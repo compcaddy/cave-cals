@@ -1,0 +1,653 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AACC11000000000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = AACC11000000000000000002 /* Fonts */; };
+		09BFA13F82E2572BAC25F5E4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF427EB93D36B9097A855A6 /* AppStore.swift */; };
+		0A6DD6FC09C1418BCD3DCEFB /* EntryEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2DD6B52048D2798EA2E5F3 /* EntryEditorSheet.swift */; };
+		0E46CDDC94EF85B49D2ACDAD /* ECCUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D262B99BD0EC759215AA3C57 /* ECCUITests.swift */; };
+		164A18ABC135A9A4AFBEB67D /* MealsAndSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F82709D277285BC739A30C91 /* MealsAndSettings.swift */; };
+		1F137D8C656A39AAD3B90C63 /* BarcodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 541DCC8CF6D2160AB5060220 /* BarcodeScanner.swift */; };
+		317EC68685ECA3B2B035EC07 /* ECCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C28A2360433059F3D4A800 /* ECCTests.swift */; };
+		35E5B82CCF58C5A52924F0E8 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */; };
+		4D20A17E184A713A9C9FED1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3309369A483B862BEEDEA084 /* Assets.xcassets */; };
+		522662E0D3EFC4510F1CD187 /* EasiestCalorieCounterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E23E99F767CFFDE893A6C5C /* EasiestCalorieCounterApp.swift */; };
+		5CEB3936BCDEB6AA9E4B548C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
+		7053D018ED3D96CE1E0AC879 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6DCC4E83042698A870482163 /* AVFoundation.framework */; };
+		8D55ABD4E37F9704ACA7FC19 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
+		96323748F9DC17819716FD77 /* FoodProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3F508E7A7C05D60934A294 /* FoodProvider.swift */; };
+		B41247EC91065AF23F421734 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 06D20150EE354567305B2E08 /* PrivacyInfo.xcprivacy */; };
+		BB4D3C8510C4D6C13C271CB4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
+		DF937A6483ACE0B29A1ED969 /* FoodHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9A5D9742D425FCFEB08983 /* FoodHistory.swift */; };
+		E114D3C4E62EB2E1924E6E13 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */; };
+		E215968B531C3F626A9EC8F2 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02F307EB109C46B14F971CA4 /* CloudKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DBBEB12D8B357D691BC8CF60 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 89732D764A9481DB29636720 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 02D05E2F57E4C8290671F829;
+			remoteInfo = EasiestCalorieCounter;
+		};
+		F20C1016A7775FAA6D24FE48 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 89732D764A9481DB29636720 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 02D05E2F57E4C8290671F829;
+			remoteInfo = EasiestCalorieCounter;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		AACC11000000000000000002 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = App/Fonts; sourceTree = "<group>"; };
+		02F307EB109C46B14F971CA4 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
+		06D20150EE354567305B2E08 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = App/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1E23E99F767CFFDE893A6C5C /* EasiestCalorieCounterApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EasiestCalorieCounterApp.swift; sourceTree = "<group>"; };
+		29C28A2360433059F3D4A800 /* ECCTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ECCTests.swift; sourceTree = "<group>"; };
+		3309369A483B862BEEDEA084 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = App/Assets.xcassets; sourceTree = "<group>"; };
+		345473C621200A1AD33FA755 /* ECCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ECCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		541DCC8CF6D2160AB5060220 /* BarcodeScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScanner.swift; sourceTree = "<group>"; };
+		581ECFEB8543B8F07F457C75 /* ECCUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ECCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		60F75519FD798D28842B739B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		67750F0D12D6A67FAD6885ED /* EasiestCalorieCounter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EasiestCalorieCounter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6DCC4E83042698A870482163 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
+		8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		9C3F508E7A7C05D60934A294 /* FoodProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoodProvider.swift; sourceTree = "<group>"; };
+		AE2DD6B52048D2798EA2E5F3 /* EntryEditorSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EntryEditorSheet.swift; sourceTree = "<group>"; };
+		CB9A5D9742D425FCFEB08983 /* FoodHistory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoodHistory.swift; sourceTree = "<group>"; };
+		D262B99BD0EC759215AA3C57 /* ECCUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ECCUITests.swift; sourceTree = "<group>"; };
+		DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		F82709D277285BC739A30C91 /* MealsAndSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MealsAndSettings.swift; sourceTree = "<group>"; };
+		FCF427EB93D36B9097A855A6 /* AppStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		06B5FAAB0EFFA5ED78AC3401 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D55ABD4E37F9704ACA7FC19 /* Foundation.framework in Frameworks */,
+				E215968B531C3F626A9EC8F2 /* CloudKit.framework in Frameworks */,
+				7053D018ED3D96CE1E0AC879 /* AVFoundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5BAF235972D3B74CF3F6687B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5CEB3936BCDEB6AA9E4B548C /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C30D9DF303A249AEF3D97417 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB4D3C8510C4D6C13C271CB4 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		126C9FD742216EC10863245B /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				D262B99BD0EC759215AA3C57 /* ECCUITests.swift */,
+			);
+			name = UITests;
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		177B5F1AACD9081976F98FE7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				76B68D192E1574805848A796 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		4D2D1E458BC1988AEA9AF424 = {
+			isa = PBXGroup;
+			children = (
+				6F80E934D14D937E4B1310F6 /* Products */,
+				177B5F1AACD9081976F98FE7 /* Frameworks */,
+				E4B161D91B5AB98BC2229769 /* App */,
+				8C9D323C5FD7B0A7CB8D9565 /* Tests */,
+				126C9FD742216EC10863245B /* UITests */,
+				3309369A483B862BEEDEA084 /* Assets.xcassets */,
+				AACC11000000000000000002 /* Fonts */,
+				06D20150EE354567305B2E08 /* PrivacyInfo.xcprivacy */,
+			);
+			sourceTree = "<group>";
+		};
+		6F80E934D14D937E4B1310F6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				67750F0D12D6A67FAD6885ED /* EasiestCalorieCounter.app */,
+				345473C621200A1AD33FA755 /* ECCTests.xctest */,
+				581ECFEB8543B8F07F457C75 /* ECCUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		76B68D192E1574805848A796 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				60F75519FD798D28842B739B /* Foundation.framework */,
+				02F307EB109C46B14F971CA4 /* CloudKit.framework */,
+				6DCC4E83042698A870482163 /* AVFoundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		8C9D323C5FD7B0A7CB8D9565 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				29C28A2360433059F3D4A800 /* ECCTests.swift */,
+			);
+			name = Tests;
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		E4B161D91B5AB98BC2229769 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				FCF427EB93D36B9097A855A6 /* AppStore.swift */,
+				541DCC8CF6D2160AB5060220 /* BarcodeScanner.swift */,
+				1E23E99F767CFFDE893A6C5C /* EasiestCalorieCounterApp.swift */,
+				AE2DD6B52048D2798EA2E5F3 /* EntryEditorSheet.swift */,
+				CB9A5D9742D425FCFEB08983 /* FoodHistory.swift */,
+				9C3F508E7A7C05D60934A294 /* FoodProvider.swift */,
+				DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */,
+				F82709D277285BC739A30C91 /* MealsAndSettings.swift */,
+				8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */,
+			);
+			name = App;
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		02D05E2F57E4C8290671F829 /* EasiestCalorieCounter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C2EC9E43655AA099CEF613ED /* Build configuration list for PBXNativeTarget "EasiestCalorieCounter" */;
+			buildPhases = (
+				2F5F5893DAEE635DBA1180B8 /* Sources */,
+				06B5FAAB0EFFA5ED78AC3401 /* Frameworks */,
+				6DCEAEBE36EB9532CA0F12E5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EasiestCalorieCounter;
+			productName = EasiestCalorieCounter;
+			productReference = 67750F0D12D6A67FAD6885ED /* EasiestCalorieCounter.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0D8260698970F3709ABDEDAF /* ECCTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 48A028014882D2B2CDF6825F /* Build configuration list for PBXNativeTarget "ECCTests" */;
+			buildPhases = (
+				6518B6626E9C71FFDEEF0F5E /* Sources */,
+				5BAF235972D3B74CF3F6687B /* Frameworks */,
+				382B0B4864721814D4A55C94 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CF0A7C2CBC82288EB79C9BBF /* PBXTargetDependency */,
+			);
+			name = ECCTests;
+			productName = ECCTests;
+			productReference = 345473C621200A1AD33FA755 /* ECCTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2BD2B39F47963618D7E60BF2 /* ECCUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 177B55BBE54099DE9BB225C2 /* Build configuration list for PBXNativeTarget "ECCUITests" */;
+			buildPhases = (
+				9A1896B72B1AE2831BDB25CB /* Sources */,
+				C30D9DF303A249AEF3D97417 /* Frameworks */,
+				B1678951682BBBB173885605 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				421EBAEF5D8528B6529E3E5E /* PBXTargetDependency */,
+			);
+			name = ECCUITests;
+			productName = ECCUITests;
+			productReference = 581ECFEB8543B8F07F457C75 /* ECCUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		89732D764A9481DB29636720 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 5132E81A8F899AAF950B71DA /* Build configuration list for PBXProject "EasiestCalorieCounter" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4D2D1E458BC1988AEA9AF424;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6F80E934D14D937E4B1310F6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				02D05E2F57E4C8290671F829 /* EasiestCalorieCounter */,
+				0D8260698970F3709ABDEDAF /* ECCTests */,
+				2BD2B39F47963618D7E60BF2 /* ECCUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		382B0B4864721814D4A55C94 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6DCEAEBE36EB9532CA0F12E5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D20A17E184A713A9C9FED1E /* Assets.xcassets in Resources */,
+				AACC11000000000000000001 /* Fonts in Resources */,
+				B41247EC91065AF23F421734 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1678951682BBBB173885605 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2F5F5893DAEE635DBA1180B8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09BFA13F82E2572BAC25F5E4 /* AppStore.swift in Sources */,
+				1F137D8C656A39AAD3B90C63 /* BarcodeScanner.swift in Sources */,
+				522662E0D3EFC4510F1CD187 /* EasiestCalorieCounterApp.swift in Sources */,
+				0A6DD6FC09C1418BCD3DCEFB /* EntryEditorSheet.swift in Sources */,
+				DF937A6483ACE0B29A1ED969 /* FoodHistory.swift in Sources */,
+				96323748F9DC17819716FD77 /* FoodProvider.swift in Sources */,
+				35E5B82CCF58C5A52924F0E8 /* MainView.swift in Sources */,
+				164A18ABC135A9A4AFBEB67D /* MealsAndSettings.swift in Sources */,
+				E114D3C4E62EB2E1924E6E13 /* Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6518B6626E9C71FFDEEF0F5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				317EC68685ECA3B2B035EC07 /* ECCTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A1896B72B1AE2831BDB25CB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0E46CDDC94EF85B49D2ACDAD /* ECCUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		421EBAEF5D8528B6529E3E5E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = EasiestCalorieCounter;
+			target = 02D05E2F57E4C8290671F829 /* EasiestCalorieCounter */;
+			targetProxy = DBBEB12D8B357D691BC8CF60 /* PBXContainerItemProxy */;
+		};
+		CF0A7C2CBC82288EB79C9BBF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = EasiestCalorieCounter;
+			target = 02D05E2F57E4C8290671F829 /* EasiestCalorieCounter */;
+			targetProxy = F20C1016A7775FAA6D24FE48 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		16833120CEC3D2259280B8C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_ENTITLEMENTS = App/EasiestCalorieCounter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Easiest Calories";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		5A20655620AF6D916B2B9E85 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2.ECCUITests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = EasiestCalorieCounter;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		6D36E4B534691AD3A99568A8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2.ECCUITests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = EasiestCalorieCounter;
+			};
+			name = Debug;
+		};
+		6E1F9A824F472EEF9A40BF18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_ENTITLEMENTS = App/EasiestCalorieCounter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Easiest Calories";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		923E8710FCF12908B595C533 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2.ECCTests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EasiestCalorieCounter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EasiestCalorieCounter";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B0D79B63C099ADEC8C495CA1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phil.EasiestCalorieCounter2.ECCTests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EasiestCalorieCounter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EasiestCalorieCounter";
+			};
+			name = Debug;
+		};
+		B67550E878E64781CD1DD54E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		CA5C242115DE7C5D43AA29EB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		177B55BBE54099DE9BB225C2 /* Build configuration list for PBXNativeTarget "ECCUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A20655620AF6D916B2B9E85 /* Release */,
+				6D36E4B534691AD3A99568A8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		48A028014882D2B2CDF6825F /* Build configuration list for PBXNativeTarget "ECCTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				923E8710FCF12908B595C533 /* Release */,
+				B0D79B63C099ADEC8C495CA1 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5132E81A8F899AAF950B71DA /* Build configuration list for PBXProject "EasiestCalorieCounter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA5C242115DE7C5D43AA29EB /* Debug */,
+				B67550E878E64781CD1DD54E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C2EC9E43655AA099CEF613ED /* Build configuration list for PBXNativeTarget "EasiestCalorieCounter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				16833120CEC3D2259280B8C0 /* Release */,
+				6E1F9A824F472EEF9A40BF18 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 89732D764A9481DB29636720 /* Project object */;
+}

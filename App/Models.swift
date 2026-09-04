@@ -1,0 +1,140 @@
+import Foundation
+import SwiftData
+
+@Model final class UserProfile {
+    var id: UUID = UUID()
+    var name: String = "" // Retained for compatibility with existing stores; no longer collected.
+    // Zero represents no goal, preserving the existing local/CloudKit schema.
+    var currentDailyGoal: Double = 2100
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(name: String = "", goal: Double) { self.name = name; currentDailyGoal = goal }
+    var dailyGoal: Double? { currentDailyGoal > 0 ? currentDailyGoal : nil }
+}
+
+@Model final class DailyGoal {
+    var id: UUID = UUID()
+    var day: String = ""
+    var calorieGoal: Double = 2100 // Zero preserves a historical day without a goal.
+    var updatedAt: Date = Date()
+    init(day: String, goal: Double) { self.day = day; calorieGoal = goal }
+}
+
+@Model final class CalorieEntry {
+    var id: UUID = UUID()
+    var name: String = ""
+    var totalCalories: Double = 0
+    var timestamp: Date = Date()
+    var servings: Double = 1
+    var caloriesPerServing: Double = 0
+    var servingDescription: String = ""
+    var sourceType: String = "manual"
+    var externalID: String?
+    var barcode: String?
+    var mealTemplateID: UUID?
+    var componentOrder: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(draft: EntryDraft) { apply(draft) }
+    func apply(_ draft: EntryDraft) {
+        name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        totalCalories = draft.calories; timestamp = draft.timestamp
+        servings = draft.servings; caloriesPerServing = draft.perServing
+        servingDescription = draft.servingDescription; externalID = draft.externalID
+        barcode = draft.barcode; sourceType = draft.source
+        mealTemplateID = draft.mealID; componentOrder = draft.order; updatedAt = Date()
+    }
+}
+
+// Meal components are one atomic value, avoiding partially synchronized templates.
+@Model final class SavedMeal {
+    var id: UUID = UUID()
+    var name: String = ""
+    var componentsData: Data = Data()
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(name: String, items: [EntryDraft]) {
+        self.name = name
+        componentsData = (try? JSONEncoder().encode(items)) ?? Data()
+    }
+    var items: [EntryDraft] { (try? JSONDecoder().decode([EntryDraft].self, from: componentsData)) ?? [] }
+    var calories: Double { items.reduce(0) { $0 + $1.calories } }
+}
+
+@Model final class BarcodeFood {
+    var id: UUID = UUID()
+    var barcode: String = ""
+    var payload: Data = Data()
+    var updatedAt: Date = Date()
+    init(barcode: String, draft: EntryDraft) {
+        self.barcode = barcode; payload = (try? JSONEncoder().encode(draft)) ?? Data()
+    }
+    var draft: EntryDraft? { try? JSONDecoder().decode(EntryDraft.self, from: payload) }
+}
+
+struct EntryDraft: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var entryID: UUID?
+    var name = ""
+    var calories: Double = 0
+    var timestamp = Date()
+    var servings: Double = 1
+    var perServing: Double = 0
+    var servingDescription = ""
+    var externalID: String?
+    var barcode: String?
+    var source = "manual"
+    var mealID: UUID?
+    var order = 0
+    init(name: String = "", calories: Double = 0, timestamp: Date = Date()) {
+        self.name = name; self.calories = calories; self.timestamp = timestamp; perServing = calories
+    }
+    init(_ entry: CalorieEntry) {
+        entryID = entry.id; name = entry.name; calories = entry.totalCalories
+        timestamp = entry.timestamp; servings = entry.servings; perServing = entry.caloriesPerServing
+        servingDescription = entry.servingDescription; externalID = entry.externalID; barcode = entry.barcode
+        source = entry.sourceType; mealID = entry.mealTemplateID; order = entry.componentOrder
+    }
+    var isValid: Bool {
+        calories.isFinite && calories >= 0 && calories <= 100_000 && servings.isFinite && servings > 0
+        && perServing.isFinite && perServing >= 0 && timestamp <= Date()
+    }
+    mutating func changeCalories(_ value: Double) {
+        calories = value
+        if perServing > 0 { servings = value / perServing }
+        if value == 0 { servings = 1 }
+    }
+    mutating func changeServings(_ value: Double) {
+        servings = value
+        if perServing > 0 { calories = value * perServing }
+    }
+    mutating func changePerServing(_ value: Double) { perServing = value; calories = servings * value }
+    func scaled(_ factor: Double, at date: Date, meal: UUID, order: Int) -> EntryDraft {
+        var copy = self; copy.id = UUID(); copy.entryID = nil
+        copy.calories *= factor; copy.servings *= factor; copy.timestamp = date
+        copy.mealID = meal; copy.order = order; copy.source = "savedMeal"
+        return copy
+    }
+}
+
+enum Day {
+    static func key(_ date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.era, .year, .month, .day], from: date)
+        return String(format: "%02d-%04d-%02d-%02d", c.era ?? 1, c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+    static func loggingDate(_ selected: Date, now: Date = Date(), calendar: Calendar = .current) -> Date {
+        if calendar.isDate(selected, inSameDayAs: now) { return now }
+        let time = calendar.dateComponents([.hour, .minute, .second], from: now)
+        return calendar.date(bySettingHour: time.hour ?? 12, minute: time.minute ?? 0, second: time.second ?? 0, of: selected) ?? selected
+    }
+    static func week(_ date: Date) -> Date { Calendar.current.dateInterval(of: .weekOfYear, for: date)!.start }
+}
+
+extension Double {
+    var calorieText: String { formatted(.number.precision(.fractionLength(0...1))) }
+}
+
+func normalizedFoodName(_ name: String) -> String {
+    name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
+}

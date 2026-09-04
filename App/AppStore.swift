@@ -1,0 +1,164 @@
+import SwiftUI
+import SwiftData
+import CloudKit
+import CoreData
+
+@MainActor @Observable final class AppStore {
+    let container: ModelContainer
+    let context: ModelContext
+    let cloudEnabled: Bool
+    var profiles: [UserProfile] = []
+    var entries: [CalorieEntry] = []
+    var goals: [DailyGoal] = []
+    var meals: [SavedMeal] = []
+    var barcodes: [BarcodeFood] = []
+    var error: String?
+    var toast: String?
+    var lastAddedID: UUID?
+    var syncStatus = "Stored on this iPhone"
+    private var undoAction: (() -> Void)?
+    private var toastTask: Task<Void, Never>?
+    var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
+
+    init(container: ModelContainer, cloudEnabled: Bool = false) {
+        self.container = container; context = container.mainContext
+        self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
+        refresh()
+    }
+    func refresh() {
+        do {
+            profiles = try context.fetch(FetchDescriptor<UserProfile>())
+            entries = try context.fetch(FetchDescriptor<CalorieEntry>(sortBy: [SortDescriptor(\.timestamp), SortDescriptor(\.componentOrder), SortDescriptor(\.createdAt)]))
+            goals = try context.fetch(FetchDescriptor<DailyGoal>())
+            meals = try context.fetch(FetchDescriptor<SavedMeal>(sortBy: [SortDescriptor(\.name)]))
+            barcodes = try context.fetch(FetchDescriptor<BarcodeFood>())
+        } catch { self.error = "Your saved data couldn’t be loaded. Please try reopening the app. \(error.localizedDescription)" }
+    }
+    @discardableResult func commit() -> Bool {
+        do { try context.save(); refresh(); return true }
+        catch { context.rollback(); refresh(); self.error = "Changes couldn’t be saved. Please try again. \(error.localizedDescription)"; return false }
+    }
+    func dayEntries(_ date: Date) -> [CalorieEntry] { entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) } }
+    func total(_ date: Date) -> Double { dayEntries(date).reduce(0) { $0 + $1.totalCalories } }
+    func goal(_ date: Date) -> Double? {
+        let key = Day.key(date)
+        let sorted = goals.sorted { $0.day == $1.day ? $0.updatedAt > $1.updatedAt : $0.day > $1.day }
+        let storedValue = sorted.first(where: { $0.day <= key })?.calorieGoal ?? sorted.last?.calorieGoal ?? profile?.currentDailyGoal ?? 0
+        return storedValue > 0 ? storedValue : nil
+    }
+    func retainGoal(_ date: Date) {
+        guard !goals.contains(where: { $0.day == Day.key(date) }) else { return }
+        let record = DailyGoal(day: Day.key(date), goal: goal(date) ?? 0)
+        context.insert(record); goals.append(record)
+    }
+    @discardableResult func saveGoal(_ value: Double?) -> Bool {
+        if let value, !value.isFinite || value < 1 || value > 9999 { return false }
+        let storedValue = value ?? 0
+        // Retain yesterday even if it had no entries, before changing today's default.
+        if profile != nil, let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) { retainGoal(yesterday) }
+        if let profile { profile.currentDailyGoal = storedValue; profile.updatedAt = Date() }
+        else { context.insert(UserProfile(goal: storedValue)) }
+        let today = Day.key(Date())
+        if let record = goals.filter({ $0.day == today }).max(by: { $0.updatedAt < $1.updatedAt }) {
+            record.calorieGoal = storedValue; record.updatedAt = Date()
+        } else { context.insert(DailyGoal(day: today, goal: storedValue)) }
+        return commit()
+    }
+    func cacheBarcode(_ draft: EntryDraft) {
+        guard let code = draft.barcode, !code.isEmpty else { return }
+        if let existing = barcodes.filter({ $0.barcode == code }).max(by: { $0.updatedAt < $1.updatedAt }) {
+            existing.payload = (try? JSONEncoder().encode(draft)) ?? existing.payload; existing.updatedAt = Date()
+        } else { let food = BarcodeFood(barcode: code, draft: draft); context.insert(food); barcodes.append(food) }
+    }
+    @discardableResult func add(_ drafts: [EntryDraft], message: String? = nil) -> Bool {
+        guard !drafts.isEmpty, drafts.allSatisfy(\.isValid) else { error = "Please enter valid calories, servings, and a date no later than now."; return false }
+        let added = drafts.map { draft -> CalorieEntry in
+            retainGoal(draft.timestamp)
+            let entry = CalorieEntry(draft: draft); context.insert(entry); cacheBarcode(draft); return entry
+        }
+        let ids = added.map(\.id)
+        guard commit() else { return false }
+        lastAddedID = ids.last
+        feedback(message ?? "\(drafts.first!.name.isEmpty ? "Entry" : drafts.first!.name) added · \(drafts.reduce(0) { $0 + $1.calories }.calorieText) cal") { [weak self] in
+            guard let self else { return }; self.entries.filter { ids.contains($0.id) }.forEach(self.context.delete); self.commit()
+        }
+        return true
+    }
+    func update(_ draft: EntryDraft) -> Bool {
+        guard draft.isValid, let entry = entries.first(where: { $0.id == draft.entryID }) else { return false }
+        retainGoal(draft.timestamp); entry.apply(draft); cacheBarcode(draft)
+        return commit()
+    }
+    func delete(_ entry: CalorieEntry) {
+        let draft = EntryDraft(entry), id = entry.id, created = entry.createdAt
+        context.delete(entry)
+        guard commit() else { return }
+        feedback("Entry deleted") { [weak self] in
+            guard let self, !self.entries.contains(where: { $0.id == id }) else { return }
+            let restored = CalorieEntry(draft: draft); restored.id = id; restored.createdAt = created
+            self.context.insert(restored); self.commit()
+        }
+    }
+    func feedback(_ message: String, undo: @escaping () -> Void) {
+        toastTask?.cancel(); toast = message; undoAction = undo
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }; self?.toast = nil; self?.undoAction = nil
+        }
+    }
+    func undo() { toastTask?.cancel(); let action = undoAction; undoAction = nil; toast = nil; action?() }
+    @discardableResult func saveMeal(_ existing: SavedMeal?, name: String, items: [EntryDraft]) -> Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !items.isEmpty, items.allSatisfy(\.isValid) else { return false }
+        if let existing {
+            existing.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            existing.componentsData = (try? JSONEncoder().encode(items)) ?? existing.componentsData; existing.updatedAt = Date()
+        } else { context.insert(SavedMeal(name: name.trimmingCharacters(in: .whitespacesAndNewlines), items: items)) }
+        return commit()
+    }
+    func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date) -> Bool {
+        guard factor.isFinite, factor > 0 else { return false }
+        return add(meal.items.enumerated().map { $0.element.scaled(factor, at: date, meal: meal.id, order: $0.offset) }, message: "\(meal.name) added")
+    }
+    func localBarcode(_ code: String) -> EntryDraft? { barcodes.filter { $0.barcode == code }.max { $0.updatedAt < $1.updatedAt }?.draft }
+    func checkCloud() async {
+        guard cloudEnabled else { syncStatus = "Stored on this iPhone"; return }
+        do {
+            switch try await CKContainer(identifier: Persistence.cloudID).accountStatus() {
+            case .available: if !syncStatus.contains("synced") { syncStatus = "iCloud available · sync is automatic" }
+            case .noAccount: syncStatus = "Sign in to iCloud in iPhone Settings"
+            case .restricted: syncStatus = "iCloud access is restricted"
+            default: syncStatus = "iCloud temporarily unavailable · saved locally"
+            }
+        } catch { syncStatus = "iCloud unavailable · saved locally" }
+    }
+    func cloudEvent(_ notification: Notification) {
+        guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else { return }
+        if event.error != nil { syncStatus = "Sync paused · saved locally" }
+        else if event.endDate == nil { syncStatus = "Syncing with iCloud…" }
+        else if event.succeeded, event.type != .setup { syncStatus = "Last synced \(event.endDate!.formatted(date: .omitted, time: .shortened))"; refresh() }
+    }
+}
+
+enum Persistence {
+    static let cloudID = "iCloud.com.phil.EasiestCalorieCounter2"
+    static let schema = Schema([UserProfile.self, DailyGoal.self, CalorieEntry.self, SavedMeal.self, BarcodeFood.self])
+    @MainActor static func make(inMemory: Bool = false) throws -> AppStore {
+        #if targetEnvironment(simulator)
+        let cloud = false
+        #else
+        let cloud = !inMemory
+        #endif
+        return try makeConfigured(inMemory: inMemory, cloud: cloud)
+    }
+    @MainActor private static func makeConfigured(inMemory: Bool, cloud: Bool) throws -> AppStore {
+        let config = ModelConfiguration("EasiestCalories", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
+        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud) }
+        catch {
+            guard cloud else { throw error }
+            let local = ModelConfiguration("EasiestCalories", schema: schema, cloudKitDatabase: .none)
+            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]))
+            store.syncStatus = "iCloud unavailable · saved locally"
+            return store
+        }
+    }
+}
