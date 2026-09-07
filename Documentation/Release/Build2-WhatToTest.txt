@@ -1,0 +1,5 @@
+Updated CaveCals branding with the white/black meal-scan app icon, larger header, Schoolbell typography, and blue controls.
+
+Please test calorie entry and search, numeric versus named entry focus, daily goal editing, diary persistence, saved meals, barcode scanning, and both widget sizes.
+
+Voice Log starts recording immediately; Cancel closes it. Stop and Analyze checks upgraded access. Meal Scan opens the camera or accepts a photo/screenshot, with an option to remove the selection. The subscription paywall appears when analysis is requested. Check monthly trial/yearly purchase, restore, and analysis after purchase on a real iPhone.

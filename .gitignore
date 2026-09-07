@@ -5,3 +5,14 @@ DerivedData/
 xcuserdata/
 .xcodebuildmcp/
 TestResults/
+.neon
+.env.local
+node_modules/
+
+.env*
+!.env.example
+.next/
+*.tsbuildinfo
+.local-uploads/
+App/Backend.local.xcconfig
+.vercel

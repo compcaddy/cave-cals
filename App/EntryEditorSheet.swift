@@ -5,34 +5,98 @@ struct EntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var draft: EntryDraft
     var onSaveComponent: ((EntryDraft) -> Void)? = nil
-    @State private var details = false
-    @FocusState private var caloriesFocused: Bool
+    var focusNameOnOpen = false
+    var focusCaloriesOnOpen = false
+    var blankCaloriesOnOpen = false
+    var onCancel: (() -> Void)? = nil
+    @FocusState private var nameFocused: Bool
+    @FocusState private var servingSizeFocused: Bool
+    @State private var showingTime = false
+    @State private var saveAsCommonDefault = false
+    @ScaledMetric(relativeTo: .largeTitle) private var calorieFieldHeight = 54
+    private let servingSizes = ["1 serving", "1 piece", "1 cup", "1/2 cup", "1 tbsp", "1 tsp", "1 oz", "100 g"]
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    Group {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("CALORIES").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        TextField("0", value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), format: .number.precision(.fractionLength(0...2)))
-                            .font(.system(.largeTitle, design: .rounded, weight: .semibold)).keyboardType(.decimalPad).focused($caloriesFocused)
-                            .accessibilityIdentifier("entryCalories").accessibilityLabel("Calories")
-                    }.padding(.vertical, 10)
-                    TextField("Name (optional)", text: $draft.name).accessibilityIdentifier("entryName")
+                        Text("CALORIES").font(.cave(.caption).weight(.semibold)).foregroundStyle(.secondary)
+                        CalorieAmountField(value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), focusOnOpen: focusCaloriesOnOpen, blankOnOpen: blankCaloriesOnOpen)
+                            .frame(height: calorieFieldHeight)
+                    }.padding(.top, 10)
+                    VStack(alignment: .leading, spacing: 0) {
+                        TextField("Name (optional)", text: $draft.name).focused($nameFocused)
+                            .autocorrectionDisabled().accessibilityIdentifier("entryName")
+                        if nameFocused, !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ForEach(nameSuggestions, id: \.self) { name in
+                                Button {
+                                    draft.name = name
+                                    nameFocused = false
+                                } label: {
+                                    HStack {
+                                        Text(name).foregroundStyle(.primary)
+                                        Spacer()
+                                        CaveIcon(.arrowUpLeft, size: 22).foregroundStyle(.secondary)
+                                    }.padding(.vertical, 12)
+                                }.buttonStyle(.borderless).accessibilityLabel("Use name \(name)")
+                            }
+                        }
+                    }
+                    }.editorRowInsets()
                 }
                 Section {
-                    DisclosureGroup("More Details", isExpanded: $details) {
-                        ServingControl(value: Binding(get: { draft.servings }, set: { draft.changeServings($0) }))
+                    Group {
+                        VStack(spacing: 0) {
                         HStack {
-                            Text("Calories per serving")
+                            Text("serving size").font(.cave(.subheadline)).opacity(0.65)
+                            Spacer(minLength: 16)
+                            TextField("e.g. 1 cup", text: $draft.servingDescription)
+                                .focused($servingSizeFocused)
+                                .multilineTextAlignment(.trailing).accessibilityLabel("Serving size")
+                        }
+                        if servingSizeFocused, draft.servingDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(servingSizes, id: \.self) { size in
+                                        Button {
+                                            draft.servingDescription = size
+                                            servingSizeFocused = false
+                                        } label: {
+                                            Text(size).frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
+                                        }.buttonStyle(.borderless)
+                                    }
+                                }
+                            }.frame(height: 176).padding(.top, 8)
+                        }
+                        }
+                        HStack {
+                            Text("cals / serving").font(.cave(.subheadline)).opacity(0.65)
                             Spacer()
                             TextField("0", value: Binding(get: { draft.perServing }, set: { draft.changePerServing($0) }), format: .number.precision(.fractionLength(0...2)))
                                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 110).accessibilityIdentifier("caloriesPerServing")
                         }
-                        TextField("Serving description (e.g. 1 cup)", text: $draft.servingDescription).accessibilityLabel("Serving description")
+                        ServingControl(value: Binding(get: { draft.servings }, set: { draft.changeServings($0) }))
                         if onSaveComponent == nil {
-                            DatePicker("Date and time", selection: $draft.timestamp, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                            HStack {
+                                Text("time").font(.cave(.subheadline)).opacity(0.65)
+                                Spacer()
+                                Button {
+                                    nameFocused = false; servingSizeFocused = false
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                    showingTime = true
+                                } label: {
+                                    Text(draft.timestamp, format: .dateTime.hour().minute())
+                                        .foregroundStyle(.primary).frame(minHeight: 32)
+                                }.buttonStyle(.plain).accessibilityLabel("Time").accessibilityValue(draft.timestamp.formatted(date: .omitted, time: .shortened))
+                            }
                         }
-                    }
+                        if let food = changedCommonFood, onSaveComponent == nil {
+                            Toggle("Save as default for '\(food.name)'", isOn: $saveAsCommonDefault)
+                                .font(.cave(.subheadline))
+                                .accessibilityIdentifier("saveCommonFoodDefault")
+                        }
+                    }.editorRowInsets()
                 }
                 if draft.entryID != nil, onSaveComponent == nil {
                     Section {
@@ -43,40 +107,177 @@ struct EntryEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add calories" : "Edit entry")
+            .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add Calories" : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showingTime) {
+                NavigationStack {
+                    DatePicker("Time", selection: timeOfDay, in: ...Date(), displayedComponents: [.hourAndMinute])
+                        .datePickerStyle(.wheel).labelsHidden().padding(.horizontal)
+                        .navigationTitle("Time").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTime = false } } }
+                }.presentationDetents([.height(300)]).presentationDragIndicator(.visible)
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        if let onCancel { onCancel() } else { dismiss() }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(draft.entryID == nil ? "Add" : "Save Changes") { save() }.fontWeight(.semibold).disabled(!draft.isValid).accessibilityIdentifier("saveEntry")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { caloriesFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
             }
-        }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }.presentationDetents([.large]).presentationDragIndicator(.visible)
+            .onChange(of: changedCommonFood?.id) { _, _ in saveAsCommonDefault = false }
+            .task {
+                guard focusNameOnOpen else { return }
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                nameFocused = true
+            }
+    }
+    private var timeOfDay: Binding<Date> {
+        Binding(get: { draft.timestamp }, set: { value in
+            let calendar = Calendar.current
+            let time = calendar.dateComponents([.hour, .minute], from: value)
+            if let updated = calendar.date(bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: 0, of: draft.timestamp),
+               calendar.isDate(updated, inSameDayAs: draft.timestamp), updated <= Date() {
+                draft.timestamp = updated
+            }
+        })
+    }
+    private var nameSuggestions: [String] {
+        var seen = Set<String>()
+        return FoodHistory.search(draft.name, entries: store.entries).compactMap { food in
+            let name = food.draft.name
+            return seen.insert(normalizedFoodName(name)).inserted ? name : nil
+        }.prefix(5).map { $0 }
+    }
+    private var changedCommonFood: CommonFood? {
+        guard let food = CommonFoods.matching(draft.name),
+              CommonFoodDefault(draft) != store.commonDefault(for: food) else { return nil }
+        return food
     }
     private func save() {
         if draft.perServing == 0, draft.calories > 0 { draft.perServing = draft.calories / draft.servings }
         if let onSaveComponent { onSaveComponent(draft); dismiss() }
-        else if draft.entryID != nil { if store.update(draft) { dismiss() } }
-        else if store.add([draft]) { dismiss() }
+        else {
+            let foodToUpdate = saveAsCommonDefault ? changedCommonFood : nil
+            let saved = draft.entryID != nil ? store.update(draft) : store.add([draft])
+            if saved {
+                if let foodToUpdate { store.saveCommonDefault(draft, for: foodToUpdate) }
+                dismiss()
+            }
+        }
+    }
+}
+
+private extension View {
+    func editorRowInsets() -> some View {
+        self.listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+    }
+}
+
+private struct CalorieAmountField: UIViewRepresentable {
+    @Binding var value: Double
+    let focusOnOpen: Bool
+    let blankOnOpen: Bool
+    func makeCoordinator() -> Coordinator { Coordinator(value: $value, initiallyBlank: blankOnOpen) }
+    func makeUIView(context: Context) -> AmountTextField {
+        let field = AmountTextField()
+        field.focusOnOpen = focusOnOpen
+        field.keyboardType = .decimalPad
+        field.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 44) ?? .systemFont(ofSize: 44))
+        field.adjustsFontForContentSizeCategory = true
+        field.placeholder = blankOnOpen ? nil : "0"
+        field.accessibilityIdentifier = "entryCalories"
+        field.accessibilityLabel = "Calories"
+        field.delegate = context.coordinator
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+    func updateUIView(_ field: AmountTextField, context: Context) {
+        context.coordinator.value = $value
+        if !field.isFirstResponder {
+            field.text = context.coordinator.initiallyBlank && value == 0
+                ? "" : context.coordinator.formatter.string(from: NSNumber(value: value))
+        }
+    }
+    final class AmountTextField: UITextField {
+        var focusOnOpen = false
+        private var focusedInitially = false
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, focusOnOpen, !focusedInitially else { return }
+            focusedInitially = true
+            DispatchQueue.main.async { [weak self] in self?.becomeFirstResponder() }
+        }
+    }
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var value: Binding<Double>
+        var initiallyBlank: Bool
+        let formatter: NumberFormatter = {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.usesGroupingSeparator = false
+            formatter.maximumFractionDigits = 2
+            return formatter
+        }()
+        init(value: Binding<Double>, initiallyBlank: Bool) {
+            self.value = value
+            self.initiallyBlank = initiallyBlank
+        }
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            DispatchQueue.main.async {
+                guard textField.isFirstResponder else { return }
+                let end = textField.endOfDocument
+                textField.selectedTextRange = textField.textRange(from: end, to: end)
+            }
+        }
+        @objc func changed(_ field: UITextField) {
+            initiallyBlank = false
+            let text = field.text ?? ""
+            value.wrappedValue = text.isEmpty ? 0 : (formatter.number(from: text)?.doubleValue ?? .nan)
+        }
     }
 }
 
 struct ServingControl: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Binding var value: Double
+    @FocusState private var editing: Bool
+    private let presets: [Double] = [0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5]
     var body: some View {
+        VStack(spacing: 0) {
         if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading) { Text("Servings"); controls }
+            VStack(alignment: .leading) { Text("# of servings").font(.cave(.subheadline)).opacity(0.65); controls }
         } else {
-            HStack { Text("Servings"); Spacer(); controls }
+            HStack { Text("# of servings").font(.cave(.subheadline)).opacity(0.65); Spacer(); controls }
+        }
+        if editing {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(presets, id: \.self) { preset in
+                        Button {
+                            value = preset
+                            editing = false
+                        } label: {
+                            Text(preset.formatted(.number.precision(.fractionLength(0...2))))
+                                .frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
+                        }.buttonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
+                    }
+                }
+            }.frame(height: 176).padding(.top, 8)
+        }
         }
     }
     private var controls: some View {
-        HStack {
-            Button { value = max(0.5, value - 0.5) } label: { Image(systemName: "minus.circle").frame(width: 44, height: 44) }.buttonStyle(.borderless).disabled(value <= 0.5).accessibilityLabel("Decrease servings")
-            TextField("1", value: $value, format: .number.precision(.fractionLength(0...3))).keyboardType(.decimalPad).multilineTextAlignment(.center).frame(width: 62).accessibilityIdentifier("servingCount").accessibilityLabel("Number of servings")
-            Button { value += 0.5 } label: { Image(systemName: "plus.circle").frame(width: 44, height: 44) }.buttonStyle(.borderless).accessibilityLabel("Increase servings")
-        }
+        TextField("1", value: $value, format: .number.precision(.fractionLength(0...3)))
+            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 110)
+            .focused($editing).accessibilityIdentifier("servingCount").accessibilityLabel("Number of servings")
     }
 }

@@ -2,16 +2,21 @@ import SwiftUI
 import SwiftData
 import CloudKit
 import CoreData
+import WidgetKit
 
 @MainActor @Observable final class AppStore {
     let container: ModelContainer
     let context: ModelContext
     let cloudEnabled: Bool
+    private let publishesWidget: Bool
     var profiles: [UserProfile] = []
     var entries: [CalorieEntry] = []
     var goals: [DailyGoal] = []
     var meals: [SavedMeal] = []
     var barcodes: [BarcodeFood] = []
+    private(set) var commonFoodDefaults: [String: CommonFoodDefault] =
+        UserDefaults.standard.data(forKey: "commonFoodDefaults.v1")
+            .flatMap { try? JSONDecoder().decode([String: CommonFoodDefault].self, from: $0) } ?? [:]
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
@@ -20,7 +25,8 @@ import CoreData
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
 
-    init(container: ModelContainer, cloudEnabled: Bool = false) {
+    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true) {
+        self.publishesWidget = publishesWidget
         self.container = container; context = container.mainContext
         self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
         refresh()
@@ -32,11 +38,34 @@ import CoreData
             goals = try context.fetch(FetchDescriptor<DailyGoal>())
             meals = try context.fetch(FetchDescriptor<SavedMeal>(sortBy: [SortDescriptor(\.name)]))
             barcodes = try context.fetch(FetchDescriptor<BarcodeFood>())
+            if publishesWidget {
+                let now = Date()
+                let snapshot = CalorieWidgetSnapshot(day: Calendar.current.startOfDay(for: now), total: total(now), goal: goal(now))
+                if CalorieWidgetStorage.write(snapshot) { WidgetCenter.shared.reloadTimelines(ofKind: CalorieWidgetStorage.kind) }
+            }
         } catch { self.error = "Your saved data couldn’t be loaded. Please try reopening the app. \(error.localizedDescription)" }
     }
     @discardableResult func commit() -> Bool {
         do { try context.save(); refresh(); return true }
         catch { context.rollback(); refresh(); self.error = "Changes couldn’t be saved. Please try again. \(error.localizedDescription)"; return false }
+    }
+    func commonDefault(for food: CommonFood) -> CommonFoodDefault {
+        commonFoodDefaults[food.id] ?? CommonFoodDefault(food.draft)
+    }
+    func applyingCommonDefault(to draft: EntryDraft) -> EntryDraft {
+        guard let food = CommonFoods.matching(draft.name),
+              draft.barcode == nil,
+              draft.externalID == nil || draft.externalID == "common:\(food.id)",
+              let saved = commonFoodDefaults[food.id] else { return draft }
+        return saved.applying(to: draft)
+    }
+    func saveCommonDefault(_ draft: EntryDraft, for food: CommonFood) {
+        guard draft.isValid else { return }
+        var updated = commonFoodDefaults
+        updated[food.id] = CommonFoodDefault(draft)
+        guard let data = try? JSONEncoder().encode(updated) else { return }
+        UserDefaults.standard.set(data, forKey: "commonFoodDefaults.v1")
+        commonFoodDefaults = updated
     }
     func dayEntries(_ date: Date) -> [CalorieEntry] { entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) } }
     func total(_ date: Date) -> Double { dayEntries(date).reduce(0) { $0 + $1.totalCalories } }
@@ -140,7 +169,7 @@ import CoreData
 }
 
 enum Persistence {
-    static let cloudID = "iCloud.com.phil.EasiestCalorieCounter2"
+    static let cloudID = "iCloud.com.philstarkovich.cavecals"
     static let schema = Schema([UserProfile.self, DailyGoal.self, CalorieEntry.self, SavedMeal.self, BarcodeFood.self])
     @MainActor static func make(inMemory: Bool = false) throws -> AppStore {
         #if targetEnvironment(simulator)
@@ -151,12 +180,12 @@ enum Persistence {
         return try makeConfigured(inMemory: inMemory, cloud: cloud)
     }
     @MainActor private static func makeConfigured(inMemory: Bool, cloud: Bool) throws -> AppStore {
-        let config = ModelConfiguration("EasiestCalories", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
-        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud) }
+        let config = ModelConfiguration("CaveCals", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
+        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory) }
         catch {
             guard cloud else { throw error }
-            let local = ModelConfiguration("EasiestCalories", schema: schema, cloudKitDatabase: .none)
-            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]))
+            let local = ModelConfiguration("CaveCals", schema: schema, cloudKitDatabase: .none)
+            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]), publishesWidget: !inMemory)
             store.syncStatus = "iCloud unavailable · saved locally"
             return store
         }

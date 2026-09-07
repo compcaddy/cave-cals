@@ -1,6 +1,6 @@
 import XCTest
 import SwiftData
-@testable import EasiestCalorieCounter
+@testable import CaveCals
 
 @MainActor final class ECCTests: XCTestCase {
     func makeStore() throws -> AppStore { try Persistence.make(inMemory: true) }

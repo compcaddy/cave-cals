@@ -1,5 +1,82 @@
 import Foundation
 
+struct CommonFood: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let aliases: [String]
+    let calories: Double
+    let serving: String
+    var draft: EntryDraft {
+        var draft = EntryDraft(name: name, calories: calories)
+        draft.servingDescription = serving
+        draft.externalID = "common:\(id)"
+        draft.source = "common"
+        return draft
+    }
+}
+
+struct CommonFoodDefault: Codable, Equatable {
+    var calories: Double
+    var perServing: Double
+    var servings: Double
+    var servingDescription: String
+
+    init(_ draft: EntryDraft) {
+        calories = draft.calories
+        perServing = draft.perServing
+        servings = draft.servings
+        servingDescription = draft.servingDescription
+    }
+
+    func applying(to input: EntryDraft) -> EntryDraft {
+        var draft = input
+        draft.calories = calories
+        draft.perServing = perServing
+        draft.servings = servings
+        draft.servingDescription = servingDescription
+        return draft
+    }
+}
+
+enum CommonFoods {
+    static func matching(_ name: String) -> CommonFood? {
+        let normalized = normalizedFoodName(name)
+        guard !normalized.isEmpty else { return nil }
+        if let exact = indexedFoods.first(where: { $0.name == normalized }) { return exact.food }
+        let aliases = indexedFoods.filter { $0.names.contains(normalized) }
+        // Ambiguous aliases must never save a personal default to the wrong food.
+        return aliases.count == 1 ? aliases[0].food : nil
+    }
+    private struct Catalog: Decodable { let foods: [CommonFood] }
+    static let foods: [CommonFood] = {
+        guard let url = Bundle.main.url(forResource: "CommonFoods", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let catalog = try? JSONDecoder().decode(Catalog.self, from: data) else { return [] }
+        return catalog.foods
+    }()
+    private static let indexedFoods = foods.map { food in
+        (food: food, name: normalizedFoodName(food.name),
+         names: ([food.name] + food.aliases).map(normalizedFoodName))
+    }
+    static func search(_ query: String) -> [CommonFood] {
+        let q = normalizedFoodName(query)
+        guard !q.isEmpty else { return [] }
+        let words = q.split(separator: " ").map(String.init)
+        return indexedFoods.compactMap { item -> (food: CommonFood, rank: Int)? in
+            let rank: Int
+            if item.name == q { rank = 0 }
+            else if item.names.contains(q) { rank = 1 }
+            else if item.names.contains(where: { $0.hasPrefix(q) }) { rank = 2 }
+            else if item.names.contains(where: { name in words.allSatisfy { name.contains($0) } }) { rank = 3 }
+            else { return nil }
+            return (item.food, rank)
+        }.sorted {
+            if $0.rank != $1.rank { return $0.rank < $1.rank }
+            return $0.food.name < $1.food.name
+        }.map(\.food)
+    }
+}
+
 struct HistoricalFood: Identifiable {
     var id: String
     var draft: EntryDraft

@@ -39,7 +39,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
         var url = URLComponents(string: "https://world.openfoodfacts.org\(path)")!
         url.queryItems = query + [URLQueryItem(name: "fields", value: fields)]
         var request = URLRequest(url: url.url!, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
-        request.setValue("EasiestCalorieCounter2/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+        request.setValue("CaveCals2/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
         return request
     }
     private func data(_ request: URLRequest) async throws -> Data {

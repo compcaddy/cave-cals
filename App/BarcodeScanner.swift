@@ -23,17 +23,13 @@ struct BarcodeSheet: View {
                             .frame(height: 250).clipShape(RoundedRectangle(cornerRadius: 20))
                             .overlay { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.8), lineWidth: 2).frame(width: 230, height: 130).allowsHitTesting(false) }
                             .accessibilityLabel("Barcode camera view")
-                        Text("Hold the barcode inside the frame.").font(.subheadline).foregroundStyle(.secondary)
+                        Text("Hold the barcode inside the frame.").font(.cave(.subheadline)).foregroundStyle(.secondary)
                     } else if permission == .denied || permission == .restricted || cameraError != nil {
-                        ContentUnavailableView("Enter a barcode", systemImage: "barcode", description: Text(cameraError ?? "Camera access is off. Allow it in Settings, or type the barcode below."))
+                        ContentUnavailableView { Label { Text("Camera unavailable") } icon: { CaveIcon(.camera, size: 48) } } description: { Text("Make sure you have granted this app access to your camera.") }
                         if permission == .denied { Button("Open Camera Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } } }
                     }
-                    HStack {
-                        TextField("Barcode number", text: $code).keyboardType(.numberPad).textFieldStyle(.roundedBorder).accessibilityIdentifier("barcodeInput")
-                        Button("Look Up") { lookup(code) }.disabled(!validCode || loading)
-                    }
                     if loading { ProgressView("Looking up barcode…") }
-                    if let message { Text(message).font(.subheadline).foregroundStyle(.secondary) }
+                    if let message { Text(message).font(.cave(.subheadline)).foregroundStyle(.secondary) }
                     if let result {
                         FoodRow(name: result.name.isEmpty ? "\(result.calories.calorieText) calories" : result.name, calories: result.name.isEmpty ? nil : result.calories, detail: result.servingDescription,
                                 add: { if store.add([result]) { dismiss() } }, edit: { editor = result })
@@ -42,13 +38,12 @@ struct BarcodeSheet: View {
                     Button("Enter calories manually") {
                         var draft = EntryDraft(timestamp: date); draft.barcode = validCode ? code : nil; draft.source = "barcode"; editor = draft
                     }
-                    Text("Product data from Open Food Facts").font(.caption).foregroundStyle(.secondary)
                 }.padding(20)
             }
             .navigationTitle("Scan a barcode").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
             .task {
-                guard AVCaptureDevice.default(for: .video) != nil else { cameraError = "Camera unavailable. Type the barcode number to look up a food."; return }
+                guard AVCaptureDevice.default(for: .video) != nil else { cameraError = "Camera unavailable. Make sure you have granted this app access to your camera."; return }
                 if permission == .notDetermined { _ = await AVCaptureDevice.requestAccess(for: .video); permission = AVCaptureDevice.authorizationStatus(for: .video) }
             }
             .sheet(item: $editor, onDismiss: { if store.lastAddedID != nil, addedDuringSheet { dismiss() } }) { draft in EntryEditorSheet(draft: draft) }
@@ -124,7 +119,7 @@ struct CameraScanner: UIViewRepresentable {
                         output.metadataObjectTypes = [.ean8, .ean13, .upce, .code128].filter { output.availableMetadataObjectTypes.contains($0) }
                     }
                     self.session.commitConfiguration(); self.session.startRunning()
-                } catch { DispatchQueue.main.async { self.onError("Camera unavailable. Type the barcode number to look up a food.") } }
+                } catch { DispatchQueue.main.async { self.onError("Camera unavailable. Make sure you have granted this app access to your camera.") } }
             }
         }
         func stop() { queue.async { self.session.stopRunning() } }
@@ -134,58 +129,4 @@ struct CameraScanner: UIViewRepresentable {
         }
     }
     private enum ScannerError: Error { case noCamera }
-}
-
-struct PhotoCaptureSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var permission = AVCaptureDevice.authorizationStatus(for: .video)
-    @State private var cameraError: String?
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 20).fill(.black)
-                        if permission == .authorized, cameraError == nil {
-                            CameraScanner(detectsBarcodes: false, onCode: { _ in }, onError: { _ in cameraError = "Camera unavailable on this device." })
-                        } else {
-                            VStack(spacing: 12) {
-                                Image(systemName: "camera").font(.largeTitle)
-                                Text(cameraError ?? "Allow camera access to see the preview.")
-                                    .font(.subheadline).multilineTextAlignment(.center)
-                            }.foregroundStyle(.white).padding()
-                        }
-                    }.frame(height: 250).clipShape(RoundedRectangle(cornerRadius: 20))
-                    Button("Capture") { }
-                        .font(.title3.weight(.semibold)).frame(maxWidth: .infinity)
-                        .buttonStyle(.borderedProminent).controlSize(.large)
-                    Text("Preview only — photo capture is coming soon.").font(.footnote).foregroundStyle(.secondary)
-                }.padding(20)
-            }
-            .navigationTitle("Camera").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-            .task {
-                guard AVCaptureDevice.default(for: .video) != nil else { cameraError = "Camera unavailable on this device."; return }
-                if permission == .notDetermined {
-                    _ = await AVCaptureDevice.requestAccess(for: .video)
-                    permission = AVCaptureDevice.authorizationStatus(for: .video)
-                }
-            }
-        }.presentationDetents([.height(460), .large]).presentationDragIndicator(.visible)
-    }
-}
-
-struct VoicePreviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Listening").font(.title2.weight(.semibold))
-            Image(systemName: "waveform").font(.system(size: 64)).foregroundStyle(Color.accentColor)
-                .accessibilityHidden(true)
-            Text("Preview only — audio is not being recorded.").font(.footnote).foregroundStyle(.secondary)
-            Button("Done") { dismiss() }
-                .font(.title3.weight(.semibold)).buttonStyle(.borderedProminent).controlSize(.large)
-        }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
-            .presentationDetents([.height(320)]).presentationDragIndicator(.visible)
-    }
 }

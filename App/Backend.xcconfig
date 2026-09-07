@@ -1,0 +1,3 @@
+// Public backend origin only. Credentials remain on the server.
+AI_BACKEND_URL = https:/$()/cavecals.vercel.app
+#include? "Backend.local.xcconfig"

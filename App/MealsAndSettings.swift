@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @State private var aiSubscriptions = AISubscriptions()
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
@@ -8,19 +9,36 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Button("Adjust Daily Calorie Goal") { adjustingGoal = true }
-                        .accessibilityIdentifier("adjustGoal")
+                    Button { adjustingGoal = true } label: {
+                        HStack(spacing: 12) {
+                            Text("Daily calorie goal").foregroundStyle(.primary)
+                            Spacer(minLength: 8)
+                            CaveIcon(.pencil, size: 22)
+                            Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }.frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("adjustGoal")
+                    .accessibilityLabel("Daily calorie goal")
+                    .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
+                    .accessibilityHint("Edit daily calorie goal")
                 }
-                Section("Saved Meals") { NavigationLink { MealsView() } label: { Label("Meals", systemImage: "square.stack.3d.up") } }
+                Section("Saved Meals") { NavigationLink { MealsView() } label: { Label { Text("Meals") } icon: { CaveIcon(.meal, size: 22) } } }
+                AISubscriptionSection(subscriptions: aiSubscriptions)
+                if AIConfiguration.developerSettingsAvailable {
+                    Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
+                }
                 Section("iCloud") {
-                    Label(store.syncStatus, systemImage: store.cloudEnabled ? "icloud" : "iphone")
-                    Text("Your entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account.").font(.footnote).foregroundStyle(.secondary)
+                    Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
+                    Text("Your entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 Section("About") {
-                    Text("Easiest Calorie Counter · 1.0")
+                    Text("Cave Cals · 1.0")
                     Link("Food data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Search terms and scanned barcodes are sent to Open Food Facts to find products. Your profile and food diary stay on your devices and in your private iCloud account. Product serving sizes and calories can vary; you can edit them before adding.").font(.footnote).foregroundStyle(.secondary)
+                    Text("Search terms and scanned barcodes are sent to Open Food Facts to find products. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
@@ -28,7 +46,7 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
             }
-            .task { await store.checkCloud() }
+            .task { await store.checkCloud(); await aiSubscriptions.refresh() }
         }
     }
 }
@@ -83,7 +101,7 @@ struct MealEditorSheet: View {
                                 if selection.contains(entry.id) { selection.remove(entry.id) } else { selection.insert(entry.id) }
                             } label: {
                                 HStack {
-                                    Image(systemName: selection.contains(entry.id) ? "checkmark.circle.fill" : "circle")
+                                    CaveIcon(selection.contains(entry.id) ? .check : .circle, size: 24)
                                     Text(entry.name.isEmpty ? "\(entry.totalCalories.calorieText) calories" : entry.name).foregroundStyle(.primary)
                                     Spacer(); Text(entry.totalCalories.calorieText).foregroundStyle(.secondary)
                                 }.padding(.vertical, 5)
@@ -98,7 +116,7 @@ struct MealEditorSheet: View {
                                 HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\(item.calories.calorieText) cal").foregroundStyle(.secondary) }
                             }.foregroundStyle(.primary)
                         }.onDelete { items.remove(atOffsets: $0) }
-                        Button { showFoodPicker = true } label: { Label("Add food", systemImage: "plus") }
+                        Button { showFoodPicker = true } label: { Label { Text("Add food") } icon: { CaveIcon(.plus, size: 18) } }
                     }
                 }
                 Section { HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories }.calorieText) cal").fontWeight(.semibold) } }
@@ -145,7 +163,7 @@ struct MealFoodPicker: View {
                 Section("Food search") {
                     ForEach(search.results) { food in row(food.draft) }
                     if search.loading { ProgressView("Searching foods…") }
-                    if let message = search.message { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                    if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
                 }
             }
             .searchable(text: $query, prompt: "Search food or enter calories")

@@ -1,0 +1,27 @@
+You eat. App count.
+
+Cave Cals is a simple calorie diary with a little prehistoric personality. Log what you ate, keep an eye on your daily total, and get on with your day. No account signup required.
+
+FREE EVERYDAY LOGGING
+• Search foods or enter calories yourself.
+• Scan a barcode to find product information.
+• Edit calories, portions, and serving sizes.
+• Save meals and add your usual foods again quickly.
+• Review your history and set an optional daily calorie goal.
+• Open your favorite logging tools from iPhone Home Screen widgets.
+• Keep your diary on your iPhone, with private iCloud sync when available.
+
+OPTIONAL CAVE CALS AI
+Meal scan: choose a food photo or screenshot and get an editable calorie estimate.
+Voice log: describe what you ate and how much, then review the foods and estimated calories.
+
+Only meal scanning and voice logging require a subscription. Both plans include up to 30 analyses per day and 300 per calendar month. All other features remain free.
+
+Choose a monthly or yearly subscription. The monthly plan offers a 3-day free trial to eligible new subscribers; the yearly plan has no free trial. Local prices and billing periods are shown before purchase. Subscriptions renew automatically unless cancelled in your Apple Account settings at least 24 hours before the current period ends.
+
+AI estimates can be inaccurate, especially for portion sizes and hidden ingredients. Review and correct each result before saving. Cave Cals is a food diary, not medical advice.
+
+Selected photos and recordings are sent to OpenAI only when you choose to analyze them. Your full diary is not sent for AI identification.
+
+Privacy: https://cavecals.vercel.app/privacy
+Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/

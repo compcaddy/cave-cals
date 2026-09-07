@@ -1,0 +1,63 @@
+{
+  "testedAt": "2026-09-06T17:26:42.032Z",
+  "synthetic": true,
+  "results": [
+    {
+      "kind": "image",
+      "bytes": 302290,
+      "result": {
+        "items": [
+          {
+            "name": "grilled chicken breast",
+            "calories": 250,
+            "portion": "1 medium cooked breast, about 5–6 oz",
+            "confidence": "high"
+          },
+          {
+            "name": "white rice",
+            "calories": 205,
+            "portion": "about 1 cup cooked",
+            "confidence": "medium"
+          },
+          {
+            "name": "broccoli",
+            "calories": 55,
+            "portion": "about 1 cup cooked florets",
+            "confidence": "high"
+          }
+        ],
+        "notes": "Estimated from the visible plate. Chicken appears lightly grilled and may include a small amount of oil or marinade not fully visible. Rice is assumed plain cooked white rice. Broccoli appears plain with no visible sauce or butter."
+      },
+      "retryMatches": true
+    },
+    {
+      "kind": "audio",
+      "bytes": 194730,
+      "result": {
+        "items": [
+          {
+            "name": "Grilled chicken breast",
+            "calories": 220,
+            "portion": "1 medium breast, grilled (about 6 oz cooked)",
+            "confidence": "medium"
+          },
+          {
+            "name": "Cooked white rice",
+            "calories": 205,
+            "portion": "1 cup cooked",
+            "confidence": "high"
+          },
+          {
+            "name": "Steamed broccoli",
+            "calories": 55,
+            "portion": "1 cup steamed",
+            "confidence": "high"
+          }
+        ],
+        "notes": "Estimated using standard portions. Grilling may add a small amount of oil or sauce if used, which is not included. Chicken breast size can vary, so the calorie estimate is the least certain item.",
+        "transcript": "I ate one grilled chicken breast, one cup of cooked white rice, and one cup of steamed broccoli."
+      },
+      "retryMatches": true
+    }
+  ]
+}
