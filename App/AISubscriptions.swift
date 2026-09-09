@@ -141,8 +141,10 @@ struct AISubscriptionSection: View {
             Button("Restore Purchases") { Task { await subscriptions.restore() } }
                 .disabled(subscriptions.busy || subscriptions.account == nil)
             Link("Manage Subscription", destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
-            Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-            if let base = AIConfiguration.baseURL { Link("Privacy", destination: base.appendingPathComponent("privacy")) }
+            if let base = AIConfiguration.baseURL {
+                Link("Terms of Use", destination: base.appendingPathComponent("terms"))
+                Link("Privacy", destination: base.appendingPathComponent("privacy"))
+            }
         }.sheet(isPresented: $showPaywall) { AIUpgradePaywall(subscriptions: subscriptions) }
     }
 }
