@@ -68,7 +68,7 @@ import WidgetKit
         commonFoodDefaults = updated
     }
     func dayEntries(_ date: Date) -> [CalorieEntry] { entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) } }
-    func total(_ date: Date) -> Double { dayEntries(date).reduce(0) { $0 + $1.totalCalories } }
+    func total(_ date: Date) -> Double { dayEntries(date).reduce(0) { $0 + $1.totalCalories.rounded() } }
     func goal(_ date: Date) -> Double? {
         let key = Day.key(date)
         let sorted = goals.sorted { $0.day == $1.day ? $0.updatedAt > $1.updatedAt : $0.day > $1.day }
@@ -108,7 +108,7 @@ import WidgetKit
         let ids = added.map(\.id)
         guard commit() else { return false }
         lastAddedID = ids.last
-        feedback(message ?? "\(drafts.first!.name.isEmpty ? "Entry" : drafts.first!.name) added · \(drafts.reduce(0) { $0 + $1.calories }.calorieText) cal") { [weak self] in
+        feedback(message ?? "\(drafts.first!.name.isEmpty ? "Entry" : drafts.first!.name) added · \(drafts.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal") { [weak self] in
             guard let self else { return }; self.entries.filter { ids.contains($0.id) }.forEach(self.context.delete); self.commit()
         }
         return true

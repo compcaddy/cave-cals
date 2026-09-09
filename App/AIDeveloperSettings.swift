@@ -50,7 +50,7 @@ struct AIDeveloperSettings: View {
                 Text("With an authorized test key, Upgraded access ON runs real meal and voice analysis. OFF tests the free experience, even if you have a subscription. Turn off the override to use your actual subscription. Production usage limits still apply.")
                     .font(.cave(.footnote)).foregroundStyle(.secondary)
             } header: { Text("Subscription testing") }
-            if busy { ProgressView("Checking access…") }
+            if busy { ProgressView("Loading…") }
             if let message { Section { Text(message).font(.cave(.footnote)) } }
         }.navigationTitle("Developer settings")
     }

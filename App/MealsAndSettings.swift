@@ -119,7 +119,7 @@ struct MealEditorSheet: View {
                         Button { showFoodPicker = true } label: { Label { Text("Add food") } icon: { CaveIcon(.plus, size: 18) } }
                     }
                 }
-                Section { HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories }.calorieText) cal").fontWeight(.semibold) } }
+                Section { HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal").fontWeight(.semibold) } }
             }
             .navigationTitle(route.meal == nil ? "New Meal" : "Edit Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -195,7 +195,7 @@ struct MealAddSheet: View {
                             HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\((item.calories * factor).calorieText) cal") }
                         }
                     }
-                    Section { HStack { Text("Total"); Spacer(); Text("\((meal.calories * factor).calorieText) cal").bold() } }
+                    Section { HStack { Text("Total"); Spacer(); Text("\(meal.items.reduce(0) { $0 + ($1.calories * factor).rounded() }.calorieText) cal").bold() } }
                 }
             }
             .navigationTitle(meal?.name ?? "Meal").navigationBarTitleDisplayMode(.inline)

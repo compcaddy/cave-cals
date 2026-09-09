@@ -132,7 +132,7 @@ struct AIInputSheet: View {
             }
         }
         if working {
-            ProgressView("Checking access and analyzing…")
+            ProgressView("Analyzing…")
                 .frame(maxWidth: .infinity, minHeight: 64)
                 .accessibilityIdentifier("aiProcessing")
         } else {
@@ -163,7 +163,7 @@ struct AIInputSheet: View {
             Text("Describe what you ate and how much.").foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 24)
         if working {
-            ProgressView("Checking access and analyzing…")
+            ProgressView("Analyzing recording…")
                 .frame(maxWidth: .infinity, minHeight: 64)
                 .accessibilityIdentifier("aiProcessing")
         } else {
@@ -352,6 +352,20 @@ struct AIInputSheet: View {
 private final class MealPreviewSurface: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    var captureAngle: CGFloat {
+        switch window?.windowScene?.interfaceOrientation {
+        case .landscapeLeft: return 0
+        case .landscapeRight: return 180
+        case .portraitUpsideDown: return 270
+        default: return 90
+        }
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if let connection = preview.connection, connection.isVideoRotationAngleSupported(captureAngle) {
+            connection.videoRotationAngle = captureAngle
+        }
+    }
 }
 
 private struct MealCameraPreview: UIViewRepresentable {
@@ -368,8 +382,8 @@ private struct MealCameraPreview: UIViewRepresentable {
         view.preview.session = context.coordinator.session
         view.preview.videoGravity = .resizeAspectFill
         if let connection = view.preview.connection,
-           connection.isVideoRotationAngleSupported(0) {
-            connection.videoRotationAngle = 0
+           connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
         context.coordinator.start()
         return view
@@ -377,7 +391,11 @@ private struct MealCameraPreview: UIViewRepresentable {
     func updateUIView(_ view: MealPreviewSurface, context: Context) {
         if captureRequest != context.coordinator.lastRequest {
             context.coordinator.lastRequest = captureRequest
-            context.coordinator.capture()
+            let angle = view.captureAngle
+            if let connection = view.preview.connection, connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
+            context.coordinator.capture(angle: angle, aspectRatio: view.bounds.width / max(view.bounds.height, 1))
         }
     }
     static func dismantleUIView(_ view: MealPreviewSurface, coordinator: Coordinator) { coordinator.stop() }
@@ -411,9 +429,9 @@ private struct MealCameraPreview: UIViewRepresentable {
                         }
                         self.session.addInput(input); self.session.addOutput(self.output)
                         self.session.commitConfiguration()
-                        // Keep the live preview and captured photo in the same landscape orientation.
-                        if let connection = self.output.connection(with: .video), connection.isVideoRotationAngleSupported(0) {
-                            connection.videoRotationAngle = 0
+                        // Portrait camera orientation is independent of the horizontal preview frame.
+                        if let connection = self.output.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
+                            connection.videoRotationAngle = 90
                         }
                         self.session.startRunning()
                         DispatchQueue.main.async { self.onReady() }
@@ -421,9 +439,14 @@ private struct MealCameraPreview: UIViewRepresentable {
                 }
             }
         }
-        func capture() {
+        private var captureAspectRatio: CGFloat = 4.0 / 3.0
+        func capture(angle: CGFloat, aspectRatio: CGFloat) {
             queue.async {
                 guard !self.stopped, self.session.isRunning else { self.fail("Camera is not ready. Please try again."); return }
+                self.captureAspectRatio = aspectRatio
+                if let connection = self.output.connection(with: .video), connection.isVideoRotationAngleSupported(angle) {
+                    connection.videoRotationAngle = angle
+                }
                 self.output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
             }
         }
@@ -431,7 +454,31 @@ private struct MealCameraPreview: UIViewRepresentable {
         private func fail(_ message: String) { DispatchQueue.main.async { self.onError(message) } }
         func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
             guard error == nil, let data = photo.fileDataRepresentation() else { fail("The photo could not be captured. Please try again."); return }
-            DispatchQueue.main.async { self.onCapture(data) }
+            let aspectRatio = captureAspectRatio
+            DispatchQueue.main.async {
+                guard let image = UIImage(data: data),
+                      let cropped = MealPhotoCrop.jpeg(image, aspectRatio: aspectRatio) else {
+                    self.onError("The photo could not be prepared. Please try again."); return
+                }
+                self.onCapture(cropped)
+            }
         }
+    }
+}
+
+// Draw through UIImage to apply EXIF orientation before matching resizeAspectFill.
+enum MealPhotoCrop {
+    static func jpeg(_ image: UIImage, aspectRatio: CGFloat) -> Data? {
+        guard image.size.width > 0, image.size.height > 0, aspectRatio.isFinite, aspectRatio > 0 else { return nil }
+        let width = min(image.size.width, image.size.height * aspectRatio)
+        let size = CGSize(width: width, height: width / aspectRatio)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(x: (size.width - image.size.width) / 2,
+                                  y: (size.height - image.size.height) / 2,
+                                  width: image.size.width, height: image.size.height))
+        }.jpegData(compressionQuality: 0.95)
     }
 }

@@ -83,6 +83,29 @@ final class ECCUITests: XCTestCase {
         app.buttons["Undo"].tap()
         XCTAssertTrue(app.staticTexts["180 calories"].waitForExistence(timeout: 3))
     }
+    func testEntryRowsSelectTheirValuesForReplacement() {
+        let search = app.textFields["foodSearch"]
+        search.tap(); search.typeText("140")
+        app.buttons["Edit 140 calories"].tap()
+        let size = app.textFields["servingSize"]
+        XCTAssertTrue(size.waitForExistence(timeout: 5))
+        app.staticTexts["serving size"].tap()
+        size.typeText("14.2 g")
+        app.staticTexts["cals / serving"].tap()
+        let calories = app.textFields["caloriesPerServing"]
+        calories.typeText("70")
+        XCTAssertEqual(calories.value as? String, "70")
+        app.staticTexts["# of servings"].tap()
+        let servings = app.textFields["servingCount"]
+        servings.typeText("1.5")
+        XCTAssertEqual(servings.value as? String, "1.5")
+        size.tap(); size.typeText("1 cup")
+        XCTAssertEqual(size.value as? String, "1 cup")
+        // Tapping the same row again also selects its current value.
+        app.staticTexts["serving size"].tap(); size.typeText("2 cups")
+        XCTAssertEqual(size.value as? String, "2 cups")
+        XCTAssertEqual(app.textFields["entryCalories"].value as? String, "105")
+    }
     func testNamedEntryServingEditorAndSavedMeal() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("140")

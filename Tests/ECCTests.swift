@@ -74,7 +74,49 @@ import SwiftData
         draft.changePerServing(150)
         XCTAssertEqual(draft.calories, 300)
         draft.changeServings(1.25)
-        XCTAssertEqual(draft.calories, 187.5)
+        XCTAssertEqual(draft.calories, 188)
+    }
+    func testFractionalCaloriesRoundWhileServingsStayDecimal() throws {
+        var draft = EntryDraft(calories: 100.5)
+        XCTAssertEqual(draft.calories, 101)
+        XCTAssertEqual(draft.perServing, 101)
+        draft.changeServings(1.25)
+        XCTAssertEqual(draft.servings, 1.25)
+        XCTAssertEqual(draft.calories, 126)
+        draft.changePerServing(90.5)
+        XCTAssertEqual(draft.perServing, 91)
+        XCTAssertEqual(draft.calories, 114)
+        draft.changeCalories(150.5)
+        XCTAssertEqual(draft.calories, 151)
+        XCTAssertEqual(draft.servings, 151.0 / 91)
+        let scaled = EntryDraft(calories: 101).scaled(0.5, at: Date(), meal: UUID(), order: 0)
+        XCTAssertEqual(scaled.calories, 51)
+        XCTAssertEqual(scaled.servings, 0.5)
+
+        // Imported or previously saved drafts can still contain fractional values.
+        draft.calories = 120.6
+        draft.perServing = 80.4
+        draft.servings = 1.5
+        let store = try makeStore()
+        XCTAssertTrue(store.add([draft]))
+        let entry = try XCTUnwrap(store.entries.first)
+        XCTAssertEqual(entry.totalCalories, 121)
+        XCTAssertEqual(entry.caloriesPerServing, 80)
+        XCTAssertEqual(entry.servings, 1.5)
+        XCTAssertEqual(120.5.calorieText, 121.0.calorieText)
+    }
+    func testClearingCaloriesResetsServingsToZero() {
+        var draft = EntryDraft(name: "1% milk", calories: 105)
+        draft.changeCalories(0)
+        XCTAssertEqual(draft.calories, 0)
+        XCTAssertEqual(draft.servings, 0)
+        XCTAssertEqual(draft.perServing, 105)
+        draft.changeCalories(210)
+        XCTAssertEqual(draft.servings, 2)
+
+        var manual = EntryDraft()
+        manual.changeCalories(0)
+        XCTAssertEqual(manual.servings, 0)
     }
     func testInputValidation() {
         var draft = EntryDraft(calories: 0)
@@ -220,7 +262,8 @@ import SwiftData
         struct Offline: FoodSearchService { func search(query: String) async throws -> [FoodResult] { throw URLError(.notConnectedToInternet) } }
         let search = FoodSearchState(provider: Offline(), persistCache: false)
         await search.search("coffee")
-        XCTAssertNotNil(search.message); XCTAssertFalse(search.loading)
+        XCTAssertEqual(search.message, FoodServiceError.offline.localizedDescription)
+        XCTAssertFalse(search.loading)
         let store = try makeStore(); XCTAssertTrue(store.add([EntryDraft(name: "Coffee", calories: 120)]))
         XCTAssertEqual(FoodHistory.search("coffee", entries: store.entries).count, 1)
     }

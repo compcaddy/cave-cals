@@ -11,6 +11,7 @@ struct EntryEditorSheet: View {
     var onCancel: (() -> Void)? = nil
     @FocusState private var nameFocused: Bool
     @FocusState private var servingSizeFocused: Bool
+    @FocusState private var perServingFocused: Bool
     @State private var showingTime = false
     @State private var saveAsCommonDefault = false
     @ScaledMetric(relativeTo: .largeTitle) private var calorieFieldHeight = 54
@@ -53,8 +54,10 @@ struct EntryEditorSheet: View {
                             Spacer(minLength: 16)
                             TextField("e.g. 1 cup", text: $draft.servingDescription)
                                 .focused($servingSizeFocused)
-                                .multilineTextAlignment(.trailing).accessibilityLabel("Serving size")
+                                .multilineTextAlignment(.trailing).accessibilityLabel("Serving size").accessibilityIdentifier("servingSize")
+                                .selectValueOnFocus(identifier: "servingSize")
                         }
+                        .selectValueOnTap(focus: $servingSizeFocused)
                         if servingSizeFocused, draft.servingDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             ScrollView {
                                 VStack(spacing: 0) {
@@ -73,9 +76,12 @@ struct EntryEditorSheet: View {
                         HStack {
                             Text("cals / serving").font(.cave(.subheadline)).opacity(0.65)
                             Spacer()
-                            TextField("0", value: Binding(get: { draft.perServing }, set: { draft.changePerServing($0) }), format: .number.precision(.fractionLength(0...2)))
-                                .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 110).accessibilityIdentifier("caloriesPerServing")
+                            TextField("0", value: Binding(get: { draft.perServing.rounded() }, set: { draft.changePerServing($0) }), format: .number.precision(.fractionLength(0)))
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 110).accessibilityIdentifier("caloriesPerServing")
+                                .focused($perServingFocused)
+                                .selectValueOnFocus(identifier: "caloriesPerServing")
                         }
+                        .selectValueOnTap(focus: $perServingFocused)
                         ServingControl(value: Binding(get: { draft.servings }, set: { draft.changeServings($0) }))
                         if onSaveComponent == nil {
                             HStack {
@@ -160,7 +166,7 @@ struct EntryEditorSheet: View {
         return food
     }
     private func save() {
-        if draft.perServing == 0, draft.calories > 0 { draft.perServing = draft.calories / draft.servings }
+        if draft.perServing == 0, draft.calories > 0 { draft.perServing = (draft.calories / draft.servings).rounded() }
         if let onSaveComponent { onSaveComponent(draft); dismiss() }
         else {
             let foodToUpdate = saveAsCommonDefault ? changedCommonFood : nil
@@ -174,6 +180,27 @@ struct EntryEditorSheet: View {
 }
 
 private extension View {
+    func selectValueOnFocus(identifier: String) -> some View {
+        onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { notification in
+            guard let field = notification.object as? UITextField,
+                  field.accessibilityIdentifier == identifier else { return }
+            DispatchQueue.main.async {
+                guard field.isFirstResponder else { return }
+                field.selectedTextRange = field.textRange(from: field.beginningOfDocument, to: field.endOfDocument)
+            }
+        }
+    }
+    func selectValueOnTap(focus: FocusState<Bool>.Binding) -> some View {
+        contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded {
+                focus.wrappedValue = true
+                // Wait for SwiftUI to focus the field and finish placing the insertion point.
+                DispatchQueue.main.async {
+                    guard focus.wrappedValue else { return }
+                    UIApplication.shared.sendAction(#selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                }
+            })
+    }
     func editorRowInsets() -> some View {
         self.listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
@@ -189,7 +216,7 @@ private struct CalorieAmountField: UIViewRepresentable {
     func makeUIView(context: Context) -> AmountTextField {
         let field = AmountTextField()
         field.focusOnOpen = focusOnOpen
-        field.keyboardType = .decimalPad
+        field.keyboardType = .numberPad
         field.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 44) ?? .systemFont(ofSize: 44))
         field.adjustsFontForContentSizeCategory = true
         field.placeholder = blankOnOpen ? nil : "0"
@@ -204,7 +231,7 @@ private struct CalorieAmountField: UIViewRepresentable {
         context.coordinator.value = $value
         if !field.isFirstResponder {
             field.text = context.coordinator.initiallyBlank && value == 0
-                ? "" : context.coordinator.formatter.string(from: NSNumber(value: value))
+                ? "" : context.coordinator.formatter.string(from: NSNumber(value: value.rounded()))
         }
     }
     final class AmountTextField: UITextField {
@@ -224,12 +251,15 @@ private struct CalorieAmountField: UIViewRepresentable {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
             formatter.usesGroupingSeparator = false
-            formatter.maximumFractionDigits = 2
+            formatter.maximumFractionDigits = 0
             return formatter
         }()
         init(value: Binding<Double>, initiallyBlank: Bool) {
             self.value = value
             self.initiallyBlank = initiallyBlank
+        }
+        func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            string.allSatisfy { $0.isWholeNumber }
         }
         func textFieldDidBeginEditing(_ textField: UITextField) {
             DispatchQueue.main.async {
@@ -253,11 +283,13 @@ struct ServingControl: View {
     private let presets: [Double] = [0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5]
     var body: some View {
         VStack(spacing: 0) {
+        Group {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading) { Text("# of servings").font(.cave(.subheadline)).opacity(0.65); controls }
         } else {
             HStack { Text("# of servings").font(.cave(.subheadline)).opacity(0.65); Spacer(); controls }
         }
+        }.selectValueOnTap(focus: $editing)
         if editing {
             ScrollView {
                 VStack(spacing: 0) {
@@ -279,5 +311,6 @@ struct ServingControl: View {
         TextField("1", value: $value, format: .number.precision(.fractionLength(0...3)))
             .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 110)
             .focused($editing).accessibilityIdentifier("servingCount").accessibilityLabel("Number of servings")
+            .selectValueOnFocus(identifier: "servingCount")
     }
 }

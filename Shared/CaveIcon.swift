@@ -35,10 +35,13 @@ struct CaveIcon: View {
 
 struct CaveSearchAddIcon: View {
     var size: CGFloat = 20
+    var compact = false
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: compact ? 0 : 3) {
             CaveIcon(.search, size: size)
-            CaveIcon(.slash, size: size).frame(width: size * 0.5)
+            CaveIcon(.slash, size: size * 0.7)
+                .frame(width: size * 0.35)
+                .padding(.horizontal, compact ? 0 : 3)
             CaveIcon(.plus, size: size)
         }.accessibilityHidden(true)
     }

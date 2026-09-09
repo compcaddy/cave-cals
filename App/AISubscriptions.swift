@@ -130,7 +130,7 @@ struct AISubscriptionSection: View {
     @State private var showPaywall = false
     var body: some View {
         Section("Meal scanning & voice logging") {
-            if subscriptions.busy { ProgressView("Checking access…") }
+            if subscriptions.busy { ProgressView("Loading…") }
             else if subscriptions.account?.active == true {
                 Label { Text("AI logging is available") } icon: { CaveIcon(.check, size: 22) }
             } else {

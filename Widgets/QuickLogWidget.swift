@@ -87,7 +87,7 @@ private struct QuickLogView: View {
         Link(destination: action.url) {
             Group {
                 if action == .add {
-                    CaveSearchAddIcon(size: family == .systemSmall ? min(20, width / 3) : 22)
+                    CaveSearchAddIcon(size: family == .systemSmall ? min(20, width / 3) : 22, compact: true)
                 } else {
                     CaveIcon(action.caveGlyph, size: 28)
                 }

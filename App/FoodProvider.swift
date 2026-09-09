@@ -9,7 +9,7 @@ struct FoodResult: Identifiable, Codable, Equatable {
     var servingDescription: String
     var barcode: String?
     var draft: EntryDraft {
-        var value = EntryDraft(name: [brand, name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "), calories: calories)
+        var value = EntryDraft(name: name, calories: calories)
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"
         return value
     }
@@ -19,11 +19,14 @@ protocol FoodSearchService: Sendable { func search(query: String) async throws -
 protocol BarcodeLookupService: Sendable { func lookup(barcode: String) async throws -> FoodResult? }
 
 enum FoodServiceError: LocalizedError {
-    case unavailable, rateLimited
+    case unavailable, rateLimited, serverUnavailable, offline, timedOut
     var errorDescription: String? {
         switch self {
         case .unavailable: "Food search is unavailable. You can still log calories or use your saved foods."
         case .rateLimited: "Food search is busy. Try again shortly, or add calories manually."
+        case .serverUnavailable: "Open Food Facts is temporarily unavailable. Try again shortly. You can still log calories or use saved foods."
+        case .offline: "Food search couldn’t connect. Check your internet connection. You can still log calories or use saved foods."
+        case .timedOut: "Food search took too long to respond. Try again shortly. You can still log calories or use saved foods."
         }
     }
 }
@@ -46,6 +49,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw FoodServiceError.unavailable }
         if http.statusCode == 429 { throw FoodServiceError.rateLimited }
+        if (500...599).contains(http.statusCode) { throw FoodServiceError.serverUnavailable }
         guard (200...299).contains(http.statusCode) else { throw FoodServiceError.unavailable }
         return data
     }
@@ -135,7 +139,12 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
             if let cacheURL, let data = try? JSONEncoder().encode(cache) { try? data.write(to: cacheURL, options: .atomic) }
         } catch {
             guard !Task.isCancelled else { return }
-            loading = false; message = (error as? FoodServiceError)?.localizedDescription ?? FoodServiceError.unavailable.localizedDescription
+            loading = false
+            if let error = error as? URLError {
+                message = (error.code == .timedOut ? FoodServiceError.timedOut : .offline).localizedDescription
+            } else {
+                message = (error as? FoodServiceError)?.localizedDescription ?? FoodServiceError.unavailable.localizedDescription
+            }
         }
     }
 }

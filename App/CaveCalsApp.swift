@@ -69,8 +69,8 @@ struct SetupView: View {
     @State private var goal: String
     @FocusState private var editingGoal: Bool
     let isAdjustingGoal: Bool
-    @ScaledMetric(relativeTo: .title) private var goalFontSize = 84.0
-    @ScaledMetric(relativeTo: .title2) private var brandSize = 42.0
+    @ScaledMetric(relativeTo: .title) private var goalFontSize = 76.0
+    @ScaledMetric(relativeTo: .title2) private var brandSize = 29.4
     init(goal: Double? = 2100, isAdjustingGoal: Bool = false) {
         _goal = State(initialValue: goal.map(Self.formattedGoal) ?? "")
         self.isAdjustingGoal = isAdjustingGoal
@@ -79,26 +79,35 @@ struct SetupView: View {
         GeometryReader { geometry in
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 10) {
                         CaveIcon(.meal, size: brandSize).foregroundStyle(.primary)
                         Text("CaveCals")
                             .font(.custom("Schoolbell-Regular", fixedSize: brandSize))
                     }
-                    .frame(maxWidth: .infinity).padding(.top, 8)
+                    .frame(maxWidth: .infinity).padding(.top, 4)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("appBrand")
-                    VStack(alignment: .leading, spacing: -12) {
-                        headlineLine("You eat.", width: geometry.size.width - 64)
-                            .padding(.horizontal, 8)
-                        headlineLine("App count.", width: geometry.size.width - 76)
-                            .padding(.horizontal, 14)
+                    VStack(spacing: -12) {
+                        headlineLine("You Eat.", width: geometry.size.width - 64, height: geometry.size.height)
+                        headlineLine("\(Caveman.name) Track.", width: geometry.size.width - 64, height: geometry.size.height)
                     }
+                    .padding(.horizontal, 8)
                     .padding(.top, -12)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
+                    if !isAdjustingGoal {
+                        Image("TrackingMascot")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: min(160, geometry.size.height * 0.21))
+                            .frame(maxWidth: .infinity)
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)
+                    }
                     VStack(spacing: 0) {
-                        Text("Calorie Goal").font(.custom("Schoolbell-Regular", size: 24, relativeTo: .title3))
+                        Text("daily calorie goal").font(.custom("Schoolbell-Regular", size: 24, relativeTo: .title3))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                         TextField("—", text: $goal)
@@ -116,8 +125,8 @@ struct SetupView: View {
                             .padding(.bottom, -8)
                             .frame(width: min(goalFieldWidth, geometry.size.width - 48))
                             .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.35)).frame(height: 1) }
-                            .accessibilityLabel("Calorie Goal").accessibilityIdentifier("profileGoal")
-                    }.frame(maxWidth: .infinity).padding(.top, 28).padding(.bottom, 16)
+                            .accessibilityLabel("daily calorie goal").accessibilityIdentifier("profileGoal")
+                    }.frame(maxWidth: .infinity).padding(.top, isAdjustingGoal ? 28 : 0)
                     VStack(spacing: 8) {
                         Button { startTracking() } label: {
                             HStack(spacing: 10) {
@@ -132,9 +141,11 @@ struct SetupView: View {
                             .accessibilityIdentifier("skipGoal")
                             .frame(maxWidth: .infinity)
                     }
-                }.padding(24)
+                }.padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 24)
             }.scrollDismissesKeyboard(.interactively)
+                .toolbar(isAdjustingGoal ? .visible : .hidden, for: .navigationBar)
                 .task {
+                    guard isAdjustingGoal else { return }
                     try? await Task.sleep(for: .milliseconds(300))
                     guard !Task.isCancelled else { return }
                     editingGoal = true
@@ -172,10 +183,10 @@ struct SetupView: View {
         if store.saveGoal(value), isAdjustingGoal { dismiss() }
     }
 
-    private func headlineLine(_ text: String, width: CGFloat) -> some View {
-        // Measure the bundled headline font so each sentence still fits on one line.
+    private func headlineLine(_ text: String, width: CGFloat, height: CGFloat) -> some View {
+        // Fit each line to the width and reserve room for controls on short phones.
         var lower: CGFloat = 1
-        var upper: CGFloat = 100
+        var upper: CGFloat = min(85, max(44, height * 0.105))
         for _ in 0..<14 {
             let size = (lower + upper) / 2
             let font = UIFont(name: "Schoolbell-Regular", size: size) ?? UIFont.systemFont(ofSize: size)
@@ -186,6 +197,6 @@ struct SetupView: View {
             .font(.custom("Schoolbell-Regular", fixedSize: lower))
             .lineLimit(1)
             .minimumScaleFactor(0.9)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 }

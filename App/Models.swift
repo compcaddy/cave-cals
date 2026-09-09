@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+enum Caveman {
+    /// Change this once to rename the tracking companion throughout the app.
+    static let name = "Zog"
+}
+
 @Model final class UserProfile {
     var id: UUID = UUID()
     var name: String = "" // Retained for compatibility with existing stores; no longer collected.
@@ -38,8 +43,8 @@ import SwiftData
     init(draft: EntryDraft) { apply(draft) }
     func apply(_ draft: EntryDraft) {
         name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        totalCalories = draft.calories; timestamp = draft.timestamp
-        servings = draft.servings; caloriesPerServing = draft.perServing
+        totalCalories = draft.calories.rounded(); timestamp = draft.timestamp
+        servings = draft.servings; caloriesPerServing = draft.perServing.rounded()
         servingDescription = draft.servingDescription; externalID = draft.externalID
         barcode = draft.barcode; sourceType = draft.source
         mealTemplateID = draft.mealID; componentOrder = draft.order; updatedAt = Date()
@@ -58,7 +63,7 @@ import SwiftData
         componentsData = (try? JSONEncoder().encode(items)) ?? Data()
     }
     var items: [EntryDraft] { (try? JSONDecoder().decode([EntryDraft].self, from: componentsData)) ?? [] }
-    var calories: Double { items.reduce(0) { $0 + $1.calories } }
+    var calories: Double { items.reduce(0) { $0 + $1.calories.rounded() } }
 }
 
 @Model final class BarcodeFood {
@@ -87,11 +92,11 @@ struct EntryDraft: Identifiable, Codable, Equatable {
     var mealID: UUID?
     var order = 0
     init(name: String = "", calories: Double = 0, timestamp: Date = Date()) {
-        self.name = name; self.calories = calories; self.timestamp = timestamp; perServing = calories
+        self.name = name; self.calories = calories.rounded(); self.timestamp = timestamp; perServing = calories.rounded()
     }
     init(_ entry: CalorieEntry) {
-        entryID = entry.id; name = entry.name; calories = entry.totalCalories
-        timestamp = entry.timestamp; servings = entry.servings; perServing = entry.caloriesPerServing
+        entryID = entry.id; name = entry.name; calories = entry.totalCalories.rounded()
+        timestamp = entry.timestamp; servings = entry.servings; perServing = entry.caloriesPerServing.rounded()
         servingDescription = entry.servingDescription; externalID = entry.externalID; barcode = entry.barcode
         source = entry.sourceType; mealID = entry.mealTemplateID; order = entry.componentOrder
     }
@@ -100,18 +105,18 @@ struct EntryDraft: Identifiable, Codable, Equatable {
         && perServing.isFinite && perServing >= 0 && timestamp <= Date()
     }
     mutating func changeCalories(_ value: Double) {
-        calories = value
-        if perServing > 0 { servings = value / perServing }
-        if value == 0 { servings = 1 }
+        calories = value.rounded()
+        if perServing > 0 { servings = calories / perServing }
+        if calories == 0 { servings = 0 }
     }
     mutating func changeServings(_ value: Double) {
         servings = value
-        if perServing > 0 { calories = value * perServing }
+        if perServing > 0 { calories = (value * perServing).rounded() }
     }
-    mutating func changePerServing(_ value: Double) { perServing = value; calories = servings * value }
+    mutating func changePerServing(_ value: Double) { perServing = value.rounded(); calories = (servings * perServing).rounded() }
     func scaled(_ factor: Double, at date: Date, meal: UUID, order: Int) -> EntryDraft {
         var copy = self; copy.id = UUID(); copy.entryID = nil
-        copy.calories *= factor; copy.servings *= factor; copy.timestamp = date
+        copy.calories = (copy.calories * factor).rounded(); copy.perServing = copy.perServing.rounded(); copy.servings *= factor; copy.timestamp = date
         copy.mealID = meal; copy.order = order; copy.source = "savedMeal"
         return copy
     }
@@ -131,10 +136,19 @@ enum Day {
 }
 
 extension Double {
-    var calorieText: String { formatted(.number.precision(.fractionLength(0...1))) }
+    var calorieText: String { rounded().formatted(.number.precision(.fractionLength(0))) }
 }
 
 func normalizedFoodName(_ name: String) -> String {
     name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
+}
+
+extension CalorieEntry {
+    var foodDisplayName: String {
+        // Older Open Food Facts entries stored "company · product" together.
+        guard externalID?.hasPrefix("openfoodfacts:") == true,
+              let separator = name.range(of: " · ") else { return name }
+        return String(name[separator.upperBound...])
+    }
 }

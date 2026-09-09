@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import OpenAI from 'openai';
 import sharp from 'sharp';
-import { identify,validateAudioDuration } from '../backend/src/server/ai';
+import { identify,validateAudioDuration,validateResult } from '../backend/src/server/ai';
 import type { Upload } from '../backend/src/server/storage';
 function wave(seconds=1) {
   const b=Buffer.alloc(44+16000*seconds*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(16000,24);b.writeUInt32LE(32000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(b.length-44,40);return b;
@@ -34,4 +34,9 @@ test('the OpenAI SDK sends image identification and transcribed voice through st
     assert.ok(requests[2].body.includes('I ate two eggs.'));
     await assert.rejects(validateAudioDuration(wave(66),'audio/wav'));
   } finally { await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve())); }
+});
+
+test('normalizes visual and preparation words from portions',()=>{
+  const result = validateResult({items:[{name:'Banana',calories:100,portion:'1 medium banana shown, peeled',confidence:'medium'}],notes:''});
+  assert.equal(result.items[0].portion,'1 medium banana');
 });

@@ -44,7 +44,7 @@ struct MainView: View {
     @State private var openedInitially = false
     @State private var wasBackgrounded = false
     @FocusState private var searching: Bool
-    @ScaledMetric(relativeTo: .largeTitle) private var summarySize = 68.0
+    @ScaledMetric(relativeTo: .largeTitle) private var summarySize = 32.0
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     var body: some View {
@@ -61,7 +61,9 @@ struct MainView: View {
                                 Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
                                     HStack(alignment: .firstTextBaseline, spacing: 14) {
                                         Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 67, alignment: .leading)
-                                        Text(entry.name).font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.primary)
+                                            .lineLimit(1).truncationMode(.tail)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(entry.totalCalories.calorieText)
                                             .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.primary)
                                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
@@ -161,19 +163,48 @@ struct MainView: View {
     }
     private var summary: some View {
         let total = store.total(selected), goal = store.goal(selected)
-        return VStack(alignment: .center, spacing: 10) {
-            VStack(spacing: 2) {
-                Text(total.calorieText)
-                    .font(.custom("Schoolbell-Regular", fixedSize: summarySize))
-                    .lineLimit(1).minimumScaleFactor(0.5)
-                if let goal {
-                    Text("/ \(goal.calorieText)").font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.secondary)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(total.calorieText)
+                        .font(.custom("Schoolbell-Regular", fixedSize: summarySize * 1.5))
+                    if let goal {
+                        Text("/ \(goal.calorieText)")
+                            .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }.accessibilityElement(children: .ignore)
-                .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
-                .accessibilityIdentifier("calorieSummary")
-        }.frame(maxWidth: .infinity).multilineTextAlignment(.center).padding(.vertical, 20)
+                Spacer(minLength: 0)
+                if let goal {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(abs(goal - total).calorieText)
+                            .font(.custom("Schoolbell-Regular", size: 28, relativeTo: .title2))
+                        Text(total > goal ? "over" : "left")
+                            .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .padding(.horizontal, 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
+            .accessibilityIdentifier("calorieSummary")
+            if let goal {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                        Capsule().fill(Color.accentColor)
+                            .frame(width: geometry.size.width * min(max(total / goal, 0), 1))
+                    }
+                }
+                .frame(height: 9)
+                .accessibilityLabel("Goal progress")
+                .accessibilityValue("\((min(total / goal, 1) * 100).calorieText) percent")
+            }
+        }.frame(maxWidth: .infinity).padding(.vertical, 20)
     }
+
     private var searchSection: some View {
         Group {
         if Double(cleanQuery) == nil {
@@ -182,23 +213,23 @@ struct MainView: View {
                 sheet = .namedEntry(EntryDraft(name: cleanQuery, timestamp: loggingDate))
             } label: {
                 HStack {
-                    Text("Add \(cleanQuery)").font(.cave(.subheadline)).foregroundStyle(.primary)
+                    Text("Add \"\(cleanQuery)\"").font(.cave(.subheadline)).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     CaveIcon(.pencil, size: 22).font(.cave(.body).weight(.semibold)).foregroundStyle(.white)
                         .frame(width: 34, height: 34).background(Color.accentColor, in: Circle())
                         .frame(width: 44, height: 48)
                 }.contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityLabel("Add \(cleanQuery), enter calories")
+            }.buttonStyle(.plain).accessibilityLabel("Add \"\(cleanQuery)\", enter calories")
+        }
+        if let amount = Double(cleanQuery), amount >= 0, amount <= 100_000 {
+            FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
+                    add: { add(EntryDraft(calories: amount)) }, edit: { edit(EntryDraft(calories: amount), focusName: true) })
         }
         Section("Results") {
             ForEach(CommonFoods.search(cleanQuery)) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { add(draft) }, edit: { edit(draft) })
-            }
-            if let amount = Double(cleanQuery), amount >= 0, amount <= 100_000 {
-                FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
-                        add: { add(EntryDraft(calories: amount)) }, edit: { edit(EntryDraft(calories: amount), focusName: true) })
             }
             let local = FoodHistory.search(cleanQuery, entries: store.entries)
             ForEach(local) { food in
@@ -214,7 +245,12 @@ struct MainView: View {
                 FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription,
                         add: { add(result.draft) }, edit: { edit(result.draft) })
             }
-            if search.loading { HStack { ProgressView(); Text("Searching foods…").foregroundStyle(.secondary) } }
+            if search.loading {
+                HStack(spacing: 12) {
+                    ProgressView().frame(width: 24, height: 24)
+                    Text("Searching foods…").foregroundStyle(.secondary)
+                }
+            }
             if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
             if !search.results.isEmpty { Text("Food data: Open Food Facts · ODbL").font(.cave(.caption2)).foregroundStyle(.secondary) }
         }
@@ -223,12 +259,12 @@ struct MainView: View {
     private var emptyDayGuide: some View {
         // Match the footer's columns so arrows stay centered over their actions.
         HStack(alignment: .bottom, spacing: 10) {
-            Color.clear.frame(width: 44, height: 1)
-            guideLabel("Scan a\nbarcode").frame(width: 44)
-            guideLabel("Voice\nLog").frame(width: 44)
-            guideLabel("Meal\nScan").frame(width: 44)
-            guideLabel("Search/\nManual Add")
-                .frame(maxWidth: .infinity).padding(.leading, 8)
+            Color.clear.frame(maxWidth: .infinity).frame(height: 1)
+            guideLabel("Voice\nLog").frame(maxWidth: .infinity)
+            guideLabel("Scan\nBarCode").frame(maxWidth: .infinity)
+            guideLabel("Scan\nMeal").frame(maxWidth: .infinity)
+            guideLabel("Search / Manual", lineLimit: 1)
+                .frame(width: 100)
         }
         .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 2)
         .background(Color(.systemBackground))
@@ -236,12 +272,12 @@ struct MainView: View {
         .allowsHitTesting(false)
     }
 
-    private func guideLabel(_ title: String) -> some View {
+    private func guideLabel(_ title: String, lineLimit: Int = 2) -> some View {
         VStack(spacing: 5) {
             Text(title)
                 .font(.custom("Schoolbell-Regular", size: 16, relativeTo: .footnote))
                 .multilineTextAlignment(.center)
-                .lineLimit(2).minimumScaleFactor(0.75)
+                .lineLimit(lineLimit).minimumScaleFactor(0.75)
                 .fixedSize(horizontal: false, vertical: true)
             GuideArrow().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
                 .frame(width: 18, height: 25)
@@ -261,20 +297,20 @@ struct MainView: View {
             if store.dayEntries(selected).isEmpty { emptyDayGuide }
             HStack(spacing: 10) {
                 Button { sheet = .settings } label: {
-                    CaveIcon(.gear, size: 22).font(.cave(.title2)).frame(width: 44, height: 48)
+                    CaveIcon(.gear, size: 24).font(.cave(.title2)).frame(maxWidth: .infinity, minHeight: 48)
                 }.accessibilityLabel("Settings")
-                Button { sheet = .barcode(loggingDate) } label: {
-                    CaveIcon(.barcode, size: 28).frame(width: 44, height: 48)
-                }.accessibilityLabel("Scan barcode")
                 Button { sheet = .voice } label: {
-                    CaveIcon(.voice, size: 28).frame(width: 44, height: 48)
+                    CaveIcon(.voice, size: 31).frame(maxWidth: .infinity, minHeight: 48)
                 }.accessibilityLabel("Voice entry")
+                Button { sheet = .barcode(loggingDate) } label: {
+                    CaveIcon(.barcode, size: 31).frame(maxWidth: .infinity, minHeight: 48)
+                }.accessibilityLabel("Scan barcode")
                 Button { sheet = .photo } label: {
-                    CaveIcon(.meal, size: 28).frame(width: 44, height: 48)
+                    CaveIcon(.meal, size: 31).frame(maxWidth: .infinity, minHeight: 48)
                 }.accessibilityLabel("Photo entry")
                 Button(action: openSearch) {
                     CaveSearchAddIcon(size: 22).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .frame(width: 100, height: 48)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
                 }.buttonStyle(.plain).accessibilityIdentifier("openSearch")
                     .accessibilityLabel("Search or add food")
@@ -283,24 +319,30 @@ struct MainView: View {
         }.background(.bar)
     }
     private var searchDrawer: some View {
+        HStack(alignment: .top, spacing: 0) {
         VStack(spacing: 4) {
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     CaveIcon(.search, size: 20).foregroundStyle(.secondary)
                     DrawerSearchField(text: $query)
                 }.padding(12).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                Button(action: closeSearch) {
-                    CaveIcon(.plus, size: 19).rotationEffect(.degrees(45)).font(.cave(.body).weight(.bold)).foregroundStyle(.white)
-                        .frame(width: 34, height: 34).background(Color.red, in: Circle())
-                        .frame(width: 44, height: 48)
-                }.accessibilityLabel("Close search")
             }.padding(.horizontal, 16).padding(.top, 24)
             List {
                 if cleanQuery.isEmpty {
                     let suggestions = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
                     if suggestions.isEmpty {
-                        Text("CaveCal will give you smart suggestions once it learns your eating habits.")
-                            .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body)).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 24) {
+                            Text("You eat. \(Caveman.name) remember. Soon, \(Caveman.name) help you log food fast.")
+                                .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body))
+                            Image("SmartSuggestionsMascot")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 220)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityHidden(true)
+                        }
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                             .listRowSeparator(.hidden)
                     } else {
@@ -321,32 +363,33 @@ struct MainView: View {
                 .contentMargins(.top, 0, for: .scrollContent)
                 .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 20)
+                HStack {
+                    Spacer()
+                    Button(action: closeSearch) {
+                        HStack(spacing: 8) {
+                            Text("Close").font(.cave(.subheadline)).foregroundStyle(.red)
+                            CaveIcon(.plus, size: 14).rotationEffect(.degrees(45)).foregroundStyle(.white)
+                                .frame(width: 26, height: 26).background(Color.red, in: Circle())
+                        }.frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel("Close search")
+                }.padding(.horizontal, 16).padding(.vertical, 8)
+        }
+            if query.isEmpty {
+                quickCalorieRail
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(stride(from: 25, through: 1000, by: 25)), id: \.self) { amount in
-                            Button {
-                                searching = false
-                                sheet = .quickEntry(EntryDraft(calories: Double(amount), timestamp: loggingDate))
-                            } label: {
-                                Text(amount.formatted()).font(.cave(.subheadline).weight(.semibold)).monospacedDigit()
-                                    .padding(.horizontal, 16).frame(minWidth: 60, minHeight: 44)
-                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
-                            }.accessibilityLabel("Add \(amount) calories")
-                        }
-                    }.padding(.horizontal, 16).padding(.vertical, 8)
-                }.accessibilityIdentifier("quickCalorieAmounts")
+
             HStack {
-                Spacer()
-                Button { searching = false; sheet = .barcode(loggingDate) } label: {
-                    CaveIcon(.barcode, size: 28).frame(width: 60, height: 48)
-                }.accessibilityLabel("Scan barcode")
                 Spacer()
                 Button { searching = false; sheet = .voice } label: {
                     CaveIcon(.voice, size: 28).frame(width: 60, height: 48)
                 }.accessibilityLabel("Voice entry")
+                Spacer()
+                Button { searching = false; sheet = .barcode(loggingDate) } label: {
+                    CaveIcon(.barcode, size: 28).frame(width: 60, height: 48)
+                }.accessibilityLabel("Scan barcode")
                 Spacer()
                 Button { searching = false; sheet = .photo } label: {
                     CaveIcon(.meal, size: 28).frame(width: 60, height: 48)
@@ -357,6 +400,25 @@ struct MainView: View {
         }
         .presentationDetents([.large]).presentationDragIndicator(.visible)
         .onDisappear { searching = false }
+    }
+    private var quickCalorieRail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 8) {
+                ForEach(Array(stride(from: 50, through: 950, by: 50)), id: \.self) { amount in
+                    Button {
+                        searching = false
+                        sheet = .quickEntry(EntryDraft(calories: Double(amount), timestamp: loggingDate))
+                    } label: {
+                        Text(amount.formatted()).font(.cave(.subheadline).weight(.semibold)).monospacedDigit()
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    }.accessibilityLabel("Add \(amount) calories")
+                }
+            }.padding(.vertical, 12).padding(.horizontal, 8)
+        }
+        .frame(width: 76)
+        .background(.bar)
+        .accessibilityIdentifier("quickCalorieAmounts")
     }
     private func openSearch() { query = ""; sheet = .search }
     private func closeSearch() { searching = false; query = ""; sheet = nil }
@@ -375,7 +437,7 @@ private struct DrawerSearchField: View {
     @Binding var text: String
     @FocusState private var focused: Bool
     var body: some View {
-        TextField("Search food or enter calories…", text: $text)
+        TextField("search food or enter cals", text: $text)
             .focused($focused).submitLabel(.search).autocorrectionDisabled()
             .accessibilityIdentifier("foodSearch")
             .task {
@@ -449,16 +511,15 @@ struct DaySelector: View {
         }
     }
     private var dateLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.dateFormat = "EEEE"
+        let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thur", "Fri", "Sat"]
+        let weekday = weekdays[Calendar.current.component(.weekday, from: selected) - 1]
         let months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."]
         let month = months[Calendar.current.component(.month, from: selected) - 1]
         let day = Calendar.current.component(.day, from: selected)
         let ordinal = NumberFormatter()
         ordinal.locale = Locale(identifier: "en_US")
         ordinal.numberStyle = .ordinal
-        return "\(formatter.string(from: selected)), \(month) \(ordinal.string(from: NSNumber(value: day)) ?? String(day))"
+        return "\(weekday), \(month) \(ordinal.string(from: NSNumber(value: day)) ?? String(day))"
     }
     private func move(_ delta: Int) {
         guard let next = Calendar.current.date(byAdding: .day, value: delta, to: selected),
@@ -489,7 +550,7 @@ private struct CalorieCalendarSheet: View {
     }
     var body: some View {
         let totals = Dictionary(grouping: store.entries, by: { calendar.startOfDay(for: $0.timestamp) })
-            .mapValues { $0.reduce(0) { $0 + $1.totalCalories } }
+            .mapValues { $0.reduce(0) { $0 + $1.totalCalories.rounded() } }
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
