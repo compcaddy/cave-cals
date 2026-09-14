@@ -30,12 +30,7 @@ private struct QuickLogView: View {
             if family == .systemSmall {
                 VStack(spacing: 6) {
                     if let snapshot = entry.snapshot {
-                        Text(snapshot.total(on: entry.date).formatted(.number.grouping(.never).precision(.fractionLength(0))))
-                            .font(.cave(.caption).weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1).minimumScaleFactor(0.75)
-                            .frame(maxWidth: .infinity)
-                            .accessibilityLabel("Today: \(Int(snapshot.total(on: entry.date).rounded())) calories")
+                        calorieSummary(snapshot, style: .caption)
                     }
                     GeometryReader { geometry in
                         let width = max(0, geometry.size.width - 8) / 2
@@ -61,16 +56,10 @@ private struct QuickLogView: View {
 
     private var mediumContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Cave Cals").font(.cave(.headline)).foregroundStyle(.primary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
-                if let snapshot = entry.snapshot {
-                    Text(snapshot.total(on: entry.date).formatted(.number.grouping(.never).precision(.fractionLength(0))))
-                        .font(.cave(.subheadline).weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.75)
-                        .accessibilityLabel("Today: \(Int(snapshot.total(on: entry.date).rounded())) calories")
-                }
+            if let snapshot = entry.snapshot {
+                calorieSummary(snapshot, style: .headline)
+            } else {
+                Text("Cave Cals").font(.cave(.headline))
             }
             GeometryReader { geometry in
                 let unitWidth = max(0, geometry.size.width - 24) / 4.4
@@ -81,6 +70,29 @@ private struct QuickLogView: View {
                 }
             }.frame(height: 56)
         }
+    }
+
+    private func calorieSummary(_ snapshot: CalorieWidgetSnapshot, style: Font.TextStyle) -> some View {
+        let total = snapshot.total(on: entry.date)
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(total.formatted(.number.precision(.fractionLength(0))))
+                .font(.cave(style).bold())
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Today: \(Int(total.rounded())) calories")
+            Spacer(minLength: 0)
+            if let goal = snapshot.goal, goal > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(abs(goal - total).formatted(.number.precision(.fractionLength(0))))
+                        .foregroundStyle(.primary)
+                    Text(total > goal ? "over" : "left")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.cave(style))
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.65)
+        .frame(maxWidth: .infinity)
     }
 
     private func actionLink(_ action: LoggingAction, width: CGFloat, height: CGFloat) -> some View {

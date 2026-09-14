@@ -39,6 +39,11 @@ struct MainView: View {
     @State private var selected = Date()
     @State private var today = Date()
     @State private var query = ""
+    @State private var showingQuickCalories = false
+    @State private var quickAmount: Int?
+    @State private var quickName = ""
+    @State private var suggestedFoods: [HistoricalFood] = []
+    @State private var localSearchFoods: [HistoricalFood] = []
     @State private var search = FoodSearchState()
     @State private var sheet: MainSheet?
     @State private var openedInitially = false
@@ -50,8 +55,18 @@ struct MainView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DaySelector(selected: $selected, today: today, openCalendar: { sheet = .calendar })
-                    .padding(.horizontal, 20).padding(.top, 8)
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        DaySelector(selected: $selected, today: today, openCalendar: { sheet = .calendar })
+                            .frame(width: geometry.size.width * 0.75)
+                        Spacer(minLength: 0)
+                        Button { sheet = .settings } label: {
+                            CaveIcon(.gear, size: 24).frame(width: 44, height: 44)
+                        }.accessibilityLabel("Settings")
+                    }
+                }
+                .frame(height: 44)
+                .padding(.horizontal, 20).padding(.top, 8)
                 summary.padding(.horizontal, 20)
                 Divider().padding(.horizontal, 20)
             ScrollViewReader { proxy in
@@ -84,6 +99,7 @@ struct MainView: View {
                 .listStyle(.plain).scrollDismissesKeyboard(.interactively)
                 .onChange(of: store.lastAddedID) { _, value in
                     guard let value else { return }
+                    if case .search = sheet { return }
                     query = ""; searching = false
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(100))
@@ -97,7 +113,10 @@ struct MainView: View {
             .sheet(isPresented: drawerPresented) {
                 drawerContent
             }
-            .task(id: cleanQuery) { await search.search(cleanQuery) }
+            .task(id: cleanQuery) {
+                localSearchFoods = FoodHistory.search(cleanQuery, entries: store.entries)
+                await search.search(cleanQuery)
+            }
             .task {
                 guard !openedInitially else { return }
                 openedInitially = true
@@ -121,6 +140,7 @@ struct MainView: View {
         }
     }
     @discardableResult private func openPendingAction() -> Bool {
+        let quickCalories = actionRouter.pending?.quickCalories == true
         guard let action = actionRouter.consume() else { return false }
         openedInitially = true
         // External logging always starts today, even if a past day was selected.
@@ -132,7 +152,9 @@ struct MainView: View {
         case .barcode: sheet = .barcode(loggingDate)
         case .voice: sheet = .voice
         case .image: sheet = .photo
-        case .add: openSearch()
+        case .add:
+            openSearch()
+            showingQuickCalories = quickCalories
         }
         return true
     }
@@ -225,20 +247,24 @@ struct MainView: View {
             FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
                     add: { add(EntryDraft(calories: amount)) }, edit: { edit(EntryDraft(calories: amount), focusName: true) })
         }
-        Section("Results") {
+        Group {
+            Text("Results").font(.cave(.caption2)).foregroundStyle(.secondary)
+                .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 16))
+                .listRowSeparator(.hidden)
+                .environment(\.defaultMinListRowHeight, 18)
             ForEach(CommonFoods.search(cleanQuery)) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { add(draft) }, edit: { edit(draft) })
             }
-            let local = FoodHistory.search(cleanQuery, entries: store.entries)
+            let local = localSearchFoods
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: draft.name, calories: draft.calories, add: { add(draft) }, edit: { edit(draft) })
             }
             ForEach(store.meals.filter { normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery)) }) { meal in
                 FoodRow(name: meal.name, calories: meal.calories, meal: true, add: {
-                    if store.addMeal(meal, date: loggingDate) { closeSearch() }
+                    _ = store.addMeal(meal, date: loggingDate)
                 }, edit: { searching = false; sheet = .meal(meal.id, loggingDate) })
             }
             ForEach(search.results.filter { result in !local.contains { $0.draft.externalID == result.id } }) { result in
@@ -296,9 +322,13 @@ struct MainView: View {
             }
             if store.dayEntries(selected).isEmpty { emptyDayGuide }
             HStack(spacing: 10) {
-                Button { sheet = .settings } label: {
-                    CaveIcon(.gear, size: 24).font(.cave(.title2)).frame(maxWidth: .infinity, minHeight: 48)
-                }.accessibilityLabel("Settings")
+                Button {
+                    openSearch()
+                    showingQuickCalories = true
+                } label: {
+                    QuickCaloriesIcon().frame(width: 28, height: 28)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }.accessibilityLabel("Quick calories")
                 Button { sheet = .voice } label: {
                     CaveIcon(.voice, size: 31).frame(maxWidth: .infinity, minHeight: 48)
                 }.accessibilityLabel("Voice entry")
@@ -324,23 +354,26 @@ struct MainView: View {
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     CaveIcon(.search, size: 20).foregroundStyle(.secondary)
-                    DrawerSearchField(text: $query)
+                    DrawerSearchField(text: $query, autofocus: !showingQuickCalories)
+                    if !query.isEmpty {
+                        Button {
+                            query = ""
+                            showingQuickCalories = false
+                            suggestedFoods = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
+                        } label: {
+                            CaveIcon(.plus, size: 17).rotationEffect(.degrees(45))
+                                .foregroundStyle(.red).frame(width: 44, height: 44)
+                        }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                    }
                 }.padding(12).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
             }.padding(.horizontal, 16).padding(.top, 24)
             List {
                 if cleanQuery.isEmpty {
-                    let suggestions = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
+                    let suggestions = suggestedFoods
                     if suggestions.isEmpty {
                         VStack(alignment: .leading, spacing: 24) {
-                            Text("You eat. \(Caveman.name) remember. Soon, \(Caveman.name) help you log food fast.")
+                            Text("You eat. App remember. Soon, app help you log food fast.")
                                 .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body))
-                            Image("SmartSuggestionsMascot")
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: 220)
-                                .frame(maxWidth: .infinity)
-                                .accessibilityHidden(true)
                         }
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -363,6 +396,7 @@ struct MainView: View {
                 .contentMargins(.top, 0, for: .scrollContent)
                 .environment(\.defaultMinListRowHeight, 44)
                 .environment(\.defaultMinListHeaderHeight, 20)
+                if query.isEmpty {
                 HStack {
                     Spacer()
                     Button(action: closeSearch) {
@@ -373,15 +407,30 @@ struct MainView: View {
                         }.frame(minHeight: 44).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityLabel("Close search")
                 }.padding(.horizontal, 16).padding(.vertical, 8)
+                }
         }
-            if query.isEmpty {
-                quickCalorieRail
-            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
-
+                if let toast = store.toast {
+                    HStack {
+                        Text(toast).font(.cave(.subheadline)).lineLimit(2)
+                        Spacer(minLength: 8)
+                        Button("Undo") { store.undo() }.font(.cave(.subheadline).bold())
+                            .frame(minHeight: 44)
+                    }.padding(.horizontal, 20).background(Color.accentColor.opacity(0.1))
+                        .accessibilityIdentifier("searchUndoBanner")
+                }
+                if query.isEmpty {
+                if showingQuickCalories { quickCalorieGrid }
             HStack {
+                Spacer()
+                Button {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    withAnimation(.easeInOut(duration: 0.2)) { showingQuickCalories.toggle() }
+                } label: {
+                    QuickCaloriesIcon().frame(width: 28, height: 28).frame(width: 60, height: 48)
+                }.accessibilityIdentifier("searchQuickCalories").accessibilityLabel("Quick calories").accessibilityValue(showingQuickCalories ? "Expanded" : "Collapsed")
                 Spacer()
                 Button { searching = false; sheet = .voice } label: {
                     CaveIcon(.voice, size: 28).frame(width: 60, height: 48)
@@ -396,36 +445,74 @@ struct MainView: View {
                 }.accessibilityLabel("Photo entry")
                 Spacer()
             }.padding(.vertical, 8)
+                }
             }.background(.bar)
         }
         .presentationDetents([.large]).presentationDragIndicator(.visible)
         .onDisappear { searching = false }
     }
-    private var quickCalorieRail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 8) {
-                ForEach(Array(stride(from: 50, through: 950, by: 50)), id: \.self) { amount in
+    private var quickCalorieGrid: some View {
+        VStack(spacing: 6) {
+            Text("Quick calories").font(.cave(.subheadline))
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
+                ForEach(Array(stride(from: 50, through: 1000, by: 50)), id: \.self) { amount in
                     Button {
-                        searching = false
-                        sheet = .quickEntry(EntryDraft(calories: Double(amount), timestamp: loggingDate))
+                        quickAmount = amount
                     } label: {
-                        Text(amount.formatted()).font(.cave(.subheadline).weight(.semibold)).monospacedDigit()
+                        Text(amount.formatted()).font(.cave(.subheadline)).lineLimit(1).minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Color.accentColor.opacity(0.12), in: Capsule())
-                    }.accessibilityLabel("Add \(amount) calories")
+                            .background(quickAmount == amount ? Color.accentColor : Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    }.buttonStyle(.plain)
+                        .foregroundStyle(quickAmount == amount ? Color(.systemBackground) : Color.accentColor)
+                        .accessibilityLabel("Select \(amount) calories")
+                        .accessibilityAddTraits(quickAmount == amount ? .isSelected : [])
+
                 }
-            }.padding(.vertical, 12).padding(.horizontal, 8)
-        }
-        .frame(width: 76)
-        .background(.bar)
-        .accessibilityIdentifier("quickCalorieAmounts")
+            }
+            HStack(spacing: 8) {
+                TextField("Name (optional)", text: $quickName)
+                    .font(.cave(.subheadline))
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityIdentifier("quickCalorieName")
+                    .submitLabel(.done)
+                    .onSubmit { addQuickCalories() }
+                Button(action: addQuickCalories) {
+                    CaveIcon(.plus, size: 18).foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.accentColor, in: Circle())
+                        .opacity(quickAmount == nil ? 0.35 : 1)
+                        .frame(width: 44, height: 44)
+                }.buttonStyle(.plain)
+                    .disabled(quickAmount == nil)
+                    .accessibilityLabel("Add quick calories")
+            }.padding(.top, 6)
+        }.padding(12)
     }
-    private func openSearch() { query = ""; sheet = .search }
+    private func addQuickCalories() {
+        guard let quickAmount else { return }
+        let draft = EntryDraft(name: quickName.trimmingCharacters(in: .whitespacesAndNewlines),
+                               calories: Double(quickAmount), timestamp: loggingDate)
+        guard store.add([draft]) else { return }
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        self.quickAmount = nil
+        quickName = ""
+        showingQuickCalories = false
+    }
+    private func openSearch() {
+        query = ""
+        showingQuickCalories = false
+        quickAmount = nil
+        quickName = ""
+        // Keep rows stable while logging several foods and showing confirmation.
+        suggestedFoods = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
+        sheet = .search
+    }
     private func closeSearch() { searching = false; query = ""; sheet = nil }
     private func resetToday() { today = Date(); selected = today }
     private func add(_ input: EntryDraft, source: String? = nil) {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
-        if store.add([draft]) { closeSearch() }
+        _ = store.add([draft])
     }
     private func edit(_ input: EntryDraft, source: String? = nil, focusName: Bool = false) {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
@@ -435,6 +522,7 @@ struct MainView: View {
 
 private struct DrawerSearchField: View {
     @Binding var text: String
+    var autofocus = true
     @FocusState private var focused: Bool
     var body: some View {
         TextField("search food or enter cals", text: $text)
@@ -442,6 +530,7 @@ private struct DrawerSearchField: View {
             .accessibilityIdentifier("foodSearch")
             .task {
                 // Focus belongs to the presented view, after the drawer enters the window.
+                guard autofocus else { return }
                 try? await Task.sleep(for: .milliseconds(400))
                 guard !Task.isCancelled else { return }
                 focused = true
@@ -451,6 +540,11 @@ private struct DrawerSearchField: View {
 }
 
 struct FoodRow: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var confirming = false
+    @State private var rotation = 0.0
+
     let name: String
     var calories: Double?
     var detail: String? = nil
@@ -461,12 +555,12 @@ struct FoodRow: View {
     private var actionName: String { calories == nil && name.hasPrefix("Add ") ? String(name.dropFirst(4)) : name }
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: add) {
+            Button(action: addWithFeedback) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             if meal { CaveIcon(.meal, size: 18) }
-                            Text("\(name)\(suggestionLayout ? "" : (calories.map { " · \($0.calorieText) cal" } ?? ""))").font(.cave(.subheadline)).lineLimit(2)
+                            Text("\(name)\(suggestionLayout ? "" : (calories.map { " · \($0.calorieText) cal" } ?? ""))").font(.cave(.subheadline).weight(confirming ? .bold : .regular)).foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(2)
                         }
                         if let detail, !detail.isEmpty { Text(detail).font(.cave(.caption)).foregroundStyle(.secondary).lineLimit(1) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
@@ -480,12 +574,70 @@ struct FoodRow: View {
             }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel("Add \(actionName)")
             Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 64 : 48) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")
-            Button(action: add) {
-                CaveIcon(.plus, size: 17).foregroundStyle(.white)
-                    .frame(width: 34, height: 34).background(Color.accentColor, in: Circle())
+            Button(action: addWithFeedback) {
+                FlipAddIcon(angle: rotation, showCheckWithoutMotion: reduceMotion && confirming)
                     .frame(width: 44, height: suggestionLayout ? 64 : 48)
             }.buttonStyle(.borderless).accessibilityLabel("Add \(actionName)")
         }
+        .task(id: confirming) {
+            guard confirming else { return }
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                confirming = false
+                rotation = 0
+            }
+        }
+    }
+    private func addWithFeedback() {
+        guard !confirming else { return }
+        let previous = store.lastAddedID
+        add()
+        guard store.lastAddedID != previous else { return }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+            confirming = true
+            rotation = reduceMotion ? 0 : 180
+        }
+    }
+}
+
+private struct FlipAddIcon: View, Animatable {
+    var angle: Double
+    var showCheckWithoutMotion: Bool
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+    var body: some View {
+        ZStack {
+            CaveIcon(.plus, size: 17).opacity(angle < 90 && !showCheckWithoutMotion ? 1 : 0)
+            CaveIcon(.check, size: 17)
+                .rotation3DEffect(.degrees(showCheckWithoutMotion ? 0 : 180), axis: (x: 0, y: 1, z: 0))
+                .opacity(angle >= 90 || showCheckWithoutMotion ? 1 : 0)
+        }
+        .foregroundStyle(.white)
+        .frame(width: 34, height: 34).background(Color.accentColor, in: Circle())
+        .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+    }
+}
+
+private struct QuickCaloriesIcon: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            for row in 0..<2 {
+                for column in 0..<2 {
+                    let x = CGFloat(column) * size.width * 0.55 + 1
+                    let y = CGFloat(row) * size.height * 0.55 + 1
+                    path.move(to: CGPoint(x: x, y: y + 1))
+                    path.addLine(to: CGPoint(x: x + size.width * 0.36, y: y))
+                    path.addLine(to: CGPoint(x: x + size.width * 0.38, y: y + size.height * 0.37))
+                    path.addLine(to: CGPoint(x: x + 1, y: y + size.height * 0.39))
+                    path.closeSubpath()
+                }
+            }
+            context.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        }.accessibilityHidden(true)
     }
 }
 
@@ -500,6 +652,7 @@ struct DaySelector: View {
             }.buttonStyle(.borderless).accessibilityLabel("Previous day")
             Button(action: openCalendar) {
                 Text(dateLabel).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
+                    .lineLimit(1).minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("selectedDate")

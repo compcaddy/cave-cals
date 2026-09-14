@@ -1,11 +1,6 @@
 import Foundation
 import SwiftData
 
-enum Caveman {
-    /// Change this once to rename the tracking companion throughout the app.
-    static let name = "Zog"
-}
-
 @Model final class UserProfile {
     var id: UUID = UUID()
     var name: String = "" // Retained for compatibility with existing stores; no longer collected.
@@ -91,6 +86,9 @@ struct EntryDraft: Identifiable, Codable, Equatable {
     var source = "manual"
     var mealID: UUID?
     var order = 0
+    // Keep following each typed digit until the user changes a serving field.
+    // Optional so previously persisted drafts decode without this new field.
+    private var derivesPerServingFromCalories: Bool? = nil
     init(name: String = "", calories: Double = 0, timestamp: Date = Date()) {
         self.name = name; self.calories = calories.rounded(); self.timestamp = timestamp; perServing = calories.rounded()
     }
@@ -106,14 +104,22 @@ struct EntryDraft: Identifiable, Codable, Equatable {
     }
     mutating func changeCalories(_ value: Double) {
         calories = value.rounded()
-        if perServing > 0 { servings = calories / perServing }
+        if perServing == 0 { derivesPerServingFromCalories = true }
+        if calories > 0, servings == 0 { servings = 1 }
+        if derivesPerServingFromCalories == true {
+            perServing = calories
+        } else if perServing > 0 { servings = calories / perServing }
         if calories == 0 { servings = 0 }
     }
     mutating func changeServings(_ value: Double) {
+        if value != servings { derivesPerServingFromCalories = false }
         servings = value
         if perServing > 0 { calories = (value * perServing).rounded() }
     }
-    mutating func changePerServing(_ value: Double) { perServing = value.rounded(); calories = (servings * perServing).rounded() }
+    mutating func changePerServing(_ value: Double) {
+        if value.rounded() != perServing { derivesPerServingFromCalories = false }
+        perServing = value.rounded(); calories = (servings * perServing).rounded()
+    }
     func scaled(_ factor: Double, at date: Date, meal: UUID, order: Int) -> EntryDraft {
         var copy = self; copy.id = UUID(); copy.entryID = nil
         copy.calories = (copy.calories * factor).rounded(); copy.perServing = copy.perServing.rounded(); copy.servings *= factor; copy.timestamp = date

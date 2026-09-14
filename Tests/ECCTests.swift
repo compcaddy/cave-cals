@@ -3,6 +3,25 @@ import SwiftData
 @testable import CaveCals
 
 @MainActor final class ECCTests: XCTestCase {
+    func testShortcutMenuRoutesAndPreservesQuickCaloriesOnColdStart() {
+        let router = LoggingActionRouter()
+        for (choice, action) in [(CalorieLoggingChoice.voice, LoggingAction.voice), (.meal, .image), (.barcode, .barcode)] {
+            choice.open(using: router)
+            XCTAssertEqual(router.consume(), action)
+            XCTAssertNil(router.pending)
+        }
+        CalorieLoggingChoice.quickCalories.open(using: router)
+        XCTAssertEqual(router.pending?.action, .add)
+        XCTAssertEqual(router.pending?.quickCalories, true)
+        let firstID = router.pending?.id
+        CalorieLoggingChoice.quickCalories.open(using: router)
+        XCTAssertNotEqual(router.pending?.id, firstID)
+        XCTAssertEqual(router.consume(), .add)
+        XCTAssertNil(router.pending)
+        router.open(.add)
+        XCTAssertEqual(router.pending?.quickCalories, false)
+    }
+
     func makeStore() throws -> AppStore { try Persistence.make(inMemory: true) }
     func yesterday() -> Date { Calendar.current.date(byAdding: .day, value: -1, to: Date())! }
 
@@ -118,6 +137,24 @@ import SwiftData
         manual.changeCalories(0)
         XCTAssertEqual(manual.servings, 0)
     }
+    func testManualCaloriesInitializeServingFieldsWhileTyping() {
+        var draft = EntryDraft()
+        draft.changeCalories(0)
+        draft.changeCalories(7)
+        draft.changeCalories(75)
+        XCTAssertEqual(draft.calories, 75)
+        XCTAssertEqual(draft.servings, 1)
+        XCTAssertEqual(draft.perServing, 75)
+        draft.changePerServing(draft.perServing)
+        XCTAssertEqual(draft.calories, 75)
+        XCTAssertTrue(draft.isValid)
+        draft.changeServings(2)
+        XCTAssertEqual(draft.calories, 150)
+        draft.changeCalories(225)
+        XCTAssertEqual(draft.perServing, 75)
+        XCTAssertEqual(draft.servings, 3)
+    }
+
     func testInputValidation() {
         var draft = EntryDraft(calories: 0)
         XCTAssertTrue(draft.isValid)

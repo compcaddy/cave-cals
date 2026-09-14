@@ -70,7 +70,6 @@ struct SetupView: View {
     @FocusState private var editingGoal: Bool
     let isAdjustingGoal: Bool
     @ScaledMetric(relativeTo: .title) private var goalFontSize = 76.0
-    @ScaledMetric(relativeTo: .title2) private var brandSize = 29.4
     init(goal: Double? = 2100, isAdjustingGoal: Bool = false) {
         _goal = State(initialValue: goal.map(Self.formattedGoal) ?? "")
         self.isAdjustingGoal = isAdjustingGoal
@@ -80,30 +79,19 @@ struct SetupView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        CaveIcon(.meal, size: brandSize).foregroundStyle(.primary)
-                        Text("CaveCals")
-                            .font(.custom("Schoolbell-Regular", fixedSize: brandSize))
-                    }
-                    .frame(maxWidth: .infinity).padding(.top, 4)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("appBrand")
                     VStack(spacing: -12) {
                         headlineLine("You Eat.", width: geometry.size.width - 64, height: geometry.size.height)
-                        headlineLine("\(Caveman.name) Track.", width: geometry.size.width - 64, height: geometry.size.height)
+                        headlineLine("App Track.", width: geometry.size.width - 64, height: geometry.size.height)
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, -12)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
                     if !isAdjustingGoal {
-                        Image("TrackingMascot")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: min(160, geometry.size.height * 0.21))
+                        CaveIcon(.meal, size: min(160, geometry.size.height * 0.21) * 0.75)
                             .frame(maxWidth: .infinity)
                             .foregroundStyle(.primary)
+                            .padding(.bottom, 12)
                             .accessibilityHidden(true)
                     }
                     VStack(spacing: 0) {

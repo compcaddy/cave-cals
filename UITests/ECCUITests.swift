@@ -7,10 +7,25 @@ final class ECCUITests: XCTestCase {
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
         XCTAssertTrue(app.textFields["profileGoal"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.textFields["profileName"].exists)
-        XCTAssertTrue(app.staticTexts["CaveCals"].exists || app.otherElements["appBrand"].exists)
         XCTAssertTrue(app.buttons["Me Start Now"].isEnabled)
         app.buttons["Me Start Now"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+    }
+    private func closeSearchDrawer() {
+        if app.buttons["Clear search"].exists { app.buttons["Clear search"].tap() }
+        app.buttons["Close search"].tap()
+    }
+    func testTypingHidesFooterAndClearRestoresIt() {
+        let search = app.textFields["foodSearch"]
+        search.tap()
+        search.typeText("Ban")
+        XCTAssertTrue(app.buttons["Clear search"].exists)
+        XCTAssertFalse(app.buttons["Close search"].exists)
+        XCTAssertFalse(app.buttons["searchQuickCalories"].exists)
+        app.buttons["Clear search"].tap()
+        XCTAssertEqual(search.value as? String, "search food or enter cals")
+        XCTAssertTrue(app.buttons["Close search"].exists)
+        XCTAssertTrue(app.buttons["searchQuickCalories"].exists)
     }
     func quickAdd(_ calories: String) {
         if !app.buttons["Close search"].exists { app.buttons["openSearch"].tap() }
@@ -18,7 +33,48 @@ final class ECCUITests: XCTestCase {
         search.tap(); search.typeText(calories)
         let add = app.buttons["Add \(calories) calories"].firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 3)); add.tap()
+        closeSearchDrawer()
     }
+    func testRepeatedAddsStayInSearchAndUndoLatest() {
+        let search = app.textFields["foodSearch"]
+        search.tap()
+        search.typeText("75")
+        let add = app.buttons["Add 75 calories"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        add.tap()
+        XCTAssertTrue(search.exists)
+        XCTAssertEqual(search.value as? String, "75")
+        // Wait for the coin to complete before intentionally logging another serving.
+        sleep(2)
+        add.tap()
+        XCTAssertFalse(app.buttons["Close search"].exists)
+        app.buttons["Undo"].firstMatch.tap()
+        closeSearchDrawer()
+        assertSummary("75 of 2,100 calories")
+    }
+
+    func testQuickCalorieGridAddsWithoutOpeningEditor() {
+        app.buttons["Quick calories"].tap()
+        XCTAssertTrue(app.buttons["Select 50 calories"].exists)
+        XCTAssertTrue(app.buttons["Select 1,000 calories"].exists || app.buttons["Select 1000 calories"].exists)
+        let gridShot = XCTAttachment(screenshot: app.screenshot())
+        gridShot.name = "Quick calorie grid"
+        gridShot.lifetime = .keepAlways
+        add(gridShot)
+        XCTAssertFalse(app.buttons["Add quick calories"].isEnabled)
+        app.buttons["Select 200 calories"].tap()
+        let name = app.textFields["quickCalorieName"]
+        name.tap()
+        name.typeText("Afternoon snack")
+        XCTAssertTrue(app.buttons["Add quick calories"].isEnabled)
+        app.buttons["Add quick calories"].tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '200 cal'")).firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["foodSearch"].exists)
+        XCTAssertFalse(app.textFields["servingSize"].exists)
+        closeSearchDrawer()
+        assertSummary("200 of 2,100 calories")
+    }
+
     func testSkipGoalThenAddGoalInSettings() {
         app.terminate(); app.launch()
         let skip = app.buttons["skipGoal"]
@@ -28,7 +84,7 @@ final class ECCUITests: XCTestCase {
         quickAdd("325")
         assertSummary("325 calories")
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'remaining'")).firstMatch.exists)
-        if app.buttons["Close search"].exists { app.buttons["Close search"].tap() }
+        if app.buttons["Close search"].exists { closeSearchDrawer() }
         app.buttons["Settings"].tap()
         XCTAssertFalse(app.textFields["settingsName"].exists)
         app.buttons["adjustGoal"].tap()
@@ -38,7 +94,7 @@ final class ECCUITests: XCTestCase {
         app.buttons["Save Changes"].tap()
         app.buttons["Done"].tap()
         assertSummary("325 of 2,100 calories")
-        if app.buttons["Close search"].exists { app.buttons["Close search"].tap() }
+        if app.buttons["Close search"].exists { closeSearchDrawer() }
         app.buttons["Settings"].tap()
         app.buttons["adjustGoal"].tap()
         XCTAssertTrue(goal.waitForExistence(timeout: 5))
@@ -48,7 +104,7 @@ final class ECCUITests: XCTestCase {
         assertSummary("325 calories")
     }
     func testAdjustGoalCancelKeepsExistingGoal() {
-        if app.buttons["Close search"].exists { app.buttons["Close search"].tap() }
+        if app.buttons["Close search"].exists { closeSearchDrawer() }
         app.buttons["Settings"].tap()
         app.buttons["adjustGoal"].tap()
         let goal = app.textFields["profileGoal"]
@@ -115,7 +171,7 @@ final class ECCUITests: XCTestCase {
         // Serving controls are shown directly in the editor.
         app.buttons["Increase servings"].tap()
         app.buttons["saveEntry"].tap()
-        if app.buttons["Close search"].exists { app.buttons["Close search"].tap() }
+        if app.buttons["Close search"].exists { closeSearchDrawer() }
         app.buttons["Settings"].tap()
         app.buttons["Meals"].tap()
         app.buttons["Create from Today’s Entries"].tap()
@@ -125,7 +181,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Add Breakfast"].waitForExistence(timeout: 3))
     }
     func testWeekNavigationAndManualBarcodeFallback() {
-        app.buttons["Close search"].tap()
+        closeSearchDrawer()
         app.buttons["Previous day"].tap()
         XCTAssertTrue(app.buttons["Next day"].isEnabled)
         app.buttons["Next day"].tap()
@@ -152,7 +208,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertEqual(app.otherElements["calorieSummary"].label, "220 of 2,100 calories")
     }
     func testMealFromScratchAndScaledAdd() {
-        if app.buttons["Close search"].exists { app.buttons["Close search"].tap() }
+        if app.buttons["Close search"].exists { closeSearchDrawer() }
         app.buttons["Settings"].tap(); app.buttons["Meals"].tap()
         app.buttons["Create from Scratch"].tap()
         let mealName = app.textFields["mealName"]
@@ -166,6 +222,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Save Meal"].waitForExistence(timeout: 4)); app.buttons["Save Meal"].tap()
         let add = app.buttons["Add Coffee break"]
         XCTAssertTrue(add.waitForExistence(timeout: 3)); add.tap()
+        closeSearchDrawer()
         app.buttons["Increase servings"].tap(); app.buttons["Add Meal"].tap()
         let back = app.navigationBars["Meals"].buttons.element(boundBy: 0)
         XCTAssertTrue(back.waitForExistence(timeout: 4)); back.tap()

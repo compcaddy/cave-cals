@@ -1,0 +1,121 @@
+{
+  "dimensions": [
+    1320,
+    2868
+  ],
+  "source": "Actual iPhone 15 Pro simulator captures; sample diary stored in memory via existing --screenshots mode. Meal photo selected through the real Photos picker.",
+  "slides": [
+    {
+      "file": "01-hero.png",
+      "raw": "01-zog.png",
+      "lines": [
+        "Calorie tracking.",
+        "Caveman simple."
+      ],
+      "sub": "Meet Zog. Your everyday calorie companion.",
+      "top": [
+        0,
+        122,
+        255
+      ],
+      "bottom": [
+        0,
+        78,
+        214
+      ],
+      "ink": "white",
+      "muted": [
+        215,
+        233,
+        255
+      ],
+      "tag": "MEET CAVE CALS"
+    },
+    {
+      "file": "02-daily-diary.png",
+      "raw": "02-diary.png",
+      "lines": [
+        "Your day.",
+        "At a glance."
+      ],
+      "sub": "Calories logged. Calories left. All right here.",
+      "top": [
+        249,
+        252,
+        255
+      ],
+      "bottom": [
+        216,
+        235,
+        255
+      ],
+      "ink": [
+        14,
+        31,
+        55
+      ],
+      "muted": [
+        71,
+        95,
+        122
+      ],
+      "tag": "YOUR DAILY DIARY"
+    },
+    {
+      "file": "03-meal-scan.png",
+      "raw": "03-meal-scan.png",
+      "lines": [
+        "Snap a meal.",
+        "Skip the typing."
+      ],
+      "sub": "AI calorie estimates you can review and log.",
+      "top": [
+        248,
+        251,
+        255
+      ],
+      "bottom": [
+        221,
+        239,
+        255
+      ],
+      "ink": [
+        14,
+        31,
+        55
+      ],
+      "muted": [
+        71,
+        95,
+        122
+      ],
+      "tag": "AI MEAL SCAN \u2022 PAID FEATURE"
+    },
+    {
+      "file": "04-quick-log.png",
+      "raw": "04-quick-log.png",
+      "lines": [
+        "Your usuals.",
+        "Logged faster."
+      ],
+      "sub": "Tap a suggestion. Get on with your day.",
+      "top": [
+        15,
+        31,
+        54
+      ],
+      "bottom": [
+        3,
+        15,
+        34
+      ],
+      "ink": "white",
+      "muted": [
+        180,
+        204,
+        232
+      ],
+      "tag": "QUICK LOGGING \u2022 FREE"
+    }
+  ]
+}
