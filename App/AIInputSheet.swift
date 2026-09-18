@@ -3,13 +3,32 @@ import PhotosUI
 import AVFoundation
 import ImageIO
 
+struct CaptureCancelButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: .cancel, action: action) {
+            Text("Go Back")
+                .font(.cave(.body))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 4)
+        .background(.bar)
+        .accessibilityIdentifier("captureCancel")
+    }
+}
+
 struct AIInputSheet: View {
-    enum Mode { case photo, voice }
+    enum Mode: Equatable { case photo, voice }
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     let mode: Mode
     let date: Date
+    var onMealDrafts: (([EntryDraft]) -> Void)? = nil
     @State private var subscriptions = AISubscriptions()
     @State private var recorder = FoodRecorder()
     @State private var photo: PhotosPickerItem?
@@ -18,10 +37,13 @@ struct AIInputSheet: View {
     @State private var uploadId: String?
     @State private var result: AIResult?
     @State private var drafts: [EntryDraft] = []
+    @State private var addedDraftIDs: Set<UUID> = []
+    @State private var undoDraftID: UUID?
     @State private var showScanDetails = false
     @State private var editing: EntryDraft?
     @State private var error: String?
     @State private var cameraError: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var working = false
     @State private var preparingPhoto = false
     @State private var startingRecording = false
@@ -47,19 +69,14 @@ struct AIInputSheet: View {
                 } else { review }
                 if let error { Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("aiError") } }
             }
-            .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Voice logging") : "Review estimate")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { operation?.cancel(); recorder.cancel(); dismiss() }
-                }
-                if result != nil {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Add") { if store.add(drafts, message: "Added estimated foods") { dismiss() } }
-                            .disabled(drafts.isEmpty || !drafts.allSatisfy(\.isValid)).accessibilityIdentifier("aiAdd")
-                    }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    reviewUndoBanner
+                    CaptureCancelButton(action: cancel)
                 }
             }
+            .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Speak Food") : "Review Scan")
+            .navigationBarTitleDisplayMode(.inline)
             .task {
                 guard !started else { return }
                 started = true
@@ -76,13 +93,12 @@ struct AIInputSheet: View {
                     try selectPhoto(data)
                 } catch is CancellationError {} catch { self.error = error.localizedDescription }
             }
-            .sheet(isPresented: $showPaywall, onDismiss: {
-                if resumeAfterPurchase {
-                    resumeAfterPurchase = false
-                    requestAnalysis()
-                }
-            }) {
-                AIUpgradePaywall(subscriptions: subscriptions) { resumeAfterPurchase = true }
+            .navigationDestination(isPresented: $showPaywall) {
+                AIUpgradePaywall(
+                    subscriptions: subscriptions,
+                    onAccessGranted: { resumeAfterPurchase = true },
+                    onDismissRequested: closePaywall
+                )
             }
             .sheet(item: $editing) { draft in
                 EntryEditorSheet(draft: draft) { updated in
@@ -106,6 +122,7 @@ struct AIInputSheet: View {
                 Image(uiImage: image).resizable().scaledToFill()
                     .aspectRatio(4 / 3, contentMode: .fit)
                     .frame(maxWidth: .infinity).clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("Selected food photo")
                 Button {
                     self.image = nil; media = nil; photo = nil; uploadId = nil; error = nil
@@ -121,7 +138,7 @@ struct AIInputSheet: View {
                     Text(cameraError).multilineTextAlignment(.center)
                 }.frame(maxWidth: .infinity, minHeight: 220).foregroundStyle(.secondary)
             } else {
-                MealCameraPreview(captureRequest: captureRequest, onReady: { cameraReady = true }, onCapture: { data in
+                MealCameraPreview(captureRequest: captureRequest, isCapturing: capturing, onReady: { cameraReady = true }, onCapture: { data in
                     capturing = false
                     do { try selectPhoto(data); requestAnalysis() }
                     catch { self.error = error.localizedDescription }
@@ -132,7 +149,7 @@ struct AIInputSheet: View {
             }
         }
         if working {
-            ProgressView("Analyzing…")
+            ProgressView("Scanning Photo…")
                 .frame(maxWidth: .infinity, minHeight: 64)
                 .accessibilityIdentifier("aiProcessing")
         } else {
@@ -140,13 +157,13 @@ struct AIInputSheet: View {
                 if media != nil { requestAnalysis() }
                 else { capturing = true; captureRequest += 1 }
             } label: {
-                Text(capturing ? "Capturing…" : image == nil ? "Capture and Analyze" : "Scan and Analyze")
+                Text(capturing ? "Capturing…" : image == nil ? "Capture Meal" : "Scan and Analyze")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }.buttonStyle(.borderedProminent)
                 .disabled(preparingPhoto || capturing || (media == nil && !cameraReady))
                 .accessibilityIdentifier("aiAnalyze")
             PhotosPicker(selection: $photo, matching: .images, photoLibrary: .shared()) {
-                Text("or, select a Photo from phone").frame(maxWidth: .infinity, minHeight: 44)
+                Text("or, Use Photo").frame(maxWidth: .infinity, minHeight: 44)
             }.disabled(capturing || preparingPhoto).accessibilityIdentifier("aiPhotoPicker")
         }
         if preparingPhoto { ProgressView("Preparing photo…") }
@@ -155,15 +172,15 @@ struct AIInputSheet: View {
     @ViewBuilder private var voiceControls: some View {
         VStack(spacing: 18) {
             CaveIcon(.voice, size: 72)
-                .foregroundStyle(recorder.recording ? .red : Color.accentColor)
-                .opacity(recorder.recording ? 0.45 : 1)
-                .animation(recorder.recording ? .easeInOut(duration: 0.85).repeatForever(autoreverses: true) : .default, value: recorder.recording)
-            Text(recorder.recording ? "Listening..." : media != nil ? "Recording ready" : "Ready to record")
+                .foregroundStyle(Color.accentColor)
+                .opacity(recorder.recording && !reduceMotion ? 0 : 1)
+                .animation(reduceMotion ? nil : recorder.recording ? .easeInOut(duration: 0.85).repeatForever(autoreverses: true) : .default, value: recorder.recording)
+            Text(recorder.recording ? "Listening…" : working ? "Analyzing your meal…" : media != nil ? "Recording saved" : "You Talk. App Listen.")
                 .font(.cave(.title))
-            Text("Describe what you ate and how much.").foregroundStyle(.secondary)
+            Text(working ? "Finding foods and calories." : media != nil && !recorder.recording ? "Tap Analyze Recording to continue." : "Tell what you eat and how much.").foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 24)
         if working {
-            ProgressView("Analyzing recording…")
+            ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 64)
                 .accessibilityIdentifier("aiProcessing")
         } else {
@@ -172,17 +189,13 @@ struct AIInputSheet: View {
                 else if media != nil { requestAnalysis() }
                 else { startRecording() }
             } label: {
-                Text(startingRecording ? "Starting microphone…" : recorder.recording ? "Stop and Analyze" : media != nil ? "Analyze Recording" : "Start Recording")
+                Text(startingRecording ? "Starting microphone…" : recorder.recording ? "Done Talking" : media != nil ? "Analyze Recording" : "Talk Now")
                     .frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(.borderedProminent).disabled(startingRecording).accessibilityIdentifier("aiRecord")
-            Button("Cancel") {
-                operation?.cancel()
-                recorder.cancel()
-                dismiss()
             }
-            .font(.cave(.footnote)).foregroundStyle(.red)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .buttonStyle(.plain).accessibilityIdentifier("aiCancelRecording")
+            .buttonStyle(.borderedProminent)
+            .tint(recorder.recording ? .red : .blue)
+            .disabled(startingRecording)
+            .accessibilityIdentifier("aiRecord")
             if media != nil && !recorder.recording {
                 Button("Record again") { startRecording() }.disabled(startingRecording)
             }
@@ -192,46 +205,144 @@ struct AIInputSheet: View {
     @ViewBuilder private var review: some View {
         if let result {
             Section {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { showScanDetails.toggle() }
-                } label: {
-                    HStack {
-                        Text("View Scan Details").font(.cave(.headline))
-                        Spacer()
-                        CaveIcon(.chevronRight, size: 20)
-                            .rotationEffect(.degrees(showScanDetails ? 90 : 0))
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("scanDetailsToggle")
-                .accessibilityLabel("View Scan Details")
-                .accessibilityValue(showScanDetails ? "Expanded" : "Collapsed")
-                if showScanDetails {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if !result.notes.isEmpty {
-                            Text(result.notes).font(.cave(.subheadline)).foregroundStyle(.secondary)
-                        }
-                        if let transcript = result.transcript {
-                            Text("You said: \(transcript)").font(.cave(.subheadline)).foregroundStyle(.secondary)
-                        }
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            Section("Foods · tap to edit, swipe to remove") {
                 ForEach(drafts) { draft in
-                    Button { editing = draft } label: {
-                        HStack {
-                            VStack(alignment: .leading) { Text(draft.name); Text(draft.servingDescription).font(.cave(.caption)).foregroundStyle(.secondary) }
-                            Spacer(); Text("\(draft.calories.calorieText) cal").fontWeight(.semibold)
-                        }.foregroundStyle(.primary)
-                    }
-                }.onDelete { drafts.remove(atOffsets: $0) }
+                    FoodRow(
+                        name: draft.name,
+                        calories: draft.calories,
+                        detail: draft.servingDescription,
+                        suggestionLayout: true,
+                        added: addedDraftIDs.contains(draft.id),
+                        keepsAddedState: true,
+                        add: { add(draft) },
+                        edit: { editing = draft }
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }.onDelete(perform: removeDrafts)
                 if drafts.isEmpty { Text("No foods to add. Try a clearer photo or description.") }
             }
+            if drafts.count > 1 {
+                Section {
+                    Button {
+                        addRemainingDrafts()
+                    } label: {
+                        HStack(spacing: 10) {
+                            CaveIcon(.check, size: 22)
+                            Text("Add All")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    .disabled(remainingDrafts.isEmpty || !remainingDrafts.allSatisfy(\.isValid))
+                    .accessibilityIdentifier("aiAdd")
+                    .accessibilityLabel("Add All")
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            Section {
+                scanDetailsDisclosure(result)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
+    }
+
+    private func scanDetailsDisclosure(_ result: AIResult) -> some View {
+        VStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) { showScanDetails.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("view scan details")
+                    CaveIcon(.chevronRight, size: 15)
+                        .rotationEffect(.degrees(showScanDetails ? -90 : 90))
+                }
+                .font(.cave(.subheadline))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("scanDetailsToggle")
+            .accessibilityLabel("View Scan Details")
+            .accessibilityValue(showScanDetails ? "Expanded" : "Collapsed")
+
+            if showScanDetails {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !result.notes.isEmpty {
+                        Text(result.notes).font(.cave(.subheadline)).foregroundStyle(.secondary)
+                    }
+                    if let transcript = result.transcript {
+                        Text("You said: \(transcript)").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                    }
+                    if result.notes.isEmpty, result.transcript == nil {
+                        Text("No additional scan details.").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding(.top, drafts.count > 1 ? 10 : 2)
+        .animation(.easeInOut(duration: 0.22), value: showScanDetails)
+    }
+
+    private var remainingDrafts: [EntryDraft] {
+        drafts.filter { !addedDraftIDs.contains($0.id) }
+    }
+
+    @ViewBuilder private var reviewUndoBanner: some View {
+        if result != nil, let undoDraftID, addedDraftIDs.contains(undoDraftID), let toast = store.toast {
+            HStack {
+                Text(toast).font(.cave(.subheadline)).lineLimit(2)
+                Spacer(minLength: 8)
+                Button("Undo") { undoLastIndividualAdd() }
+                    .font(.cave(.subheadline).bold())
+                    .frame(minHeight: 44)
+            }
+            .padding(.horizontal, 20)
+            .background(Color.accentColor.opacity(0.1))
+            .accessibilityIdentifier("scanUndoBanner")
+        }
+    }
+
+    private func add(_ draft: EntryDraft) {
+        guard !addedDraftIDs.contains(draft.id), draft.isValid else { return }
+        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard store.add([draft], message: "\(name.isEmpty ? "Food" : name) added") else { return }
+        addedDraftIDs.insert(draft.id)
+        undoDraftID = draft.id
+        if drafts.count == 1 { dismiss() }
+    }
+
+    private func undoLastIndividualAdd() {
+        guard let draftID = undoDraftID else { return }
+        store.undo()
+        addedDraftIDs.remove(draftID)
+        undoDraftID = nil
+    }
+
+    private func addRemainingDrafts() {
+        let remaining = remainingDrafts
+        guard !remaining.isEmpty, remaining.allSatisfy(\.isValid) else { return }
+        guard store.add(remaining, message: "Added estimated foods") else { return }
+        addedDraftIDs.formUnion(remaining.map(\.id))
+        dismiss()
+    }
+
+    private func removeDrafts(at offsets: IndexSet) {
+        let removable = IndexSet(offsets.filter { !addedDraftIDs.contains(drafts[$0].id) })
+        drafts.remove(atOffsets: removable)
+    }
+
+    private func cancel() {
+        operation?.cancel()
+        recorder.cancel()
+        dismiss()
     }
 
     private func selectPhoto(_ data: Data) throws {
@@ -273,7 +384,16 @@ struct AIInputSheet: View {
             do {
                 let response = try await AIBackend.shared.identify(data: media, kind: mode == .photo ? "image" : "audio", mime: mode == .photo ? "image/jpeg" : "audio/mp4", existingUpload: uploadId, onUpload: { id in await MainActor.run { uploadId = id } })
                 try Task.checkCancellation()
-                result = response; drafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
+                let generatedDrafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
+                if let onMealDrafts {
+                    self.media = nil; image = nil
+                    onMealDrafts(generatedDrafts)
+                    return
+                }
+                result = response
+                drafts = generatedDrafts
+                addedDraftIDs.removeAll()
+                undoDraftID = nil
                 self.media = nil; image = nil
             } catch is CancellationError {} catch {
                 self.error = error.localizedDescription
@@ -284,6 +404,17 @@ struct AIInputSheet: View {
             }
         }
     }
+
+    private func closePaywall() {
+        showPaywall = false
+        guard resumeAfterPurchase else { return }
+        resumeAfterPurchase = false
+        Task { @MainActor in
+            await Task.yield()
+            requestAnalysis()
+        }
+    }
+
     static func preparePhoto(_ data: Data, maximumBytes: Int = 2 * 1024 * 1024) throws -> Data {
         guard maximumBytes > 0, let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw AIServiceError(code: "photo", message: "This photo could not be read.")
@@ -370,6 +501,7 @@ private final class MealPreviewSurface: UIView {
 
 private struct MealCameraPreview: UIViewRepresentable {
     let captureRequest: Int
+    let isCapturing: Bool
     let onReady: () -> Void
     let onCapture: (Data) -> Void
     let onError: (String) -> Void
@@ -389,6 +521,10 @@ private struct MealCameraPreview: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: MealPreviewSurface, context: Context) {
+        // Freeze the displayed frame immediately, without stopping the session
+        // or disabling the separate photo-output connection needed for capture.
+        // Re-enable it if preparation fails and this preview remains on screen.
+        view.preview.connection?.isEnabled = !isCapturing
         if captureRequest != context.coordinator.lastRequest {
             context.coordinator.lastRequest = captureRequest
             let angle = view.captureAngle
@@ -447,7 +583,9 @@ private struct MealCameraPreview: UIViewRepresentable {
                 if let connection = self.output.connection(with: .video), connection.isVideoRotationAngleSupported(angle) {
                     connection.videoRotationAngle = angle
                 }
-                self.output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+                let settings = AVCapturePhotoSettings()
+                settings.photoQualityPrioritization = .speed
+                self.output.capturePhoto(with: settings, delegate: self)
             }
         }
         func stop() { queue.async { self.stopped = true; self.session.stopRunning() } }

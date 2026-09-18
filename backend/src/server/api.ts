@@ -3,7 +3,8 @@ import { APIError, errorResponse, readLimited, positiveInt } from './config';
 import { authenticate, challenge, register } from './auth';
 import { products, entitlement, requirePaid, verifyPurchase, verifyNotification } from './apple';
 import { signUpload, uploadInput } from './storage';
-import { analyze } from './analysis';
+import { analyze, reserveAIUsage } from './analysis';
+import { importMealFromWebsite } from './ai';
 import { consume, tomorrow, limitPublic } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
@@ -61,6 +62,12 @@ export async function api(request: Request, path: string): Promise<Response> {
       const { uploadId } = z.object({ uploadId: z.string().uuid() }).parse(body);
       await requirePaid(identity);
       return ok(await analyze(identity, uploadId));
+    }
+    if (path === 'meal/import') {
+      const { url } = z.object({ url: z.string().url().max(2048) }).parse(body);
+      await requirePaid(identity);
+      await reserveAIUsage(identity);
+      return ok(await importMealFromWebsite(url));
     }
     throw new APIError(404, 'not_found', 'Not found.');
   } catch (error) {

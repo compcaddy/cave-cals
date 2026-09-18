@@ -22,10 +22,10 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 - Optional daily-goal setup, with local persistence; no name is requested.
 - Daily date navigation, disabled future dates, day status, and historical editing.
 - Calorie total and chronological entries; target/remaining amounts appear only when a goal is set. Goals can be enabled or removed in Settings without changing historical targets.
-- Search/Add drawer, calorie shortcuts, barcode scanning, meal scanning and voice logging.
+- unified Logged / Quick Add screen, calorie shortcuts, barcode scanning, meal scanning and voice logging.
 - Numeric quick-add, compact local-first food results, unified entry editor, and serving calculations with last-edit precedence.
 - Eight-second undo for adds/deletes; a meal's components undo as one action.
-- Local habit suggestions using frequency, recency, time, weekday, and food sequences. Repeated foods use recent/frequent calorie values, not a single outlier.
+- Local Quick Add ranks up to ten foods using smooth food-specific time windows, recent and established habits, conditional day patterns, same-day occurrence cadence, and meal-session companions. Context-specific calorie variants require repeated evidence so one outlier cannot redefine a food.
 - Meals built from today's entries or from scratch; templates expand into independently editable entries and support proportional scaling.
 - Open Food Facts food search and camera barcode lookup, manual calorie entry when the camera is unavailable, and persistent local barcode overrides.
 - Cached external searches, offline local history/meals/logging, and nonblocking network errors.

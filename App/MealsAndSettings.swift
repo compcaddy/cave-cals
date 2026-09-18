@@ -5,6 +5,8 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
+    @State private var showingPaywall = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -25,8 +27,7 @@ struct SettingsView: View {
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
                 }
-                Section("Saved Meals") { NavigationLink { MealsView() } label: { Label { Text("Meals") } icon: { CaveIcon(.meal, size: 22) } } }
-                AISubscriptionSection(subscriptions: aiSubscriptions)
+                AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
                 if AIConfiguration.developerSettingsAvailable {
                     Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
                 }
@@ -35,18 +36,46 @@ struct SettingsView: View {
                     Text("Your entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 Section("About") {
-                    Text("Cave Cals · 1.0")
+                    Text(appVersionLabel)
                     Link("Food data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Search terms and scanned barcodes are sent to Open Food Facts to find products. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Search terms and scanned barcodes are sent to Open Food Facts to find products. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
+                legalLinks
             }
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
             }
+            .navigationDestination(isPresented: $showingPaywall) {
+                AIUpgradePaywall(
+                    subscriptions: aiSubscriptions,
+                    onDismissRequested: { showingPaywall = false }
+                )
+            }
             .task { await store.checkCloud(); await aiSubscriptions.refresh() }
+        }
+    }
+
+    private var appVersionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        return build.isEmpty ? "Cave Cals · \(version)" : "Cave Cals · \(version) (\(build))"
+    }
+
+    @ViewBuilder private var legalLinks: some View {
+        if let base = AIConfiguration.baseURL {
+            Section {
+                HStack(spacing: 14) {
+                    Spacer()
+                    Link("Terms of Use", destination: base.appendingPathComponent("terms"))
+                    Text("·").foregroundStyle(.tertiary)
+                    Link("Privacy Policy", destination: base.appendingPathComponent("privacy"))
+                    Spacer()
+                }
+                .font(.cave(.footnote))
+            }
         }
     }
 }
@@ -55,28 +84,59 @@ struct MealRoute: Identifiable {
     let id = UUID()
     var meal: SavedMeal?
     var fromToday = false
+    var initialName = ""
+    var initialItems: [EntryDraft] = []
+
+    init(meal: SavedMeal? = nil, fromToday: Bool = false, name: String = "", items: [EntryDraft] = []) {
+        self.meal = meal
+        self.fromToday = fromToday
+        initialName = name
+        initialItems = items
+    }
 }
 
-struct MealsView: View {
+enum NewMealStart {
+    case today, photo, voice, link, manual
+}
+
+struct NewMealStartSheet: View {
     @Environment(AppStore.self) private var store
-    @State private var editor: MealRoute?
-    @State private var adding: SavedMeal?
+    @Environment(\.dismiss) private var dismiss
+    let select: (NewMealStart) -> Void
+
     var body: some View {
-        List {
-            Section {
-                Button("Create from Today’s Entries") { editor = MealRoute(fromToday: true) }.disabled(store.dayEntries(Date()).isEmpty)
-                Button("Create from Scratch") { editor = MealRoute() }
+        NavigationStack {
+            List {
+                startButton("Create from Today's Entries", start: .today)
+                    .disabled(store.dayEntries(Date()).isEmpty)
+                startButton("Create from Meal Scan", start: .photo)
+                startButton("Create from Voice Log", start: .voice)
+                startButton("Import from Link/Website", start: .link)
+                startButton("Manually Add Meal Items", start: .manual)
             }
-            Section("Your meals") {
-                if store.meals.isEmpty { Text("Save foods you often eat together.").foregroundStyle(.secondary) }
-                ForEach(store.meals) { meal in
-                    FoodRow(name: meal.name, calories: meal.calories, meal: true, add: { adding = meal }, edit: { editor = MealRoute(meal: meal) })
-                        .swipeActions { Button("Delete", role: .destructive) { store.context.delete(meal); store.commit() } }
-                }
+            .navigationTitle("New Meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                CaptureCancelButton { dismiss() }
             }
-        }.navigationTitle("Meals").navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $editor) { route in MealEditorSheet(route: route) }
-            .sheet(item: $adding) { meal in MealAddSheet(mealID: meal.id, date: Date()) }
+        }
+        .presentationDetents([.fraction(0.68)])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func startButton(_ title: String, start: NewMealStart) -> some View {
+        Button {
+            select(start)
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer()
+                CaveIcon(.chevronRight, size: 16).foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -130,7 +190,11 @@ struct MealEditorSheet: View {
                 }
             }
             .onAppear {
-                if !initialized { name = route.meal?.name ?? ""; items = route.meal?.items ?? []; initialized = true }
+                if !initialized {
+                    name = route.meal?.name ?? route.initialName
+                    items = route.meal?.items ?? route.initialItems
+                    initialized = true
+                }
             }
             .sheet(item: $component) { draft in
                 EntryEditorSheet(draft: draft) { updated in
@@ -143,6 +207,115 @@ struct MealEditorSheet: View {
     }
     private var chosenItems: [EntryDraft] {
         route.fromToday ? store.dayEntries(Date()).filter { selection.contains($0.id) }.map { EntryDraft($0) } : items
+    }
+}
+
+struct MealLinkImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let imported: (String, [EntryDraft]) -> Void
+    @State private var subscriptions = AISubscriptions()
+    @State private var link = ""
+    @State private var working = false
+    @State private var error: String?
+    @State private var showPaywall = false
+    @State private var retryAfterPurchase = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("https://example.com/recipe", text: $link)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("mealImportLink")
+                } header: {
+                    Text("Recipe or meal link")
+                } footer: {
+                    Text("Paste a public recipe, restaurant, or food page. You can review every imported item before saving the meal.")
+                }
+                Section {
+                    Button {
+                        importLink()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if working { ProgressView().tint(.white) }
+                            else { CaveIcon(.arrowRight, size: 18) }
+                            Text(working ? "Importing…" : "Import Meal")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(validURL == nil || working)
+                    .accessibilityIdentifier("importMeal")
+                }
+                .listRowBackground(Color.clear)
+                if let error {
+                    Section { Text(error).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Import Meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .navigationDestination(isPresented: $showPaywall) {
+                AIUpgradePaywall(
+                    subscriptions: subscriptions,
+                    onAccessGranted: { retryAfterPurchase = true },
+                    onDismissRequested: closePaywall
+                )
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var validURL: URL? {
+        let value = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: value), url.scheme?.lowercased() == "https", url.host?.isEmpty == false else { return nil }
+        return url
+    }
+
+    private func importLink() {
+        guard let url = validURL, !working else { return }
+        working = true; error = nil
+        Task { @MainActor in
+            defer { working = false }
+            await subscriptions.refresh()
+            guard let account = subscriptions.account else {
+                error = subscriptions.message ?? "Could not check access. Please try again."
+                return
+            }
+            guard account.active else {
+                if subscriptions.offering != nil { showPaywall = true }
+                else { error = subscriptions.message ?? "Subscriptions could not load. Please try again." }
+                return
+            }
+            do {
+                let result = try await AIBackend.shared.importMeal(from: url)
+                let drafts = result.drafts(at: Date(), source: "aiLink")
+                guard !drafts.isEmpty else {
+                    error = "No meal items were found at that link."
+                    return
+                }
+                imported(result.mealName, drafts)
+            } catch {
+                self.error = error.localizedDescription
+                if let service = error as? AIServiceError,
+                   service.code == "subscription_required", subscriptions.offering != nil {
+                    showPaywall = true
+                }
+            }
+        }
+    }
+
+    private func closePaywall() {
+        showPaywall = false
+        guard retryAfterPurchase else { return }
+        retryAfterPurchase = false
+        Task { @MainActor in
+            await Task.yield()
+            importLink()
+        }
     }
 }
 
@@ -202,7 +375,15 @@ struct MealAddSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add Meal") { if let meal, store.addMeal(meal, factor: factor, date: date) { dismiss() } }.disabled(factor <= 0 || !factor.isFinite || meal == nil)
+                    Button {
+                        if let meal, store.addMeal(meal, factor: factor, date: date) { dismiss() }
+                    } label: {
+                        Label("Add Meal", systemImage: "checkmark")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.blue)
+                    .disabled(factor <= 0 || !factor.isFinite || meal == nil)
                 }
             }
         }.presentationDetents([.medium, .large])

@@ -27,7 +27,7 @@ final class LoggingActionUITests: XCTestCase {
     func testAllLinksReplaceCurrentDrawerAndRepeat() {
         completeSetup()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        for (action, title) in [("voice", "Voice logging"), ("image", "Meal Scan"), ("barcode", "Scan a barcode"), ("voice", "Voice logging")] {
+        for (action, title) in [("voice", "Voice logging"), ("image", "Meal Scan"), ("barcode", "Scan a Barcode"), ("voice", "Voice logging")] {
             XCUIDevice.shared.system.open(URL(string: "cavecals://log/\(action)")!)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), action)
         }
@@ -62,7 +62,7 @@ final class LoggingActionUITests: XCTestCase {
     func testWarmQuickActionsOpenRequestedFeatures() {
         completeSetup()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        for (action, title) in [("Voice Log", "Voice logging"), ("Meal Scan", "Meal Scan"), ("Barcode Scan", "Scan a barcode")] {
+        for (action, title) in [("Voice Log", "Voice logging"), ("Meal Scan", "Meal Scan"), ("Barcode Scan", "Scan a Barcode")] {
             chooseQuickAction(action)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
         }

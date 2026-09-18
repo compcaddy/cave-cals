@@ -18,7 +18,7 @@ export function authorizedTestAccess(input: unknown): boolean | undefined {
 export function ownerTestAccess(input: unknown, path: string): boolean {
   const active = authorizedTestAccess(input);
   if (active === undefined) throw new APIError(403, 'test_access_denied', 'A private test-access key is required.');
-  if (!['account/status', 'uploads/sign', 'food/analyze'].includes(path)) {
+  if (!['account/status', 'uploads/sign', 'food/analyze', 'meal/import'].includes(path)) {
     throw new APIError(403, 'test_route_denied', 'Private testing cannot modify purchases or device registrations.');
   }
   return active;

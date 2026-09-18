@@ -5,10 +5,13 @@ import CoreData
 import WidgetKit
 
 @MainActor @Observable final class AppStore {
+    private static let pinnedFoodIDsKey = "pinnedFoodIDs.v1"
+    private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
     let container: ModelContainer
     let context: ModelContext
     let cloudEnabled: Bool
     private let publishesWidget: Bool
+    @ObservationIgnored private let preferences: UserDefaults
     var profiles: [UserProfile] = []
     var entries: [CalorieEntry] = []
     var goals: [DailyGoal] = []
@@ -17,6 +20,8 @@ import WidgetKit
     private(set) var commonFoodDefaults: [String: CommonFoodDefault] =
         UserDefaults.standard.data(forKey: "commonFoodDefaults.v1")
             .flatMap { try? JSONDecoder().decode([String: CommonFoodDefault].self, from: $0) } ?? [:]
+    private(set) var pinnedFoodIDs: [String]
+    private(set) var pinnedMealIDs: [String]
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
@@ -25,7 +30,10 @@ import WidgetKit
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
 
-    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true) {
+    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true, preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        pinnedFoodIDs = preferences.stringArray(forKey: Self.pinnedFoodIDsKey) ?? []
+        pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
         self.publishesWidget = publishesWidget
         self.container = container; context = container.mainContext
         self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
@@ -66,6 +74,31 @@ import WidgetKit
         guard let data = try? JSONEncoder().encode(updated) else { return }
         UserDefaults.standard.set(data, forKey: "commonFoodDefaults.v1")
         commonFoodDefaults = updated
+    }
+    func isPinned(_ foodID: String) -> Bool { pinnedFoodIDs.contains(foodID) }
+    func setPinned(_ pinned: Bool, foodID: String) {
+        updatePin(originalID: foodID, replacementID: foodID, pinned: pinned)
+    }
+    func updatePin(originalID: String, replacementID: String, pinned: Bool) {
+        guard !originalID.isEmpty, !replacementID.isEmpty else { return }
+        var updated = pinnedFoodIDs
+        let originalIndex = updated.firstIndex(of: originalID)
+        updated.removeAll { $0 == originalID || $0 == replacementID }
+        if pinned {
+            updated.insert(replacementID, at: min(originalIndex ?? updated.count, updated.count))
+        }
+        guard updated != pinnedFoodIDs else { return }
+        preferences.set(updated, forKey: Self.pinnedFoodIDsKey)
+        pinnedFoodIDs = updated
+    }
+    func isMealPinned(_ mealID: UUID) -> Bool { pinnedMealIDs.contains(mealID.uuidString) }
+    func setMealPinned(_ pinned: Bool, mealID: UUID) {
+        let id = mealID.uuidString
+        var updated = pinnedMealIDs.filter { $0 != id }
+        if pinned { updated.append(id) }
+        guard updated != pinnedMealIDs else { return }
+        preferences.set(updated, forKey: Self.pinnedMealIDsKey)
+        pinnedMealIDs = updated
     }
     func dayEntries(_ date: Date) -> [CalorieEntry] { entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) } }
     func total(_ date: Date) -> Double { dayEntries(date).reduce(0) { $0 + $1.totalCalories.rounded() } }
@@ -147,6 +180,15 @@ import WidgetKit
     func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date) -> Bool {
         guard factor.isFinite, factor > 0 else { return false }
         return add(meal.items.enumerated().map { $0.element.scaled(factor, at: date, meal: meal.id, order: $0.offset) }, message: "\(meal.name) added")
+    }
+    func deleteMeal(_ meal: SavedMeal) {
+        let wasPinned = isMealPinned(meal.id)
+        setMealPinned(false, mealID: meal.id)
+        context.delete(meal)
+        guard commit() else {
+            if wasPinned { setMealPinned(true, mealID: meal.id) }
+            return
+        }
     }
     func localBarcode(_ code: String) -> EntryDraft? { barcodes.filter { $0.barcode == code }.max { $0.updatedAt < $1.updatedAt }?.draft }
     func checkCloud() async {

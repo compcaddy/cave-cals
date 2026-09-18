@@ -5,58 +5,58 @@ struct BarcodeSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let date: Date
-    @State private var code = ""
-    @State private var result: EntryDraft?
     @State private var editor: EntryDraft?
     @State private var loading = false
     @State private var message: String?
     @State private var permission: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var cameraError: String?
     @State private var task: Task<Void, Never>?
-    private var validCode: Bool { (8...14).contains(code.count) && code.allSatisfy(\.isNumber) }
     var body: some View {
+        if let editor {
+            EntryEditorSheet(draft: editor).id(editor.id)
+        } else {
+            scanner
+        }
+    }
+
+    private var scanner: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    if permission == .authorized, cameraError == nil, result == nil, !loading, editor == nil {
+                    if permission == .authorized, cameraError == nil, !loading {
                         CameraScanner(onCode: lookup, onError: { cameraError = $0 })
                             .frame(height: 250).clipShape(RoundedRectangle(cornerRadius: 20))
                             .overlay { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.8), lineWidth: 2).frame(width: 230, height: 130).allowsHitTesting(false) }
                             .accessibilityLabel("Barcode camera view")
-                        Text("Hold the barcode inside the frame.").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                        Text("Hold Barcode in Frame").font(.cave(.subheadline)).foregroundStyle(.secondary)
                     } else if permission == .denied || permission == .restricted || cameraError != nil {
                         ContentUnavailableView { Label { Text("Camera unavailable") } icon: { CaveIcon(.camera, size: 48) } } description: { Text("Make sure you have granted this app access to your camera.") }
                         if permission == .denied { Button("Open Camera Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } } }
                     }
                     if loading { ProgressView("Looking up barcode…") }
                     if let message { Text(message).font(.cave(.subheadline)).foregroundStyle(.secondary) }
-                    if let result {
-                        FoodRow(name: result.name.isEmpty ? "\(result.calories.calorieText) calories" : result.name, calories: result.name.isEmpty ? nil : result.calories, detail: result.servingDescription,
-                                add: { if store.add([result]) { dismiss() } }, edit: { editor = result })
-                        Button("Scan another barcode") { self.result = nil; code = ""; message = nil }
-                    }
-                    Button("Enter calories manually") {
-                        var draft = EntryDraft(timestamp: date); draft.barcode = validCode ? code : nil; draft.source = "barcode"; editor = draft
-                    }
                 }.padding(20)
             }
-            .navigationTitle("Scan a barcode").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                CaptureCancelButton {
+                    task?.cancel()
+                    dismiss()
+                }
+            }
+            .navigationTitle("Barcode Scan").navigationBarTitleDisplayMode(.inline)
             .task {
                 guard AVCaptureDevice.default(for: .video) != nil else { cameraError = "Camera unavailable. Make sure you have granted this app access to your camera."; return }
                 if permission == .notDetermined { _ = await AVCaptureDevice.requestAccess(for: .video); permission = AVCaptureDevice.authorizationStatus(for: .video) }
             }
-            .sheet(item: $editor, onDismiss: { if store.lastAddedID != nil, addedDuringSheet { dismiss() } }) { draft in EntryEditorSheet(draft: draft) }
-            .onChange(of: store.lastAddedID) { _, _ in addedDuringSheet = true }
             .onDisappear { task?.cancel() }
         }
     }
-    @State private var addedDuringSheet = false
+
     private func lookup(_ raw: String) {
-        guard !loading, result == nil else { return }
+        guard !loading, editor == nil else { return }
         let cleaned = raw.filter(\.isNumber)
         guard (8...14).contains(cleaned.count) else { return }
-        code = cleaned; loading = true; message = nil
+        loading = true; message = nil
         task?.cancel()
         task = Task { @MainActor in
             var draft = store.localBarcode(cleaned)
@@ -66,7 +66,7 @@ struct BarcodeSheet: View {
             }
             guard !Task.isCancelled else { return }
             loading = false
-            if var draft { draft.timestamp = date; draft.entryID = nil; draft.source = "barcode"; result = draft }
+            if var draft { draft.timestamp = date; draft.entryID = nil; draft.source = "barcode"; editor = draft }
             else {
                 if message == nil { message = "Barcode not found. Save it once to use it next time." }
                 var manual = EntryDraft(timestamp: date); manual.barcode = cleaned; manual.source = "barcode"; editor = manual

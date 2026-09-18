@@ -1,0 +1,17 @@
+Resubmission following the previous App Review feedback:
+
+1. Mainland China availability: We removed Mainland China from the app's distribution territories. App Store Connect now shows Mainland China as unavailable.
+
+2. Subscription-screen presentation (Guideline 2.1): We changed the paywall presentation to use navigation within the existing screen instead of nested sheets, and added a guard against duplicate dismissal requests. These changes address the subscription page disappearing immediately after it was opened, including when the iPhone app runs on iPad in compatibility mode.
+
+3. Updated screenshots and branding: The App Store screenshots have been replaced with current app captures. The optional premium subscription is branded Cave Cals+.
+
+Review instructions:
+- No app account or login is required. Complete the optional calorie-goal setup or skip setting a goal.
+- Open Settings and select the upgrade option to open the Cave Cals+ subscription page. Close/cancel returns to the prior screen without making a purchase.
+- Restore purchases is available in Settings and on the paywall. Apple may ask the reviewer to authenticate with the App Store account during purchase or restoration.
+- Manual calorie logging, food search, barcode lookup, Quick Add, saved meals, history, goals, and widgets are free. Cave Cals+ provides meal-photo analysis, voice analysis, and recipe/link import.
+- To review Meal Scan, tap the drumstick scan button, take or select a food photo, then tap Scan and Analyze. To review voice logging, tap the microphone. A subscription is required for analysis; users can review and edit estimates before adding them.
+- Purchases use Apple's in-app purchase flow. The production backend supports verified Apple sandbox transactions. Use a physical iPhone or iPad for device attestation and sandbox purchase testing.
+
+The changes above address the reported availability and paywall-presentation issues. No demo account credentials are needed.

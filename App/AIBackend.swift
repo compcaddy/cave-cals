@@ -16,6 +16,9 @@ struct AIFoodEstimate: Codable, Identifiable {
     var name: String
     var calories: Double
     var portion: String
+    // Optional so results cached by the previous backend contract still work.
+    var servingSize: String?
+    var servings: Double?
     var confidence: String
 }
 struct AIResult: Codable {
@@ -25,9 +28,30 @@ struct AIResult: Codable {
     func drafts(at date: Date, source: String) -> [EntryDraft] {
         items.map { item in
             var draft = EntryDraft(name: item.name, calories: item.calories, timestamp: date)
-            draft.source = source; draft.servingDescription = item.portion
+            let size = item.servingSize?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let microscopic = size?.range(
+                of: #"\b(grain|kernel|crumb|drop|noodle|flake)s?\b"#,
+                options: [.regularExpression, .caseInsensitive]
+            ) != nil
+            let structuredCount = item.servings.flatMap {
+                $0.isFinite && $0 > 0 && $0 <= 100 && size?.isEmpty == false && !microscopic ? $0 : nil
+            }
+            let count = structuredCount ?? 1
+            draft.source = source
+            draft.servingDescription = structuredCount == nil ? item.portion : size!
+            draft.servings = count
+            draft.perServing = (item.calories / count).rounded()
             return draft
         }
+    }
+}
+struct AIMealImportResult: Codable {
+    var mealName: String
+    var items: [AIFoodEstimate]
+    var notes: String
+
+    func drafts(at date: Date, source: String) -> [EntryDraft] {
+        AIResult(items: items, notes: notes, transcript: nil).drafts(at: date, source: source)
     }
 }
 struct AIServiceError: LocalizedError {
@@ -125,6 +149,9 @@ actor AIBackend {
         }
         return try await signed("food/analyze",fields:["uploadId":uploadId])
     }
+    func importMeal(from url: URL) async throws -> AIMealImportResult {
+        try await signed("meal/import", fields: ["url": url.absoluteString])
+    }
     private func signed<T: Decodable>(_ path: String, fields: [String:Any]) async throws -> T {
         let previous = gate
         let (stream, continuation) = AsyncStream<Void>.makeStream()
@@ -164,7 +191,7 @@ actor AIBackend {
         var request = URLRequest(url: base.appendingPathComponent("api/v1/\(path)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze"].contains(path) {
+        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze", "meal/import"].contains(path) {
             // The separately issued owner capability authorizes testing without App Attest.
             request.setValue("1", forHTTPHeaderField: "X-Cave-Owner-Test")
             body["nonce"] = UUID().uuidString

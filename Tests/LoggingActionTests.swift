@@ -12,6 +12,10 @@ import UIKit
         }
     }
 
+    func testCaveCountDisplayFontIsBundled() {
+        XCTAssertNotNil(UIFont(name: "CaveCount-Regular", size: 48))
+    }
+
     func testAllWidgetLinksAndQuickActionsResolve() {
         for action in LoggingAction.allCases {
             XCTAssertEqual(LoggingAction(url: action.url), action)

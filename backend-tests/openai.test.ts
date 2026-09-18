@@ -3,19 +3,19 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import OpenAI from 'openai';
 import sharp from 'sharp';
-import { identify,validateAudioDuration,validateResult } from '../backend/src/server/ai';
+import { identify,importMealFromWebsite,validateAudioDuration,validateResult } from '../backend/src/server/ai';
 import type { Upload } from '../backend/src/server/storage';
 function wave(seconds=1) {
   const b=Buffer.alloc(44+16000*seconds*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(16000,24);b.writeUInt32LE(32000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(b.length-44,40);return b;
 }
 test('the OpenAI SDK sends image identification and transcribed voice through structured Responses',async()=>{
   const requests:{url:string;body:string}[]=[];
-  const result={items:[{name:'Eggs',calories:160,portion:'2 eggs',confidence:'medium'}],notes:'Estimated'};
+  const result={items:[{name:'Eggs',calories:160,portion:'2 eggs',servingSize:'1 egg',servings:2,confidence:'medium'}],notes:'Estimated'};
   const server=createServer(async(req,res)=>{
     const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(chunk);
     requests.push({url:req.url!,body:Buffer.concat(chunks).toString()});res.setHeader('content-type','application/json');
     if(req.url==='/v1/audio/transcriptions')res.end(JSON.stringify({text:'I ate two eggs.'}));
-    else res.end(JSON.stringify({id:'resp_test',object:'response',status:'completed',created_at:1,model:'test',output:[{id:'msg_test',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify(result),annotations:[]}]}]}));
+    else res.end(JSON.stringify({id:'resp_test',object:'response',status:'completed',created_at:1,model:'test',output:[{id:'msg_test',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify({...result,mealName:'Egg breakfast'}),annotations:[]}]}]}));
   });
   await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
   const port=(server.address() as {port:number}).port;
@@ -32,11 +32,23 @@ test('the OpenAI SDK sends image identification and transcribed voice through st
     assert.equal(voice.transcript,'I ate two eggs.');assert.equal(voice.items[0].calories,160);
     assert.equal(requests[1].url,'/v1/audio/transcriptions');assert.ok(requests[1].body.includes('gpt-transcribe'));
     assert.ok(requests[2].body.includes('I ate two eggs.'));
+    const imported=await importMealFromWebsite('https://example.com/recipe',client);
+    assert.equal(imported.mealName,'Egg breakfast');assert.equal(imported.items[0].name,'Eggs');
+    assert.ok(requests[3].body.includes('web_search'));assert.ok(requests[3].body.includes('https://example.com/recipe'));
+    await assert.rejects(importMealFromWebsite('http://example.com/recipe',client));
     await assert.rejects(validateAudioDuration(wave(66),'audio/wav'));
   } finally { await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve())); }
 });
 
 test('normalizes visual and preparation words from portions',()=>{
-  const result = validateResult({items:[{name:'Banana',calories:100,portion:'1 medium banana shown, peeled',confidence:'medium'}],notes:''});
+  const result = validateResult({items:[{name:'Banana',calories:100,portion:'1 medium banana shown, peeled',servingSize:'1 medium banana peeled',servings:1,confidence:'medium'}],notes:''});
   assert.equal(result.items[0].portion,'1 medium banana');
+  assert.equal(result.items[0].servingSize,'1 medium banana');
+});
+
+test('keeps useful servings and collapses microscopic serving units',()=>{
+  const banana = validateResult({items:[{name:'Bananas',calories:210,portion:'2 medium bananas',servingSize:'1 medium banana',servings:2,confidence:'high'}],notes:''}).items[0];
+  assert.equal(banana.servingSize,'1 medium banana');assert.equal(banana.servings,2);
+  const rice = validateResult({items:[{name:'Rice',calories:300,portion:'1.5 cups cooked rice',servingSize:'1 grain of rice',servings:3000,confidence:'low'}],notes:''}).items[0];
+  assert.equal(rice.servingSize,'1.5 cups cooked rice');assert.equal(rice.servings,1);
 });

@@ -1,24 +1,18 @@
 import SwiftUI
 
-private struct GuideArrow: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            let tip = CGPoint(x: rect.midX, y: rect.maxY - 1)
-            path.move(to: CGPoint(x: rect.midX - 4, y: rect.minY + 1))
-            path.addQuadCurve(to: tip, control: CGPoint(x: rect.midX + 5, y: rect.midY))
-            path.move(to: CGPoint(x: tip.x - 5, y: tip.y - 6))
-            path.addLine(to: tip)
-            path.addLine(to: CGPoint(x: tip.x + 5, y: tip.y - 6))
-        }
-    }
+enum HomeListMode: String, CaseIterable {
+    case logged
+    case quickAdd
+    case meals
 }
 
 enum MainSheet: Identifiable {
-    case entry(EntryDraft), searchEntry(EntryDraft), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, barcode(Date), meal(UUID, Date), photo, voice, search, calendar
+    case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, barcode(Date), meal(UUID, Date), photo, voice, calendar
+    case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport
     var id: String {
         switch self {
         case .entry(let draft): "entry-\(draft.id)"
-        case .searchEntry(let draft): "search-entry-\(draft.id)"
+        case .searchEntry(let draft, _): "search-entry-\(draft.id)"
         case .namedEntry(let draft): "named-entry-\(draft.id)"
         case .quickEntry(let draft): "quick-entry-\(draft.id)"
         case .settings: "settings"
@@ -26,8 +20,36 @@ enum MainSheet: Identifiable {
         case .meal(let id, _): "meal-\(id)"
         case .photo: "photo"
         case .voice: "voice"
-        case .search: "search"
         case .calendar: "calendar"
+        case .newMeal: "new-meal"
+        case .mealEditor(let route): "meal-editor-\(route.id)"
+        case .mealCapture(let mode): "meal-capture-\(mode == .photo ? "photo" : "voice")"
+        case .mealImport: "meal-import"
+        }
+    }
+}
+
+struct CalorieProgressSegments: Equatable {
+    let blue: Double
+    let orange: Double
+    let red: Double
+
+    init(total: Double, goal: Double) {
+        guard total.isFinite, goal.isFinite, goal > 0 else {
+            blue = 0; orange = 0; red = 0
+            return
+        }
+        let progress = max(0, total / goal)
+        if progress <= 1 {
+            blue = min(progress, 0.8)
+            orange = min(max(progress - 0.8, 0), 0.2)
+            red = 0
+        } else {
+            // Keep the final 20% as the warning band. Each percentage over goal
+            // replaces the same amount of blue with red from the right edge.
+            red = min(progress - 1, 0.8)
+            orange = 0.2
+            blue = max(0, 0.8 - red)
         }
     }
 }
@@ -40,6 +62,8 @@ struct MainView: View {
     @State private var today = Date()
     @State private var query = ""
     @State private var showingQuickCalories = false
+    @State private var listMode: HomeListMode = .quickAdd
+    @State private var revealNextAddedEntry = false
     @State private var quickAmount: Int?
     @State private var quickName = ""
     @State private var suggestedFoods: [HistoricalFood] = []
@@ -47,8 +71,9 @@ struct MainView: View {
     @State private var search = FoodSearchState()
     @State private var sheet: MainSheet?
     @State private var openedInitially = false
-    @State private var wasBackgrounded = false
+    @State private var backgroundedAt: Date?
     @FocusState private var searching: Bool
+    @FocusState private var quickNameFocused: Bool
     @ScaledMetric(relativeTo: .largeTitle) private var summarySize = 32.0
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -68,21 +93,37 @@ struct MainView: View {
                 .frame(height: 44)
                 .padding(.horizontal, 20).padding(.top, 8)
                 summary.padding(.horizontal, 20)
+                if cleanQuery.isEmpty {
+                    foodListPicker
+                    .padding(.horizontal, 20).padding(.bottom, 12)
+                }
                 Divider().padding(.horizontal, 20)
             ScrollViewReader { proxy in
                 List {
+                    if !cleanQuery.isEmpty {
+                        searchSection
+                    } else if listMode == .quickAdd {
+                        suggestionRows
+                    } else if listMode == .meals {
+                        mealRows
+                    } else {
+                        if store.dayEntries(selected).isEmpty {
+                            Text("No food logged for this day.")
+                                .font(.cave(.body)).foregroundStyle(.secondary)
+                                .listRowSeparator(.hidden)
+                        }
                         Section {
                             ForEach(store.dayEntries(selected)) { entry in
                                 Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
-                                    HStack(alignment: .firstTextBaseline, spacing: 14) {
-                                        Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 67, alignment: .leading)
-                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.primary)
+                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                        Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
+                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
                                             .lineLimit(1).truncationMode(.tail)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(entry.totalCalories.calorieText)
-                                            .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body)).foregroundStyle(.primary)
+                                            .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
                                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
-                                    }.padding(.horizontal, 8).padding(.vertical, 14).frame(minHeight: 48).contentShape(Rectangle())
+                                    }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain).id(entry.id)
                                 .overlay(alignment: .bottom) {
@@ -92,15 +133,37 @@ struct MainView: View {
                                 .listRowSeparator(.hidden)
                                 .accessibilityIdentifier("entry-\(entry.id)")
                                 .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
-                                .swipeActions(edge: .trailing) { Button("Delete", role: .destructive) { store.delete(entry) } }
+                                .contextMenu {
+                                    Button {
+                                        searching = false
+                                        sheet = .entry(EntryDraft(entry))
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        store.delete(entry)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button("Delete", role: .destructive) { store.delete(entry) }
+                                        .tint(.red)
+                                }
                             }
                         }.listSectionSeparator(.hidden)
+                    }
                 }
                 .listStyle(.plain).scrollDismissesKeyboard(.interactively)
                 .onChange(of: store.lastAddedID) { _, value in
                     guard let value else { return }
-                    if case .search = sheet { return }
-                    query = ""; searching = false
+                    let source = store.entries.first(where: { $0.id == value })?.sourceType
+                    let cameFromScan = ["aiPhoto", "aiVoice", "barcode"].contains(source)
+                    if revealNextAddedEntry || cameFromScan {
+                        revealNextAddedEntry = false
+                        showLogged()
+                    }
+                    guard listMode == .logged, cleanQuery.isEmpty else { return }
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(100))
                         withAnimation { proxy.scrollTo(value, anchor: .bottom) }
@@ -122,15 +185,32 @@ struct MainView: View {
                 openedInitially = true
                 if !openPendingAction() { openSearch() }
             }
+            .onChange(of: selected) { _, _ in
+                refreshSuggestions()
+            }
+            .onChange(of: listMode) { _, mode in
+                if mode == .quickAdd { refreshSuggestions() }
+            }
+            .onChange(of: store.pinnedFoodIDs) { _, _ in
+                if listMode == .quickAdd { refreshSuggestions() }
+            }
+            .onChange(of: cleanQuery) { _, value in
+                if !value.isEmpty { showingQuickCalories = false }
+            }
             .onChange(of: actionRouter.pending) { _, request in
                 if request != nil { _ = openPendingAction() }
             }
             .onChange(of: phase) { _, value in
-                if value == .background { wasBackgrounded = true }
+                if value == .background { backgroundedAt = Date() }
                 if value == .active {
-                    resetToday()
-                    if !openPendingAction(), wasBackgrounded, sheet == nil { openSearch() }
-                    wasBackgrounded = false
+                    let now = Date()
+                    if !Calendar.current.isDate(now, inSameDayAs: today) { resetToday() }
+                    if !openPendingAction(), sheet == nil,
+                       let backgroundedAt, now.timeIntervalSince(backgroundedAt) >= 30 * 60 {
+                        resetToday()
+                        openSearch()
+                    }
+                    backgroundedAt = nil
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in resetToday() }
@@ -138,6 +218,45 @@ struct MainView: View {
                 if !Calendar.current.isDate(now, inSameDayAs: today) { resetToday() }
             }
         }
+    }
+
+    private var foodListPicker: some View {
+        HStack(spacing: 0) {
+            foodListButton("Logged", glyph: .check, mode: .logged)
+            foodListButton("Quick Add", glyph: .lightning, mode: .quickAdd)
+            foodListButton("Meals", glyph: .meals, mode: .meals)
+        }
+        .padding(3)
+        .background(Color(.secondarySystemFill), in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("foodListPicker")
+    }
+
+    private func foodListButton(_ title: String, glyph: CaveGlyph, mode: HomeListMode) -> some View {
+        let selected = listMode == mode
+        return Button {
+            withAnimation(.easeInOut(duration: 0.18)) { listMode = mode }
+        } label: {
+            HStack(spacing: 6) {
+                CaveIcon(glyph, size: 16)
+                Text(title)
+            }
+            .font(.system(.subheadline, design: .rounded, weight: .medium))
+            .lineLimit(1).minimumScaleFactor(0.75)
+            .foregroundStyle(selected ? Color.primary : Color.secondary)
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
     @discardableResult private func openPendingAction() -> Bool {
         let quickCalories = actionRouter.pending?.quickCalories == true
@@ -149,17 +268,21 @@ struct MainView: View {
         searching = false
         query = ""
         switch action {
-        case .barcode: sheet = .barcode(loggingDate)
-        case .voice: sheet = .voice
-        case .image: sheet = .photo
+        case .barcode:
+            revealNextAddedEntry = true
+            sheet = .barcode(loggingDate)
+        case .voice:
+            revealNextAddedEntry = true
+            sheet = .voice
+        case .image:
+            revealNextAddedEntry = true
+            sheet = .photo
         case .add:
             openSearch()
             showingQuickCalories = quickCalories
         }
         return true
     }
-    // The route changes the contents, not the presentation identity. Moving from
-    // search to an editor keeps the existing drawer on screen.
     private var drawerPresented: Binding<Bool> {
         Binding(get: { sheet != nil }, set: { if !$0 { sheet = nil } })
     }
@@ -167,19 +290,30 @@ struct MainView: View {
         switch sheet {
         case .entry(let draft):
             EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true).id(draft.id)
-        case .searchEntry(let draft):
-            EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true, onCancel: { sheet = .search }).id(draft.id)
+        case .searchEntry(let draft, let pinFoodID):
+            EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true, onCancel: { sheet = nil }, pinFoodID: pinFoodID).id(draft.id)
         case .namedEntry(let draft):
-            EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true, blankCaloriesOnOpen: true, onCancel: { sheet = .search }).id(draft.id)
+            EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true, blankCaloriesOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
         case .quickEntry(let draft):
-            EntryEditorSheet(draft: draft, focusNameOnOpen: true, onCancel: { sheet = .search }).id(draft.id)
+            EntryEditorSheet(draft: draft, focusNameOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
         case .settings: SettingsView()
         case .barcode(let date): BarcodeSheet(date: date)
         case .meal(let id, let date): MealAddSheet(mealID: id, date: date)
         case .photo: AIInputSheet(mode: .photo, date: loggingDate).id("photo")
         case .voice: AIInputSheet(mode: .voice, date: loggingDate).id("voice")
-        case .search: searchDrawer
         case .calendar: CalorieCalendarSheet(selected: $selected, today: today)
+        case .newMeal:
+            NewMealStartSheet { start in openMealStart(start) }
+        case .mealEditor(let route):
+            MealEditorSheet(route: route)
+        case .mealCapture(let mode):
+            AIInputSheet(mode: mode, date: loggingDate) { drafts in
+                sheet = .mealEditor(MealRoute(items: drafts))
+            }.id("meal-\(mode == .photo ? "photo" : "voice")")
+        case .mealImport:
+            MealLinkImportSheet { name, drafts in
+                sheet = .mealEditor(MealRoute(name: name, items: drafts))
+            }
         case nil: EmptyView()
         }
     }
@@ -189,7 +323,7 @@ struct MainView: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(total.calorieText)
-                        .font(.custom("Schoolbell-Regular", fixedSize: summarySize * 1.5))
+                        .font(.custom("CaveCount-Regular", fixedSize: summarySize * 1.5))
                     if let goal {
                         Text("/ \(goal.calorieText)")
                             .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
@@ -213,18 +347,25 @@ struct MainView: View {
             .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
             .accessibilityIdentifier("calorieSummary")
             if let goal {
+                let segments = CalorieProgressSegments(total: total, goal: goal)
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.primary.opacity(0.08))
-                        Capsule().fill(Color.accentColor)
-                            .frame(width: geometry.size.width * min(max(total / goal, 0), 1))
+                        HStack(spacing: 0) {
+                            Color.accentColor.frame(width: geometry.size.width * segments.blue)
+                            Color.orange.frame(width: geometry.size.width * segments.orange)
+                            Color.red.frame(width: geometry.size.width * segments.red)
+                            Spacer(minLength: 0)
+                        }
+                        .clipShape(Capsule())
                     }
                 }
                 .frame(height: 9)
+                .animation(.easeInOut(duration: 0.25), value: segments)
                 .accessibilityLabel("Goal progress")
-                .accessibilityValue("\((min(total / goal, 1) * 100).calorieText) percent")
+                .accessibilityValue("\((max(total / goal, 0) * 100).calorieText) percent")
             }
-        }.frame(maxWidth: .infinity).padding(.vertical, 20)
+        }.frame(maxWidth: .infinity).padding(.top, 8).padding(.bottom, 20)
     }
 
     private var searchSection: some View {
@@ -232,6 +373,7 @@ struct MainView: View {
         if Double(cleanQuery) == nil {
             Button {
                 searching = false
+                revealNextAddedEntry = true
                 sheet = .namedEntry(EntryDraft(name: cleanQuery, timestamp: loggingDate))
             } label: {
                 HStack {
@@ -245,31 +387,45 @@ struct MainView: View {
         }
         if let amount = Double(cleanQuery), amount >= 0, amount <= 100_000 {
             FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
-                    add: { add(EntryDraft(calories: amount)) }, edit: { edit(EntryDraft(calories: amount), focusName: true) })
+                    add: { addFromSearch(EntryDraft(calories: amount)) },
+                    edit: { edit(EntryDraft(calories: amount), focusName: true, revealAfterSave: true) })
         }
         Group {
+            if Double(cleanQuery) == nil {
             Text("Results").font(.cave(.caption2)).foregroundStyle(.secondary)
                 .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 16))
                 .listRowSeparator(.hidden)
                 .environment(\.defaultMinListRowHeight, 18)
+            }
             ForEach(CommonFoods.search(cleanQuery)) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
-                        add: { add(draft) }, edit: { edit(draft) })
+                        add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             let local = localSearchFoods
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: draft.name, calories: draft.calories, add: { add(draft) }, edit: { edit(draft) })
+                FoodRow(name: draft.name, calories: draft.calories,
+                        add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(store.meals.filter { normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery)) }) { meal in
-                FoodRow(name: meal.name, calories: meal.calories, meal: true, add: {
-                    _ = store.addMeal(meal, date: loggingDate)
-                }, edit: { searching = false; sheet = .meal(meal.id, loggingDate) })
+                FoodRow(name: meal.name, calories: meal.calories, add: {
+                    revealNextAddedEntry = true
+                    if store.addMeal(meal, date: loggingDate) {
+                        showLogged()
+                    } else {
+                        revealNextAddedEntry = false
+                    }
+                }, edit: {
+                    searching = false
+                    revealNextAddedEntry = true
+                    sheet = .meal(meal.id, loggingDate)
+                })
             }
             ForEach(search.results.filter { result in !local.contains { $0.draft.externalID == result.id } }) { result in
                 FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription,
-                        add: { add(result.draft) }, edit: { edit(result.draft) })
+                        add: { addFromSearch(result.draft) },
+                        edit: { edit(result.draft, revealAfterSave: true) })
             }
             if search.loading {
                 HStack(spacing: 12) {
@@ -282,136 +438,122 @@ struct MainView: View {
         }
         }
     }
-    private var emptyDayGuide: some View {
-        // Match the footer's columns so arrows stay centered over their actions.
-        HStack(alignment: .bottom, spacing: 10) {
-            Color.clear.frame(maxWidth: .infinity).frame(height: 1)
-            guideLabel("Voice\nLog").frame(maxWidth: .infinity)
-            guideLabel("Scan\nBarCode").frame(maxWidth: .infinity)
-            guideLabel("Scan\nMeal").frame(maxWidth: .infinity)
-            guideLabel("Search / Manual", lineLimit: 1)
-                .frame(width: 100)
-        }
-        .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 2)
-        .background(Color(.systemBackground))
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-    }
-
-    private func guideLabel(_ title: String, lineLimit: Int = 2) -> some View {
-        VStack(spacing: 5) {
-            Text(title)
-                .font(.custom("Schoolbell-Regular", size: 16, relativeTo: .footnote))
-                .multilineTextAlignment(.center)
-                .lineLimit(lineLimit).minimumScaleFactor(0.75)
-                .fixedSize(horizontal: false, vertical: true)
-            GuideArrow().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-                .frame(width: 18, height: 25)
-        }
-        .foregroundStyle(.secondary)
-    }
-
-    private var bottomBar: some View {
-        VStack(spacing: 0) {
-            if let toast = store.toast {
-                HStack {
-                    Text(toast).font(.cave(.subheadline)).lineLimit(2)
-                    Spacer(minLength: 10)
-                    Button("Undo") { store.undo() }.font(.cave(.subheadline).bold()).frame(minHeight: 44)
-                }.padding(.horizontal, 20).background(Color.accentColor.opacity(0.1)).accessibilityIdentifier("undoBanner")
-            }
-            if store.dayEntries(selected).isEmpty { emptyDayGuide }
-            HStack(spacing: 10) {
-                Button {
-                    openSearch()
-                    showingQuickCalories = true
-                } label: {
-                    QuickCaloriesIcon().frame(width: 28, height: 28)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }.accessibilityLabel("Quick calories")
-                Button { sheet = .voice } label: {
-                    CaveIcon(.voice, size: 31).frame(maxWidth: .infinity, minHeight: 48)
-                }.accessibilityLabel("Voice entry")
-                Button { sheet = .barcode(loggingDate) } label: {
-                    CaveIcon(.barcode, size: 31).frame(maxWidth: .infinity, minHeight: 48)
-                }.accessibilityLabel("Scan barcode")
-                Button { sheet = .photo } label: {
-                    CaveIcon(.meal, size: 31).frame(maxWidth: .infinity, minHeight: 48)
-                }.accessibilityLabel("Photo entry")
-                Button(action: openSearch) {
-                    CaveSearchAddIcon(size: 22).foregroundStyle(.white)
-                        .frame(width: 100, height: 48)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(.plain).accessibilityIdentifier("openSearch")
-                    .accessibilityLabel("Search or add food")
-                    .padding(.leading, 8)
-            }.padding(.horizontal, 16).padding(.vertical, 10)
-        }.background(.bar)
-    }
-    private var searchDrawer: some View {
-        HStack(alignment: .top, spacing: 0) {
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    CaveIcon(.search, size: 20).foregroundStyle(.secondary)
-                    DrawerSearchField(text: $query, autofocus: !showingQuickCalories)
-                    if !query.isEmpty {
-                        Button {
-                            query = ""
-                            showingQuickCalories = false
-                            suggestedFoods = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
-                        } label: {
-                            CaveIcon(.plus, size: 17).rotationEffect(.degrees(45))
-                                .foregroundStyle(.red).frame(width: 44, height: 44)
-                        }.buttonStyle(.plain).accessibilityLabel("Clear search")
-                    }
-                }.padding(12).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-            }.padding(.horizontal, 16).padding(.top, 24)
-            List {
-                if cleanQuery.isEmpty {
-                    let suggestions = suggestedFoods
-                    if suggestions.isEmpty {
-                        VStack(alignment: .leading, spacing: 24) {
-                            Text("You eat. App remember. Soon, app help you log food fast.")
-                                .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body))
-                        }
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 16).padding(.vertical, 12)
-                            .listRowSeparator(.hidden)
-                    } else {
-                        Section {
-                            ForEach(suggestions) { food in
-                                let draft = store.applyingCommonDefault(to: food.draft)
-                                FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true,
-                                        add: { add(draft, source: "suggestion") },
-                                        edit: { edit(draft, source: "suggestion") })
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+    private var suggestionRows: some View {
+        Group {
+            if suggestedFoods.isEmpty {
+                Text("\nYou eat.\n\nApp remember.\n\nSoon, app help you log food fast.")
+                    .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(suggestedFoods) { food in
+                    let draft = store.applyingCommonDefault(to: food.draft)
+                    let pinned = store.isPinned(food.id)
+                    FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: pinned,
+                            add: {
+                                revealNextAddedEntry = false
+                                add(draft, source: "suggestion")
+                            },
+                            edit: { edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: false) })
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                        .contextMenu {
+                            Button {
+                                edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: false)
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
                             }
-                        } header: {
-                            Text("Suggestions").font(.cave(.caption)).textCase(nil).padding(.vertical, 2)
+                            Button {
+                                revealNextAddedEntry = false
+                                add(draft, source: "suggestion")
+                            } label: {
+                                Label("Add", systemImage: "plus")
+                            }
+                            Button {
+                                store.setPinned(!pinned, foodID: food.id)
+                            } label: {
+                                Label(pinned ? "Un-Pin" : "Pin", systemImage: pinned ? "pin.slash" : "pin")
+                            }
+                        }
+                }
+            }
+        }
+    }
+    private var mealRows: some View {
+        Group {
+            Button {
+                sheet = .newMeal
+            } label: {
+                HStack(spacing: 8) {
+                    CaveIcon(.plus, size: 18)
+                    Text("New Meal")
+                }
+                .font(.cave(.subheadline).weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 38)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .frame(maxWidth: .infinity)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier("newMeal")
+
+            if store.meals.isEmpty {
+                Text("Save foods you often eat together.")
+                    .font(.cave(.body)).foregroundStyle(.secondary)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(orderedMeals) { meal in
+                    let pinned = store.isMealPinned(meal.id)
+                    FoodRow(name: meal.name, calories: meal.calories, suggestionLayout: true, pinned: pinned, add: {
+                        revealNextAddedEntry = true
+                        sheet = .meal(meal.id, loggingDate)
+                    }, edit: {
+                        sheet = .mealEditor(MealRoute(meal: meal))
+                    })
+                    .overlay(alignment: .top) {
+                        if meal.id == orderedMeals.first?.id {
+                            Rectangle().fill(Color(.separator)).frame(height: 0.5)
                         }
                     }
-                } else { searchSection }
-            }.listStyle(.plain).scrollDismissesKeyboard(.interactively)
-                .contentMargins(.top, 0, for: .scrollContent)
-                .environment(\.defaultMinListRowHeight, 44)
-                .environment(\.defaultMinListHeaderHeight, 20)
-                if query.isEmpty {
-                HStack {
-                    Spacer()
-                    Button(action: closeSearch) {
-                        HStack(spacing: 8) {
-                            Text("Close").font(.cave(.subheadline)).foregroundStyle(.red)
-                            CaveIcon(.plus, size: 14).rotationEffect(.degrees(45)).foregroundStyle(.white)
-                                .frame(width: 26, height: 26).background(Color.red, in: Circle())
-                        }.frame(minHeight: 44).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel("Close search")
-                }.padding(.horizontal, 16).padding(.vertical, 8)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                    .contextMenu {
+                        Button {
+                            sheet = .mealEditor(MealRoute(meal: meal))
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            store.deleteMeal(meal)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        Button {
+                            store.setMealPinned(!pinned, mealID: meal.id)
+                        } label: {
+                            Label(pinned ? "Un-Pin" : "Pin", systemImage: pinned ? "pin.slash" : "pin")
+                        }
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button("Delete", role: .destructive) { store.deleteMeal(meal) }
+                            .tint(.red)
+                    }
                 }
+            }
         }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+    }
+    private var orderedMeals: [SavedMeal] {
+        let byID = Dictionary(uniqueKeysWithValues: store.meals.map { ($0.id.uuidString, $0) })
+        let pinned = store.pinnedMealIDs.compactMap { byID[$0] }
+        let pinnedSet = Set(pinned.map(\.id))
+        return pinned + store.meals.filter { !pinnedSet.contains($0.id) }
+    }
+    private var bottomBar: some View {
             VStack(spacing: 0) {
+                if showingQuickCalories { quickCalorieGrid }
                 if let toast = store.toast {
                     HStack {
                         Text(toast).font(.cave(.subheadline)).lineLimit(2)
@@ -421,43 +563,69 @@ struct MainView: View {
                     }.padding(.horizontal, 20).background(Color.accentColor.opacity(0.1))
                         .accessibilityIdentifier("searchUndoBanner")
                 }
-                if query.isEmpty {
-                if showingQuickCalories { quickCalorieGrid }
+                HStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        CaveIcon(.search, size: 20).foregroundStyle(.secondary)
+                        TextField("search food or enter cals", text: $query)
+                            .focused($searching).submitLabel(.search).autocorrectionDisabled()
+                            .accessibilityIdentifier("foodSearch")
+                        if searching || !query.isEmpty {
+                            Button {
+                                query = ""
+                                searching = false
+                                showingQuickCalories = false
+                                refreshSuggestions()
+                            } label: {
+                                CaveIcon(.plus, size: 17).rotationEffect(.degrees(45))
+                                    .foregroundStyle(.red).frame(width: 44, height: 44)
+                            }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                        }
+                    }.padding(12).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+                }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 2)
             HStack {
                 Spacer()
                 Button {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    searching = false
                     withAnimation(.easeInOut(duration: 0.2)) { showingQuickCalories.toggle() }
                 } label: {
                     QuickCaloriesIcon().frame(width: 28, height: 28).frame(width: 60, height: 48)
-                }.accessibilityIdentifier("searchQuickCalories").accessibilityLabel("Quick calories").accessibilityValue(showingQuickCalories ? "Expanded" : "Collapsed")
+                }.accessibilityIdentifier("searchQuickCalories").accessibilityLabel("Select Calories").accessibilityValue(showingQuickCalories ? "Expanded" : "Collapsed")
                 Spacer()
-                Button { searching = false; sheet = .voice } label: {
+                Button {
+                    searching = false
+                    revealNextAddedEntry = true
+                    sheet = .voice
+                } label: {
                     CaveIcon(.voice, size: 28).frame(width: 60, height: 48)
                 }.accessibilityLabel("Voice entry")
                 Spacer()
-                Button { searching = false; sheet = .barcode(loggingDate) } label: {
+                Button {
+                    searching = false
+                    revealNextAddedEntry = true
+                    sheet = .barcode(loggingDate)
+                } label: {
                     CaveIcon(.barcode, size: 28).frame(width: 60, height: 48)
                 }.accessibilityLabel("Scan barcode")
                 Spacer()
-                Button { searching = false; sheet = .photo } label: {
+                Button {
+                    searching = false
+                    revealNextAddedEntry = true
+                    sheet = .photo
+                } label: {
                     CaveIcon(.meal, size: 28).frame(width: 60, height: 48)
                 }.accessibilityLabel("Photo entry")
                 Spacer()
             }.padding(.vertical, 8)
-                }
             }.background(.bar)
-        }
-        .presentationDetents([.large]).presentationDragIndicator(.visible)
-        .onDisappear { searching = false }
     }
     private var quickCalorieGrid: some View {
         VStack(spacing: 6) {
-            Text("Quick calories").font(.cave(.subheadline))
+            Text("Select Calories").font(.cave(.subheadline))
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
                 ForEach(Array(stride(from: 50, through: 1000, by: 50)), id: \.self) { amount in
                     Button {
                         quickAmount = amount
+                        quickNameFocused = true
                     } label: {
                         Text(amount.formatted()).font(.cave(.subheadline)).lineLimit(1).minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity, minHeight: 44)
@@ -471,6 +639,7 @@ struct MainView: View {
             }
             HStack(spacing: 8) {
                 TextField("Name (optional)", text: $quickName)
+                    .focused($quickNameFocused)
                     .font(.cave(.subheadline))
                     .padding(12)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
@@ -493,49 +662,67 @@ struct MainView: View {
         guard let quickAmount else { return }
         let draft = EntryDraft(name: quickName.trimmingCharacters(in: .whitespacesAndNewlines),
                                calories: Double(quickAmount), timestamp: loggingDate)
-        guard store.add([draft]) else { return }
+        revealNextAddedEntry = true
+        guard store.add([draft]) else {
+            revealNextAddedEntry = false
+            return
+        }
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        quickNameFocused = false
         self.quickAmount = nil
         quickName = ""
-        showingQuickCalories = false
+        showLogged()
     }
-    private func openSearch() {
+    private func openSearch(autofocus: Bool = false) {
+        searching = autofocus
+        listMode = .quickAdd
         query = ""
         showingQuickCalories = false
         quickAmount = nil
         quickName = ""
         // Keep rows stable while logging several foods and showing confirmation.
-        suggestedFoods = FoodHistory.suggestions(entries: store.entries, date: loggingDate)
-        sheet = .search
+        refreshSuggestions()
+        sheet = nil
     }
-    private func closeSearch() { searching = false; query = ""; sheet = nil }
     private func resetToday() { today = Date(); selected = today }
-    private func add(_ input: EntryDraft, source: String? = nil) {
-        var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
-        _ = store.add([draft])
+    private func showLogged() {
+        query = ""
+        searching = false
+        showingQuickCalories = false
+        listMode = .logged
     }
-    private func edit(_ input: EntryDraft, source: String? = nil, focusName: Bool = false) {
-        var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
-        searching = false; sheet = focusName ? .quickEntry(draft) : .searchEntry(draft)
+    private func openMealStart(_ start: NewMealStart) {
+        switch start {
+        case .today: sheet = .mealEditor(MealRoute(fromToday: true))
+        case .photo: sheet = .mealCapture(.photo)
+        case .voice: sheet = .mealCapture(.voice)
+        case .link: sheet = .mealImport
+        case .manual: sheet = .mealEditor(MealRoute())
+        }
     }
-}
-
-private struct DrawerSearchField: View {
-    @Binding var text: String
-    var autofocus = true
-    @FocusState private var focused: Bool
-    var body: some View {
-        TextField("search food or enter cals", text: $text)
-            .focused($focused).submitLabel(.search).autocorrectionDisabled()
-            .accessibilityIdentifier("foodSearch")
-            .task {
-                // Focus belongs to the presented view, after the drawer enters the window.
-                guard autofocus else { return }
-                try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else { return }
-                focused = true
-            }
-            .onDisappear { focused = false }
+    private func addFromSearch(_ input: EntryDraft) {
+        revealNextAddedEntry = true
+        if add(input) {
+            showLogged()
+        } else {
+            revealNextAddedEntry = false
+        }
+    }
+    @discardableResult private func add(_ input: EntryDraft, source: String? = nil) -> Bool {
+        var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
+        return store.add([draft])
+    }
+    private func refreshSuggestions() {
+        suggestedFoods = FoodHistory.suggestions(
+            entries: store.entries,
+            date: loggingDate,
+            pinnedIDs: store.pinnedFoodIDs
+        )
+    }
+    private func edit(_ input: EntryDraft, source: String? = nil, focusName: Bool = false, pinFoodID: String? = nil, revealAfterSave: Bool) {
+        var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
+        revealNextAddedEntry = revealAfterSave
+        searching = false; sheet = focusName ? .quickEntry(draft) : .searchEntry(draft, pinFoodID)
     }
 }
 
@@ -548,8 +735,10 @@ struct FoodRow: View {
     let name: String
     var calories: Double?
     var detail: String? = nil
-    var meal = false
     var suggestionLayout = false
+    var pinned = false
+    var added = false
+    var keepsAddedState = false
     let add: () -> Void
     let edit: () -> Void
     private var actionName: String { calories == nil && name.hasPrefix("Add ") ? String(name.dropFirst(4)) : name }
@@ -559,7 +748,12 @@ struct FoodRow: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            if meal { CaveIcon(.meal, size: 18) }
+                            if pinned {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                            }
                             Text("\(name)\(suggestionLayout ? "" : (calories.map { " · \($0.calorieText) cal" } ?? ""))").font(.cave(.subheadline).weight(confirming ? .bold : .regular)).foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(2)
                         }
                         if let detail, !detail.isEmpty { Text(detail).font(.cave(.caption)).foregroundStyle(.secondary).lineLimit(1) }
@@ -569,31 +763,53 @@ struct FoodRow: View {
                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
                             .padding(.trailing, 6)
                     }
-                }.frame(maxWidth: .infinity, minHeight: suggestionLayout ? 64 : 48, alignment: .leading)
+                }.frame(maxWidth: .infinity, minHeight: suggestionLayout ? 52 : 48, alignment: .leading)
                     .contentShape(Rectangle())
-            }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel("Add \(actionName)")
-            Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 64 : 48) }
+            }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "Add \(actionName)")
+                .accessibilityValue(pinned ? "Pinned" : "")
+                .disabled(added)
+            Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 52 : 48) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")
+                .disabled(added)
             Button(action: addWithFeedback) {
-                FlipAddIcon(angle: rotation, showCheckWithoutMotion: reduceMotion && confirming)
-                    .frame(width: 44, height: suggestionLayout ? 64 : 48)
-            }.buttonStyle(.borderless).accessibilityLabel("Add \(actionName)")
+                if added {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 44, height: suggestionLayout ? 52 : 48)
+                } else {
+                    FlipAddIcon(angle: rotation, showCheckWithoutMotion: reduceMotion && confirming)
+                        .frame(width: 44, height: suggestionLayout ? 52 : 48)
+                }
+            }.buttonStyle(.borderless).accessibilityLabel(added ? "Added \(actionName)" : "Add \(actionName)")
+                .disabled(added)
         }
         .task(id: confirming) {
             guard confirming else { return }
             try? await Task.sleep(for: .milliseconds(750))
             guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                confirming = false
+                rotation = reduceMotion ? 0 : 360
+            }
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+            }
+            // Reset the equivalent front-facing angle without animating backward.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 rotation = 0
+                confirming = false
             }
         }
     }
     private func addWithFeedback() {
-        guard !confirming else { return }
+        guard !confirming && !added else { return }
         let previous = store.lastAddedID
         add()
         guard store.lastAddedID != previous else { return }
+        guard !keepsAddedState else { return }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
             confirming = true
             rotation = reduceMotion ? 0 : 180
@@ -609,14 +825,16 @@ private struct FlipAddIcon: View, Animatable {
         set { angle = newValue }
     }
     var body: some View {
+        let showsCheck = showCheckWithoutMotion || (angle >= 90 && angle < 270)
         ZStack {
-            CaveIcon(.plus, size: 17).opacity(angle < 90 && !showCheckWithoutMotion ? 1 : 0)
-            CaveIcon(.check, size: 17)
+            CaveIcon(.plus, size: 17).opacity(showsCheck ? 0 : 1)
+            Image(systemName: "checkmark")
+                .font(.system(size: 20, weight: .semibold))
                 .rotation3DEffect(.degrees(showCheckWithoutMotion ? 0 : 180), axis: (x: 0, y: 1, z: 0))
-                .opacity(angle >= 90 || showCheckWithoutMotion ? 1 : 0)
+                .opacity(showsCheck ? 1 : 0)
         }
-        .foregroundStyle(.white)
-        .frame(width: 34, height: 34).background(Color.accentColor, in: Circle())
+        .foregroundStyle(showsCheck ? Color.primary : Color.white)
+        .frame(width: 34, height: 34).background(showsCheck ? Color.clear : Color.accentColor, in: Circle())
         .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
     }
 }

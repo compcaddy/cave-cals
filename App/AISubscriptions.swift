@@ -99,52 +99,167 @@ import RevenueCatUI
 }
 
 /// RevenueCat owns the paywall UI; the app still verifies purchases with its backend.
+@MainActor final class PaywallDismissalGate {
+    private(set) var hasRequestedDismissal = false
+
+    func request(_ action: () -> Void) {
+        guard !hasRequestedDismissal else { return }
+        hasRequestedDismissal = true
+        action()
+    }
+}
+
 struct AIUpgradePaywall: View {
-    @Environment(\.dismiss) private var dismiss
     let subscriptions: AISubscriptions
     var onAccessGranted: () -> Void = {}
+    let onDismissRequested: () -> Void
+    @State private var dismissalGate = PaywallDismissalGate()
+
     var body: some View {
-        if let offering = subscriptions.offering {
-            PaywallView(offering: offering, fonts: CustomPaywallFontProvider(fontName: "Schoolbell-Regular"), displayCloseButton: true, performPurchase: { package in
-                guard let product = subscriptions.products.first(where: { $0.id == package.storeProduct.productIdentifier }) else {
-                    return (false, AIServiceError(code: "product", message: "This subscription is unavailable. Please try again."))
+        Group {
+            if let offering = subscriptions.offering {
+                PaywallView(offering: offering, fonts: CustomPaywallFontProvider(fontName: "Schoolbell-Regular"), displayCloseButton: true, performPurchase: { package in
+                    guard let product = subscriptions.products.first(where: { $0.id == package.storeProduct.productIdentifier }) else {
+                        return (false, AIServiceError(code: "product", message: "This subscription is unavailable. Please try again."))
+                    }
+                    let result = await subscriptions.buy(product)
+                    if result.error == nil && !result.userCancelled && subscriptions.account?.active == true {
+                        grantAccessAndDismiss()
+                    }
+                    return result
+                }, performRestore: {
+                    let result = await subscriptions.restore()
+                    if result.success { grantAccessAndDismiss() }
+                    return result
+                })
+                .onRequestedDismissal { requestDismissal() }
+            } else {
+                ContentUnavailableView {
+                    Label { Text("Subscriptions unavailable") } icon: { CaveIcon(.warning, size: 48) }
+                } description: {
+                    Text("Please close this screen and try again.")
+                } actions: {
+                    Button("Close") { requestDismissal() }
                 }
-                let result = await subscriptions.buy(product)
-                if result.error == nil && !result.userCancelled && subscriptions.account?.active == true {
-                    onAccessGranted(); dismiss()
-                }
-                return result
-            }, performRestore: {
-                let result = await subscriptions.restore()
-                if result.success { onAccessGranted(); dismiss() }
-                return result
-            })
-        } else {
-            ContentUnavailableView { Label { Text("Subscriptions unavailable") } icon: { CaveIcon(.warning, size: 48) } } description: { Text("Please close this screen and try again.") }
+            }
         }
+        .accessibilityIdentifier("aiUpgradePaywall")
+        .navigationBarBackButtonHidden(true)
+    }
+
+    private func grantAccessAndDismiss() {
+        dismissalGate.request {
+            onAccessGranted()
+            onDismissRequested()
+        }
+    }
+
+    private func requestDismissal() {
+        dismissalGate.request(onDismissRequested)
     }
 }
 
 struct AISubscriptionSection: View {
     let subscriptions: AISubscriptions
-    @State private var showPaywall = false
+    let openPaywall: () -> Void
+
     var body: some View {
-        Section("Meal scanning & voice logging") {
-            if subscriptions.busy { ProgressView("Loading…") }
-            else if subscriptions.account?.active == true {
-                Label { Text("AI logging is available") } icon: { CaveIcon(.check, size: 22) }
-            } else {
-                Button("Upgrade meal scanning & voice logging") { showPaywall = true }
-                    .disabled(subscriptions.offering == nil).accessibilityIdentifier("aiPaywall")
+        Section {
+            VStack(spacing: 16) {
+                Image("CaveCalsPlusLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 280)
+                    .accessibilityLabel("Cave Cals Plus")
+
+                if subscriptions.busy {
+                    ProgressView("Checking membership…")
+                        .frame(minHeight: 64)
+                } else if subscriptions.account?.active == true {
+                    membershipStatus
+                } else {
+                    upgradeInvitation
+                }
+
+                if let message = subscriptions.message {
+                    Text(message)
+                        .font(.cave(.footnote))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                membershipActions
             }
-            if let message = subscriptions.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
-            Button("Restore Purchases") { Task { await subscriptions.restore() } }
-                .disabled(subscriptions.busy || subscriptions.account == nil)
-            Link("Manage Subscription", destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
-            if let base = AIConfiguration.baseURL {
-                Link("Terms of Use", destination: base.appendingPathComponent("terms"))
-                Link("Privacy", destination: base.appendingPathComponent("privacy"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var membershipStatus: some View {
+        HStack(alignment: .top, spacing: 12) {
+            CaveIcon(.check, size: 24)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("You’re a Cave Cals+ member")
+                    .font(.cave(.headline))
+                Text("Premium meal logging is ready whenever you are.")
+                    .font(.cave(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        }.sheet(isPresented: $showPaywall) { AIUpgradePaywall(subscriptions: subscriptions) }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var upgradeInvitation: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Text("Smarter logging, carved for real life.")
+                    .font(.cave(.headline))
+                    .multilineTextAlignment(.center)
+                Text("Snap a meal, speak what you ate, or import a recipe. Cave Cals+ turns it into an editable log in seconds.")
+                    .font(.cave(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button(action: openPaywall) {
+                HStack(spacing: 8) {
+                    CaveIcon(.plus, size: 18)
+                    Text("Explore Cave Cals+")
+                }
+                    .frame(maxWidth: .infinity, minHeight: 34)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(subscriptions.offering == nil)
+            .accessibilityIdentifier("aiPaywall")
+        }
+    }
+
+    @ViewBuilder private var membershipActions: some View {
+        if subscriptions.account?.active == true {
+            HStack(spacing: 12) {
+                Link("Manage subscription", destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
+                Text("·").foregroundStyle(.tertiary)
+                restoreButton
+            }
+            .font(.cave(.footnote))
+        } else {
+            restoreButton
+                .font(.cave(.footnote))
+        }
+    }
+
+    private var restoreButton: some View {
+        Button("Restore purchases") { Task { await subscriptions.restore() } }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .disabled(subscriptions.busy || subscriptions.account == nil)
     }
 }

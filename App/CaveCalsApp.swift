@@ -23,6 +23,15 @@ import CoreData
                     let draft = EntryDraft(name: name, calories: calories, timestamp: Date().addingTimeInterval(-Double(minutes) * 60))
                     store.context.insert(CalorieEntry(draft: draft))
                 }
+                for day in 1...7 {
+                    for (name, calories) in [("Banana", 105.0), ("Chicken breast", 230.0), ("Brown rice", 215.0), ("Almonds", 164.0)] {
+                        let date = Calendar.current.date(byAdding: .day, value: -day, to: Date())!
+                        store.context.insert(CalorieEntry(draft: EntryDraft(name: name, calories: calories, timestamp: date)))
+                    }
+                }
+                store.context.insert(SavedMeal(name: "My breakfast", items: [EntryDraft(name: "Scrambled eggs", calories: 180), EntryDraft(name: "Sourdough toast", calories: 160)]))
+                store.context.insert(SavedMeal(name: "Chicken & rice bowl", items: [EntryDraft(name: "Chicken breast", calories: 230), EntryDraft(name: "Brown rice", calories: 215), EntryDraft(name: "Broccoli", calories: 55)]))
+                store.context.insert(SavedMeal(name: "Yogurt & berries", items: [EntryDraft(name: "Greek yogurt", calories: 130), EntryDraft(name: "Blueberries", calories: 85)]))
                 store.commit()
             }
             #endif
@@ -79,21 +88,24 @@ struct SetupView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if !isAdjustingGoal {
+                        Image("SetupAppIcon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: min(120, geometry.size.height * 0.17))
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .frame(maxWidth: .infinity)
+                            .accessibilityHidden(true)
+                    }
                     VStack(spacing: -12) {
                         headlineLine("You Eat.", width: geometry.size.width - 64, height: geometry.size.height)
                         headlineLine("App Track.", width: geometry.size.width - 64, height: geometry.size.height)
+                        headlineLine("Weight Drop.", width: geometry.size.width - 64, height: geometry.size.height)
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, -12)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
-                    if !isAdjustingGoal {
-                        CaveIcon(.meal, size: min(160, geometry.size.height * 0.21) * 0.75)
-                            .frame(maxWidth: .infinity)
-                            .foregroundStyle(.primary)
-                            .padding(.bottom, 12)
-                            .accessibilityHidden(true)
-                    }
                     VStack(spacing: 0) {
                         Text("daily calorie goal").font(.custom("Schoolbell-Regular", size: 24, relativeTo: .title3))
                             .foregroundStyle(.secondary)

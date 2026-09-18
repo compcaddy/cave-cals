@@ -15,6 +15,8 @@ enum CaveGlyph: String, CaseIterable {
     case camera = "CaveCamera"
     case circle = "CaveCircle"
     case check = "CaveCheck"
+    case lightning = "CaveLightning"
+    case meals = "CaveMeals"
     case stop = "CaveStop"
     case cloud = "CaveCloud"
     case phone = "CavePhone"

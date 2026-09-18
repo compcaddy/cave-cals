@@ -68,6 +68,22 @@ import SwiftData
         XCTAssertEqual(store.goal(Date()), 9999)
     }
 
+    func testCalorieProgressUsesWarningAndOverageBands() {
+        func assertSegments(_ total: Double, blue: Double, orange: Double, red: Double, line: UInt = #line) {
+            let segments = CalorieProgressSegments(total: total, goal: 1_000)
+            XCTAssertEqual(segments.blue, blue, accuracy: 0.0001, line: line)
+            XCTAssertEqual(segments.orange, orange, accuracy: 0.0001, line: line)
+            XCTAssertEqual(segments.red, red, accuracy: 0.0001, line: line)
+        }
+
+        assertSegments(500, blue: 0.5, orange: 0, red: 0)
+        assertSegments(900, blue: 0.8, orange: 0.1, red: 0)
+        assertSegments(1_000, blue: 0.8, orange: 0.2, red: 0)
+        assertSegments(1_200, blue: 0.6, orange: 0.2, red: 0.2)
+        assertSegments(1_400, blue: 0.4, orange: 0.2, red: 0.4)
+        assertSegments(1_900, blue: 0, orange: 0.2, red: 0.8)
+    }
+
     func testNoGoalPreferencePersistsAcrossReopen() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -262,11 +278,156 @@ import SwiftData
     func testSuggestionsColdStartLimitAndRepeatVisibility() throws {
         let store = try makeStore()
         XCTAssertTrue(FoodHistory.suggestions(entries: store.entries, date: Date()).isEmpty)
-        for i in 0..<8 { store.add([EntryDraft(name: "Food \(i)", calories: 100)]) }
+        for i in 0..<12 { store.add([EntryDraft(name: "Food \(i)", calories: 100)]) }
         let suggestions = FoodHistory.suggestions(entries: store.entries, date: Date())
-        XCTAssertEqual(suggestions.count, 5)
+        XCTAssertEqual(suggestions.count, 10)
         var repeated = suggestions[0].draft; repeated.timestamp = Date(); store.add([repeated])
         XCTAssertTrue(FoodHistory.suggestions(entries: store.entries, date: Date()).contains { $0.id == suggestions[0].id })
+    }
+    func testPinnedSuggestionsStayAtTopWithinTenItemLimit() {
+        let date = Date().addingTimeInterval(60)
+        let entries = (0..<12).map { index in
+            suggestionEntry("Food \(index)", calories: Double(100 + index), at: date.addingTimeInterval(Double(-index - 1)))
+        }
+        let foods = FoodHistory.foods(entries).sorted { $0.id < $1.id }
+        let pinnedIDs = [foods[10].id, foods[3].id]
+        let suggestions = FoodHistory.suggestions(entries: entries, date: date, pinnedIDs: pinnedIDs)
+        XCTAssertEqual(suggestions.count, 10)
+        XCTAssertEqual(Array(suggestions.prefix(2).map(\.id)), pinnedIDs)
+        XCTAssertEqual(Set(suggestions.map(\.id)).count, suggestions.count)
+    }
+    func testPinPreferencesPreserveOrderRenameAndUnpin() throws {
+        let suite = "CaveCalsTests.pins.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(
+            container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+            publishesWidget: false,
+            preferences: preferences
+        )
+        store.setPinned(true, foodID: "name:coffee")
+        store.setPinned(true, foodID: "name:oats")
+        XCTAssertEqual(store.pinnedFoodIDs, ["name:coffee", "name:oats"])
+        store.updatePin(originalID: "name:coffee", replacementID: "name:iced coffee", pinned: true)
+        XCTAssertEqual(store.pinnedFoodIDs, ["name:iced coffee", "name:oats"])
+        store.setPinned(false, foodID: "name:iced coffee")
+        XCTAssertEqual(store.pinnedFoodIDs, ["name:oats"])
+    }
+    func testMealPinsPersistInInsertionOrderAndClearOnDelete() throws {
+        let suite = "CaveCalsTests.mealPins.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(
+            container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+            publishesWidget: false,
+            preferences: preferences
+        )
+        store.saveMeal(nil, name: "Breakfast", items: [EntryDraft(name: "Eggs", calories: 160)])
+        store.saveMeal(nil, name: "Lunch", items: [EntryDraft(name: "Soup", calories: 240)])
+        let breakfast = try XCTUnwrap(store.meals.first { $0.name == "Breakfast" })
+        let lunch = try XCTUnwrap(store.meals.first { $0.name == "Lunch" })
+        store.setMealPinned(true, mealID: lunch.id)
+        store.setMealPinned(true, mealID: breakfast.id)
+        XCTAssertEqual(store.pinnedMealIDs, [lunch.id.uuidString, breakfast.id.uuidString])
+        store.setMealPinned(false, mealID: lunch.id)
+        XCTAssertEqual(store.pinnedMealIDs, [breakfast.id.uuidString])
+        store.deleteMeal(breakfast)
+        XCTAssertTrue(store.pinnedMealIDs.isEmpty)
+        XCTAssertEqual(store.meals.map(\.name), ["Lunch"])
+    }
+    func testSuggestionsLearnFoodSpecificTimeWindows() {
+        let calendar = suggestionCalendar()
+        let target = suggestionDate(day: 0, hour: 7, minute: 40, calendar: calendar)
+        var entries: [CalorieEntry] = []
+        for day in -14 ... -1 {
+            entries.append(suggestionEntry("Coffee", calories: 80, at: suggestionDate(day: day, hour: 7, minute: 30, calendar: calendar)))
+            entries.append(suggestionEntry("Afternoon snack", calories: 180, at: suggestionDate(day: day, hour: 14, minute: 0, calendar: calendar)))
+            entries.append(suggestionEntry("Afternoon snack", calories: 180, at: suggestionDate(day: day, hour: 16, minute: 0, calendar: calendar)))
+        }
+        XCTAssertEqual(FoodHistory.suggestions(entries: entries, date: target, calendar: calendar).first?.draft.name, "Coffee")
+    }
+    func testSameDaySuppressionLearnsWhetherFoodRepeats() {
+        let calendar = suggestionCalendar()
+        let target = suggestionDate(day: 0, hour: 8, minute: 30, calendar: calendar)
+        var entries: [CalorieEntry] = []
+        for day in -12 ... -1 {
+            entries.append(suggestionEntry("Once daily", calories: 100, at: suggestionDate(day: day, hour: 8, minute: 0, calendar: calendar)))
+            for hour in [8, 12, 16] {
+                entries.append(suggestionEntry("Repeater", calories: 10, at: suggestionDate(day: day, hour: hour, minute: 0, calendar: calendar)))
+            }
+            for index in 0..<4 {
+                entries.append(suggestionEntry("Alternative \(index)", calories: 100, at: suggestionDate(day: day, hour: 8, minute: 30, calendar: calendar)))
+            }
+        }
+        entries.append(suggestionEntry("Once daily", calories: 100, at: suggestionDate(day: 0, hour: 8, minute: 0, calendar: calendar)))
+        entries.append(suggestionEntry("Repeater", calories: 10, at: suggestionDate(day: 0, hour: 8, minute: 0, calendar: calendar)))
+
+        let names = FoodHistory.suggestions(entries: entries, date: target, calendar: calendar).map(\.draft.name)
+        // With six candidates and ten available slots, suppression lowers rank;
+        // it does not remove an otherwise valid food from the list.
+        XCTAssertEqual(Set(names), Set(["Repeater", "Once daily"] + (0..<4).map { "Alternative \($0)" }))
+        XCTAssertEqual(names.last, "Once daily")
+    }
+    func testRecentSessionCoOccurrencePromotesCompanionFood() {
+        let calendar = suggestionCalendar()
+        let target = suggestionDate(day: 0, hour: 19, minute: 2, calendar: calendar)
+        var entries: [CalorieEntry] = []
+        for day in -24 ... -13 {
+            entries.append(suggestionEntry("Burger", calories: 500, at: suggestionDate(day: day, hour: 19, minute: 0, calendar: calendar)))
+            entries.append(suggestionEntry("Fries", calories: 300, at: suggestionDate(day: day, hour: 19, minute: 8, calendar: calendar)))
+        }
+        for day in -12 ... -1 {
+            entries.append(suggestionEntry("Salad", calories: 200, at: suggestionDate(day: day, hour: 19, minute: 0, calendar: calendar)))
+        }
+        entries.append(suggestionEntry("Burger", calories: 500, at: suggestionDate(day: 0, hour: 19, minute: 0, calendar: calendar)))
+
+        let names = FoodHistory.suggestions(entries: entries, date: target, calendar: calendar).map(\.draft.name)
+        guard let friesIndex = names.firstIndex(of: "Fries"),
+              let saladIndex = names.firstIndex(of: "Salad") else {
+            return XCTFail("Expected both foods in the ranked suggestions")
+        }
+        XCTAssertLessThan(friesIndex, saladIndex)
+    }
+    func testSuggestionsUseCaloriesForTheCurrentFoodTimePattern() {
+        let calendar = suggestionCalendar()
+        var entries: [CalorieEntry] = []
+        for day in -12 ... -1 {
+            entries.append(suggestionEntry("Coffee", calories: 80, at: suggestionDate(day: day, hour: 7, minute: 30, calendar: calendar)))
+            entries.append(suggestionEntry("Coffee", calories: 30, at: suggestionDate(day: day, hour: 15, minute: 30, calendar: calendar)))
+        }
+        let morning = FoodHistory.suggestions(entries: entries, date: suggestionDate(day: 0, hour: 7, minute: 40, calendar: calendar), calendar: calendar)
+        let afternoon = FoodHistory.suggestions(entries: entries, date: suggestionDate(day: 0, hour: 15, minute: 40, calendar: calendar), calendar: calendar)
+        XCTAssertEqual(morning.first?.draft.calories, 80)
+        XCTAssertEqual(afternoon.first?.draft.calories, 30)
+    }
+    func testSuggestionReplayMetricsMeasureKnownRoutine() {
+        let calendar = suggestionCalendar()
+        var entries: [CalorieEntry] = []
+        for day in -20 ... -1 {
+            entries.append(suggestionEntry("Breakfast", calories: 400, at: suggestionDate(day: day, hour: 7, minute: 0, calendar: calendar)))
+            entries.append(suggestionEntry("Lunch", calories: 600, at: suggestionDate(day: day, hour: 12, minute: 0, calendar: calendar)))
+        }
+        let metrics = FoodHistory.replayMetrics(entries: entries, maximumSamples: 30, calendar: calendar)
+        XCTAssertEqual(metrics.samples, 30)
+        XCTAssertGreaterThan(metrics.top1Accuracy, 0.8)
+        XCTAssertEqual(metrics.top5Accuracy, 1)
+        XCTAssertGreaterThan(metrics.meanReciprocalRank, 0.8)
+    }
+
+    private func suggestionCalendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+    private func suggestionDate(day: Int, hour: Int, minute: Int, calendar: Calendar) -> Date {
+        let anchor = calendar.date(from: DateComponents(year: 2026, month: 9, day: 16))!
+        let date = calendar.date(byAdding: .day, value: day, to: anchor)!
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date)!
+    }
+    private func suggestionEntry(_ name: String, calories: Double, at date: Date) -> CalorieEntry {
+        CalorieEntry(draft: EntryDraft(name: name, calories: calories, timestamp: date))
     }
     func testLocalDateBoundaryAndHistoricalQuickEntry() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!

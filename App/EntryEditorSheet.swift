@@ -9,11 +9,13 @@ struct EntryEditorSheet: View {
     var focusCaloriesOnOpen = false
     var blankCaloriesOnOpen = false
     var onCancel: (() -> Void)? = nil
+    var pinFoodID: String? = nil
     @FocusState private var nameFocused: Bool
     @FocusState private var servingSizeFocused: Bool
     @FocusState private var perServingFocused: Bool
     @State private var showingTime = false
     @State private var saveAsCommonDefault = false
+    @State private var pinOnQuickAdd = false
     @ScaledMetric(relativeTo: .largeTitle) private var calorieFieldHeight = 54
     private let servingSizes = ["1 serving", "1 piece", "1 cup", "1/2 cup", "1 tbsp", "1 tsp", "1 oz", "100 g"]
     var body: some View {
@@ -104,6 +106,13 @@ struct EntryEditorSheet: View {
                         }
                     }.editorRowInsets()
                 }
+                if pinFoodID != nil, onSaveComponent == nil {
+                    Section {
+                        Toggle("Pin on Quick Add", isOn: $pinOnQuickAdd)
+                            .font(.cave(.subheadline))
+                            .accessibilityIdentifier("pinOnQuickAdd")
+                    }
+                }
                 if draft.entryID != nil, onSaveComponent == nil {
                     Section {
                         Button("Delete Entry", role: .destructive) {
@@ -130,13 +139,21 @@ struct EntryEditorSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(draft.entryID == nil ? "Add" : "Save Changes") { save() }.fontWeight(.semibold).disabled(!draft.isValid).accessibilityIdentifier("saveEntry")
+                    Button(action: save) {
+                        Label(draft.entryID == nil ? "Add" : "Save Changes", systemImage: "checkmark")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.blue)
+                    .fontWeight(.semibold).disabled(!draft.isValid)
+                    .accessibilityIdentifier("saveEntry")
                 }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
             .onChange(of: changedCommonFood?.id) { _, _ in saveAsCommonDefault = false }
             .task {
+                if let pinFoodID { pinOnQuickAdd = store.isPinned(pinFoodID) }
                 guard focusNameOnOpen else { return }
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
@@ -173,6 +190,10 @@ struct EntryEditorSheet: View {
             let saved = draft.entryID != nil ? store.update(draft) : store.add([draft])
             if saved {
                 if let foodToUpdate { store.saveCommonDefault(draft, for: foodToUpdate) }
+                if let pinFoodID {
+                    let replacementID = FoodHistory.identifier(for: draft) ?? pinFoodID
+                    store.updatePin(originalID: pinFoodID, replacementID: replacementID, pinned: pinOnQuickAdd)
+                }
                 dismiss()
             }
         }

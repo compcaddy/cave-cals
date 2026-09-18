@@ -40,11 +40,12 @@ test('images are decoded, resized, and stripped of metadata; disguised files are
   await assert.rejects(prepareImage(Buffer.from('<svg/>')));
 });
 test('invalid food output cannot be logged as a successful estimate',()=>{
-  const base={items:[{name:'Egg',calories:80,portion:'1 large egg',confidence:'medium'}],notes:''};
+  const base={items:[{name:'Egg',calories:80,portion:'1 large egg',servingSize:'1 large egg',servings:1,confidence:'medium'}],notes:''};
   assert.equal(validateResult(base).items.length,1);
   assert.throws(()=>validateResult({...base,items:[{...base.items[0],calories:-1}]}));
   assert.throws(()=>validateResult({...base,items:[{...base.items[0],calories:100001}]}));
   assert.throws(()=>validateResult({...base,items:[{...base.items[0],name:''}]}));
+  assert.throws(()=>validateResult({...base,items:[{...base.items[0],servings:0}]}));
   assert.throws(()=>validateResult({...base,items:Array(21).fill(base.items[0])}));
   assert.deepEqual(validateResult({items:[],notes:'No food visible'}).items,[]);
 });

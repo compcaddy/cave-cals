@@ -68,7 +68,7 @@ test('upload ownership and idempotency prevent cross-account access and double O
   const identity=await account(),other=await account();const id=randomUUID();uploadIds.push(id);
   const bytes=Buffer.from('fixture');const row={id,accountId:identity.accountId,pathname:`temporary/${id}`,kind:'image',mime:'image/jpeg',byteLength:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),storage:'local',expiresAt:tomorrow()};
   await database().insert(uploads).values(row);await mkdir(path.dirname(localPath(id)),{recursive:true});await writeFile(localPath(id),bytes);
-  let calls=0;const fixture={items:[{name:'Egg',calories:80,portion:'one egg',confidence:'medium' as const}],notes:'Test fixture'};
+  let calls=0;const fixture={items:[{name:'Egg',calories:80,portion:'one egg',servingSize:'one egg',servings:1,confidence:'medium' as const}],notes:'Test fixture'};
   const model=async()=>{calls++;await new Promise(r=>setTimeout(r,100));return fixture;};
   await assert.rejects(analyze(other,id,model));assert.equal(calls,0);
   const results=await Promise.allSettled([analyze(identity,id,model),analyze(identity,id,model)]);

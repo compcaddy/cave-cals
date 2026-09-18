@@ -19,6 +19,7 @@ test('private test capability fails closed and supports explicit free access', a
     assert.equal(ownerTestAccess({ key, active: true }, 'account/status'), true);
     assert.equal(ownerTestAccess({ key, active: false }, 'uploads/sign'), false);
     assert.equal(ownerTestAccess({ key, active: true }, 'food/analyze'), true);
+    assert.equal(ownerTestAccess({ key, active: true }, 'meal/import'), true);
     assert.throws(() => ownerTestAccess(undefined, 'account/status'));
     assert.throws(() => ownerTestAccess({ key, active: true }, 'purchase/verify'));
     assert.throws(() => ownerTestAccess({ key: 'forged'.repeat(8), active: true }, 'account/status'));

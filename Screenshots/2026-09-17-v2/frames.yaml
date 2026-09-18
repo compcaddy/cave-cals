@@ -1,0 +1,56 @@
+project:
+  name: Cave Cals screenshots v2
+  output_dir: frames
+  device: iPhone 17 Pro - Silver - Portrait
+  output_size: [1320, 2868]
+defaults:
+  background:
+    type: solid
+    colors: ['#FAF6EE']
+screenshots:
+  01-goals:
+    content:
+      - type: image
+        asset: ../2026-09-17/raw/logged.png
+        frame: true
+        scale: 0.86
+        position: ['50%', '71%']
+        rotation: -4
+  02-quick:
+    background:
+      type: solid
+      colors: ['#008CFF']
+    content:
+      - type: image
+        asset: ../2026-09-17/raw/quick-add.png
+        frame: true
+        scale: 0.87
+        position: ['50%', '64%']
+        rotation: 4
+  03-scan:
+    content:
+      - type: image
+        asset: raw/meal-scan.png
+        frame: true
+        scale: 0.89
+        position: ['50%', '65%']
+        rotation: -3
+  04-meals:
+    background:
+      type: solid
+      colors: ['#C9450A']
+    content:
+      - type: image
+        asset: ../2026-09-17/raw/meals.png
+        frame: true
+        scale: 0.87
+        position: ['50%', '64%']
+        rotation: 4
+  05-start:
+    content:
+      - type: image
+        asset: ../2026-09-17/raw/setup.png
+        frame: true
+        scale: 0.87
+        position: ['50%', '64%']
+        rotation: -4
