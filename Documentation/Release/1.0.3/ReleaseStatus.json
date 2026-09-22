@@ -8,7 +8,7 @@
   "processingState": "VALID",
   "internalBuildState": "IN_BETA_TESTING",
   "internalGroupId": "0aa5b575-10c4-4ef9-9cc7-4a50257b7816",
-  "appStoreState": "PREPARE_FOR_SUBMISSION",
+  "appStoreState": "WAITING_FOR_REVIEW",
   "releaseType": "MANUAL",
   "usesNonExemptEncryption": false,
   "validation": {
@@ -22,5 +22,14 @@
     "iPad": 8,
     "backend": 36
   },
-  "remaining": "Physical-device Health sharing and purchase/restore verification before review submission."
+  "remaining": "Owner submitted build 2 after preparation. Awaiting owner choice to replace it with attribution build 3; current review unchanged.",
+  "attributionBuild": {
+    "buildNumber": "3",
+    "buildId": "d04f0d9a-5913-4a54-8a4e-a87bebdf5612",
+    "processingState": "VALID",
+    "sourceCommit": "fffbfe9",
+    "selectedForReview": false,
+    "internalGroupId": "0aa5b575-10c4-4ef9-9cc7-4a50257b7816",
+    "validation": "Simulator build and 2 focused iPad search UI tests passed. Release archive, export and strict signature verification passed."
+  }
 }

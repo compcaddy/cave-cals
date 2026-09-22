@@ -1,3 +1,13 @@
+# Attribution update — September 21, 2026
+
+- Owner received FatSecret Premier Free access. Added the required `Powered by fatsecret nutrition API (www.fatsecret.com)` to App Store 1.0.3’s description and verified it by reading the saved localization. Preserved the owner’s other listing edits. The live website already contains the exact approved attribution link.
+- Native attribution now follows FatSecret-backed foods into local search/history, Quick Add, saved meals, food editors and meal editors/add screens, using a reusable approved text link and the stored `fatsecret:` identifier. Existing You/About attribution remains.
+- Prepared **1.0.3 (3)** with matching app/widget/generator versions. Simulator build, both focused search editing/add/Undo UI checks on iPad, Release archive, App Store export, and strict signature verification passed. Exported app retains production App Attest/CloudKit, HealthKit, and App Groups entitlements.
+- App Store version 1.0.3 was observed as WAITING_FOR_REVIEW with build 2 during this follow-up. The owner had submitted it after the earlier preparation below. Build 3 (`d04f0d9a-5913-4a54-8a4e-a87bebdf5612`) processed as VALID and was explicitly added to Internal Testers. Replacing the queued build requires withdrawal and resubmission, so the existing review is unchanged pending the owner’s choice.
+- Source commit: `fffbfe9`, pushed to `origin/main`. Premier API-tier configuration is separate and was not changed in this attribution task.
+
+---
+
 # Current release preparation — September 21, 2026
 
 - Live Apple status was rechecked: App Store version 1.0 is READY_FOR_DISTRIBUTION and its review submission is COMPLETE. The September 17 rejection/signing notes below are historical, not current blockers.
