@@ -1,6 +1,8 @@
 import { pgTable, uuid, text, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 export const accounts = pgTable('ai_accounts', {
   id: uuid('id').primaryKey(),
+  scansUsed: integer('scans_used').notNull().default(0),
+  regularLogCount: integer('regular_log_count').notNull().default(0),
   originalTransactionId: text('original_transaction_id').unique(),
   environment: text('environment'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -22,6 +24,7 @@ export const uploads = pgTable('ai_uploads', {
   id: uuid('id').primaryKey(), accountId: uuid('account_id').notNull().references(() => accounts.id),
   pathname: text('pathname').notNull(), kind: text('kind').notNull(), mime: text('mime').notNull(),
   byteLength: integer('byte_length').notNull(), sha256: text('sha256').notNull(), storage: text('storage').notNull(),
+  scanReservedUntil: timestamp('scan_reserved_until', { withTimezone: true }),
   state: text('state').notNull().default('pending'), result: jsonb('result'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

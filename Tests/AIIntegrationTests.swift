@@ -14,11 +14,21 @@ import DeviceCheck
     }
 
     func testDeviceKeyRecoveryOnlyRetriesRecoverableFailures() {
+        XCTAssertTrue(AIBackend.needsNewDeviceKey(NSError(domain: DCError.errorDomain, code: DCError.invalidInput.rawValue)))
         XCTAssertTrue(AIBackend.needsNewDeviceKey(NSError(domain: DCError.errorDomain, code: DCError.invalidKey.rawValue)))
         XCTAssertTrue(AIBackend.needsNewDeviceKey(AIServiceError(code: "unknown_device", message: "Missing")))
         XCTAssertFalse(AIBackend.needsNewDeviceKey(NSError(domain: NSURLErrorDomain, code: DCError.invalidKey.rawValue)))
         XCTAssertFalse(AIBackend.needsNewDeviceKey(AIServiceError(code: "subscription_required", message: "Upgrade")))
         XCTAssertFalse(AIBackend.needsNewDeviceKey(NSError(domain: DCError.errorDomain, code: DCError.serverUnavailable.rawValue)))
+    }
+    func testDeviceCheckFailuresUseCustomerFacingMessages() {
+        let invalidInput = AIBackend.customerFacingError(NSError(domain: DCError.errorDomain, code: DCError.invalidInput.rawValue))
+        XCTAssertEqual(invalidInput.localizedDescription, "Cave Cals+ couldn’t verify this device right now. Please try again.")
+        XCTAssertFalse(invalidInput.localizedDescription.contains("Developer Settings"))
+        XCTAssertFalse(invalidInput.localizedDescription.contains(DCError.errorDomain))
+
+        let unavailable = AIBackend.customerFacingError(NSError(domain: DCError.errorDomain, code: DCError.serverUnavailable.rawValue))
+        XCTAssertTrue(unavailable.localizedDescription.contains("Check your internet connection"))
     }
     func testEmptyDeveloperTokenAlwaysSelectsProduction() {
         XCTAssertEqual(AIConfiguration.selectedURL(token: nil, override: "http://127.0.0.1:3000"), AIConfiguration.productionURL)

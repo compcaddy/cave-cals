@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { foodSearchClient, foodSearchInput, limitFoodSearch } from './food-search';
 import { APIError, errorResponse, readLimited, positiveInt } from './config';
 import { authenticate, challenge, register } from './auth';
 import { products, entitlement, requirePaid, verifyPurchase, verifyNotification } from './apple';
@@ -9,16 +10,23 @@ import { consume, tomorrow, limitPublic } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
 import { authorizedTestAccess, ownerTestAccess } from './test-access';
+import { scanAccess, scanUsageInput, requireScanAccess } from './scan-access';
 const nonceSchema = z.string().min(1).max(200);
 const keySchema = z.string().min(1).max(200);
 export async function api(request: Request, path: string): Promise<Response> {
   try {
     if (request.method !== 'POST') throw new APIError(405, 'method', 'Use POST.');
     if (!request.headers.get('content-type')?.startsWith('application/json')) throw new APIError(415, 'content_type', 'Use application/json.');
-    const raw = (await readLimited(request)).toString('utf8');
+    const raw = (await readLimited(request, path === 'foods/search' ? 1024 : 64 * 1024)).toString('utf8');
     let body: unknown;
     try { body = JSON.parse(raw); } catch { throw new APIError(400, 'invalid_json', 'Invalid request.'); }
     const ok = (value: unknown) => Response.json(value, { headers: { 'Cache-Control':'no-store' } });
+    if (path === 'foods/search') {
+      const input = foodSearchInput.parse(body);
+      const provider = foodSearchClient();
+      await limitFoodSearch(request);
+      return ok(await provider.search(input.query));
+    }
     if (path === 'device/challenge') {
       const input = z.object({ keyId: keySchema, purpose: z.enum(['register','request']) }).parse(body);
       return ok(await challenge(request, input.keyId, input.purpose));
@@ -48,20 +56,29 @@ export async function api(request: Request, path: string): Promise<Response> {
     }
     identity.testAccess = authorizedTestAccess((body as { testAccess?: unknown }).testAccess);
     await consume(`requests:${identity.accountId}:${new Date().toISOString().slice(0,16)}`, 30, tomorrow());
-    if (path === 'account/status') return ok({ accountId: identity.accountId, ...await entitlement(identity), productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300) });
+    if (path === 'account/status') {
+      const { regularLogCount } = scanUsageInput.parse(body);
+      const membership = await entitlement(identity);
+      return ok({ accountId: identity.accountId, ...membership, ...await scanAccess(identity, membership.active, regularLogCount), productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300) });
+    }
     if (path === 'purchase/verify') {
       const input = z.object({ signedTransaction: z.string().min(1).max(50000) }).parse(body);
       return ok(await verifyPurchase(identity, input.signedTransaction));
     }
     if (path === 'uploads/sign') {
       const input = uploadInput.parse(body);
-      await requirePaid(identity);
+      const { regularLogCount } = scanUsageInput.parse(body);
+      const { active } = await entitlement(identity);
+      await scanAccess(identity, active, regularLogCount);
+      await database().transaction(tx => requireScanAccess(identity, active, regularLogCount, tx));
       return ok(await signUpload(request, identity, input));
     }
     if (path === 'food/analyze') {
       const { uploadId } = z.object({ uploadId: z.string().uuid() }).parse(body);
-      await requirePaid(identity);
-      return ok(await analyze(identity, uploadId));
+      const { regularLogCount } = scanUsageInput.parse(body);
+      // Persist the high-water mark even if access is denied inside the analysis transaction.
+      await scanAccess(identity, false, regularLogCount);
+      return ok(await analyze(identity, uploadId, undefined, regularLogCount));
     }
     if (path === 'meal/import') {
       const { url } = z.object({ url: z.string().url().max(2048) }).parse(body);

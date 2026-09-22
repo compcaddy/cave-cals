@@ -3,6 +3,40 @@ import SwiftData
 @testable import CaveCals
 
 @MainActor final class ECCTests: XCTestCase {
+    func testRegularLogAllowanceCountPersistsAndExcludesScans() throws {
+        let suite = "scan-allowance-tests-\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let store = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        var photo = EntryDraft(calories: 80); photo.source = "aiPhoto"
+        var voice = EntryDraft(calories: 90); voice.source = "aiVoice"
+        XCTAssertTrue(store.add([photo, voice]))
+        XCTAssertEqual(store.regularLogCount, 0)
+        XCTAssertTrue(store.add([EntryDraft(calories: 100)]))
+        XCTAssertEqual(store.regularLogCount, 1)
+        store.undo()
+        XCTAssertEqual(store.regularLogCount, 1)
+        XCTAssertTrue(store.add((0..<98).map { _ in EntryDraft(calories: 100) }))
+        XCTAssertEqual(store.regularLogCount, 99)
+        store.refresh()
+        XCTAssertEqual(store.regularLogCount, 99)
+        let reopened = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        XCTAssertEqual(reopened.regularLogCount, 99)
+        XCTAssertTrue(reopened.add([EntryDraft(calories: 100)]))
+        XCTAssertEqual(reopened.regularLogCount, 100)
+        XCTAssertTrue(reopened.add([EntryDraft(calories: 100)]))
+        XCTAssertEqual(reopened.regularLogCount, 100)
+    }
+
+    func testFreeScanAccountIsNotAPaidMembership() throws {
+        let json = #"{"accountId":"00000000-0000-4000-8000-000000000001","active":false,"canScan":true,"freeScansRemaining":10,"scansUsed":0,"regularLogCount":0,"productIds":[],"dailyLimit":30,"monthlyLimit":300}"#
+        let account = try JSONDecoder().decode(AIAccount.self, from: Data(json.utf8))
+        XCTAssertFalse(account.active)
+        XCTAssertTrue(account.canScan)
+        XCTAssertEqual(account.freeScansRemaining, 10)
+    }
+
     func testShortcutMenuRoutesAndPreservesQuickCaloriesOnColdStart() {
         let router = LoggingActionRouter()
         for (choice, action) in [(CalorieLoggingChoice.voice, LoggingAction.voice), (.meal, .image), (.barcode, .barcode)] {
@@ -268,6 +302,19 @@ import SwiftData
         store.add([EntryDraft(name: "Coffee cake", calories: 400)])
         XCTAssertEqual(FoodHistory.foods(store.entries).count, 2)
     }
+    func testHistorySearchPrioritizesExactThenLikelyMatches() throws {
+        let store = try makeStore()
+        let now = Date()
+        store.add([EntryDraft(name: "Popcorn kettle", calories: 120, timestamp: now.addingTimeInterval(-60 * 86_400))])
+        for day in 1...5 {
+            store.add([EntryDraft(name: "Popcorn sea salt", calories: 100, timestamp: now.addingTimeInterval(Double(-day) * 86_400))])
+        }
+        store.add([EntryDraft(name: "Popcorn", calories: 90, timestamp: now.addingTimeInterval(-90 * 86_400))])
+
+        let results = FoodHistory.search("popcorn", entries: store.entries, date: now)
+
+        XCTAssertEqual(results.map(\.draft.name), ["Popcorn", "Popcorn sea salt", "Popcorn kettle"])
+    }
     func testExternalIdentityOverridesName() throws {
         let store = try makeStore()
         var a = EntryDraft(name: "Oats", calories: 140); a.externalID = "off:123"
@@ -465,6 +512,66 @@ import SwiftData
         let store = try makeStore(); XCTAssertTrue(store.add([EntryDraft(name: "Coffee", calories: 120)]))
         XCTAssertEqual(FoodHistory.search("coffee", entries: store.entries).count, 1)
     }
+    func testFatSecretClientUsesBackendAndPreservesServingContract() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FoodSearchURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let provider = FatSecretSearch(session: session, baseURL: URL(string: "https://fixture.invalid")!)
+        let page = try await provider.searchPage(query: "Urbane Cafe")
+        XCTAssertEqual(page.results.first?.calories, 800)
+        XCTAssertEqual(page.results.first?.servingDescription, "1 sandwich")
+        XCTAssertEqual(page.cacheLifetime, 0)
+        do { _ = try await provider.search(query: "busy"); XCTFail("Must surface rate limit") }
+        catch { XCTAssertEqual(error.localizedDescription, FoodServiceError.rateLimited.localizedDescription) }
+    }
+    func testFoodSearchNeverCachesEmptyResultsAndRetainsRestaurantName() async throws {
+        let provider = SearchFixture(pages: [FoodSearchPage(results: [], cacheLifetime: 3600), SearchFixture.page])
+        let search = FoodSearchState(provider: provider, persistCache: false, debounce: .zero)
+        await search.search("Urbane Cafe")
+        XCTAssertTrue(search.results.isEmpty)
+        XCTAssertNotNil(search.message)
+        await search.search("Urbane Cafe")
+        XCTAssertEqual(search.results.count, 1)
+        XCTAssertEqual(search.results.first?.draft.name, "Urbane Cafe — So-Cal Sandwich")
+        XCTAssertEqual(search.results.first?.draft.calories, 800)
+        let calls = await provider.calls
+        XCTAssertEqual(calls, 2)
+    }
+    func testFoodSearchPositiveCacheExpiresAndBasicResultsAreNeverPersisted() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("search.json")
+        var now = Date()
+        let provider = SearchFixture(pages: [SearchFixture.page])
+        let search = FoodSearchState(provider: provider, cacheURL: file, now: { now }, debounce: .zero)
+        await search.search("Urbane Cafe"); await search.search("urbane cafe")
+        var calls = await provider.calls; XCTAssertEqual(calls, 1)
+        let reopened = FoodSearchState(provider: provider, cacheURL: file, now: { now }, debounce: .zero)
+        await reopened.search("urbane cafe")
+        calls = await provider.calls; XCTAssertEqual(calls, 1)
+        now = now.addingTimeInterval(3601)
+        await reopened.search("urbane cafe")
+        calls = await provider.calls; XCTAssertEqual(calls, 2)
+        let basicFile = folder.appendingPathComponent("basic.json")
+        let basic = SearchFixture(pages: [FoodSearchPage(results: SearchFixture.page.results, cacheLifetime: 0)])
+        let uncached = FoodSearchState(provider: basic, cacheURL: basicFile, debounce: .zero)
+        await uncached.search("urbane"); await uncached.search("urbane")
+        calls = await basic.calls; XCTAssertEqual(calls, 2)
+        XCTAssertFalse(String(data: try Data(contentsOf: basicFile), encoding: .utf8)!.contains("Sandwich"))
+    }
+    func testFoodSearchIgnoresOlderResponsesAfterQueryChanges() async throws {
+        let provider = SlowSearchFixture()
+        let search = FoodSearchState(provider: provider, persistCache: false, debounce: .zero)
+        let first = Task { await search.search("old query") }
+        while !(await provider.waiting) { await Task.yield() }
+        await search.search("new query")
+        await provider.finish()
+        await first.value
+        XCTAssertEqual(search.results.first?.name, "new query")
+        XCTAssertFalse(search.loading)
+    }
     func testPersistentStoreReopensWithoutLosingData() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -479,4 +586,50 @@ import SwiftData
         XCTAssertEqual(reopened.profile?.dailyGoal, 2100)
         XCTAssertEqual(reopened.total(Date()), 120)
     }
+}
+
+private actor SearchFixture: FoodSearchService {
+    static let page = FoodSearchPage(results: [FoodResult(id: "fatsecret:123", name: "So-Cal Sandwich", brand: "Urbane Cafe", calories: 800, servingDescription: "1 sandwich")], cacheLifetime: 3600)
+    private let pages: [FoodSearchPage]
+    private(set) var calls = 0
+    init(pages: [FoodSearchPage]) { self.pages = pages }
+    func search(query: String) async throws -> [FoodResult] { try await searchPage(query: query).results }
+    func searchPage(query: String) async throws -> FoodSearchPage {
+        let page = pages[min(calls, pages.count - 1)]; calls += 1; return page
+    }
+}
+private actor SlowSearchFixture: FoodSearchService {
+    private var continuation: CheckedContinuation<Void, Never>?
+    var waiting: Bool { continuation != nil }
+    func finish() { continuation?.resume(); continuation = nil }
+    func search(query: String) async throws -> [FoodResult] {
+        if query == "old query" { await withCheckedContinuation { continuation = $0 } }
+        return [FoodResult(id: "fixture:\(query)", name: query, calories: 100, servingDescription: "1 serving")]
+    }
+}
+
+private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "fixture.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/api/v1/foods/search")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+        var body = request.httpBody ?? Data()
+        if let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while stream.hasBytesAvailable { let size = stream.read(&buffer, maxLength: buffer.count); if size <= 0 { break }; body.append(contentsOf: buffer.prefix(size)) }
+        }
+        let query = (try? JSONDecoder().decode([String: String].self, from: body))?["query"]
+        XCTAssertNotNil(query)
+        let status = query == "busy" ? 429 : 200
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+        let data = #"{"results":[{"id":"fatsecret:123","name":"So-Cal Sandwich","brand":"Urbane Cafe","calories":800,"servingDescription":"1 sandwich"}],"cacheLifetime":0}"#.data(using: .utf8)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

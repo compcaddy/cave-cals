@@ -1,11 +1,16 @@
 import Foundation
 import CryptoKit
 import DeviceCheck
+import OSLog
 import Security
 
 struct AIAccount: Decodable {
     let accountId: UUID
     let active: Bool
+    let canScan: Bool
+    let freeScansRemaining: Int
+    let scansUsed: Int
+    let regularLogCount: Int
     var testing: Bool? = nil
     let productIds: [String]
     let dailyLimit: Int
@@ -121,6 +126,7 @@ enum KeychainValue {
 // Serialize authenticated requests so App Attest counters reach the server in order.
 actor AIBackend {
     static let shared = AIBackend()
+    private static let verificationLogger = Logger(subsystem: "com.philstarkovich.cavecals", category: "AppAttest")
     private var gate: Task<Void, Never>?
     private let session: URLSession
     init() {
@@ -128,17 +134,17 @@ actor AIBackend {
         config.timeoutIntervalForRequest = 240; config.timeoutIntervalForResource = 300
         session = URLSession(configuration: config)
     }
-    func status() async throws -> AIAccount { try await signed("account/status", fields: [:]) }
+    func status(regularLogCount: Int = 0) async throws -> AIAccount { try await signed("account/status", fields: ["regularLogCount": regularLogCount]) }
     func purchase(_ jws: String) async throws {
         struct Result: Decodable { let accountId: UUID }
         let _: Result = try await signed("purchase/verify", fields: ["signedTransaction":jws])
     }
-    func identify(data: Data, kind: String, mime: String, existingUpload: String? = nil, onUpload: @Sendable (String) async -> Void = { _ in }) async throws -> AIResult {
+    func identify(data: Data, kind: String, mime: String, existingUpload: String? = nil, regularLogCount: Int = 0, onUpload: @Sendable (String) async -> Void = { _ in }) async throws -> AIResult {
         let uploadId: String
         if let existingUpload { uploadId = existingUpload }
         else {
             struct Upload: Decodable { let uploadId: String; let uploadURL: URL; let contentType: String }
-            let upload: Upload = try await signed("uploads/sign", fields: ["kind":kind,"mime":mime,"byteLength":data.count,"sha256":SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined()])
+            let upload: Upload = try await signed("uploads/sign", fields: ["regularLogCount":regularLogCount,"kind":kind,"mime":mime,"byteLength":data.count,"sha256":SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined()])
             var request = URLRequest(url:upload.uploadURL);request.httpMethod="PUT"
             request.setValue(upload.contentType, forHTTPHeaderField:"Content-Type")
             if let base = AIConfiguration.baseURL, upload.uploadURL.host == base.host, upload.uploadURL.port == base.port, let token = AIConfiguration.developerToken { request.setValue("Bearer \(token)", forHTTPHeaderField:"Authorization") }
@@ -147,7 +153,7 @@ actor AIBackend {
             uploadId=upload.uploadId
             await onUpload(uploadId)
         }
-        return try await signed("food/analyze",fields:["uploadId":uploadId])
+        return try await signed("food/analyze",fields:["uploadId":uploadId,"regularLogCount":regularLogCount])
     }
     func importMeal(from url: URL) async throws -> AIMealImportResult {
         try await signed("meal/import", fields: ["url": url.absoluteString])
@@ -165,8 +171,13 @@ actor AIBackend {
             do {
                 return try await authenticatedRequest(path, fields: fields, base: base)
             } catch {
-                guard attempt == 0, Self.needsNewDeviceKey(error) else { throw error }
-                try KeychainValue.save(nil, key: credentialName(base))
+                if attempt == 0, Self.needsNewDeviceKey(error) {
+                    let detail = error as NSError
+                    Self.verificationLogger.notice("Replacing an unusable App Attest key after \(detail.domain, privacy: .public) code \(detail.code)")
+                    try KeychainValue.save(nil, key: credentialName(base))
+                    continue
+                }
+                throw Self.customerFacingError(error)
             }
         }
         throw AIServiceError(code: "attestation", message: "Device verification could not be restored.")
@@ -174,7 +185,22 @@ actor AIBackend {
     static func needsNewDeviceKey(_ error: Error) -> Bool {
         if let service = error as? AIServiceError { return service.code == "unknown_device" }
         let apple = error as NSError
-        return apple.domain == DCError.errorDomain && apple.code == DCError.invalidKey.rawValue
+        return apple.domain == DCError.errorDomain && [DCError.invalidInput.rawValue, DCError.invalidKey.rawValue].contains(apple.code)
+    }
+    static func customerFacingError(_ error: Error) -> Error {
+        let apple = error as NSError
+        guard apple.domain == DCError.errorDomain else { return error }
+        verificationLogger.error("App Attest failed with \(apple.domain, privacy: .public) code \(apple.code)")
+        if apple.code == DCError.serverUnavailable.rawValue {
+            return AIServiceError(
+                code: "attestation_unavailable",
+                message: "Cave Cals+ couldn’t contact Apple’s device verification service. Check your internet connection and try again."
+            )
+        }
+        return AIServiceError(
+            code: "attestation",
+            message: "Cave Cals+ couldn’t verify this device right now. Please try again."
+        )
     }
     func resetDeviceVerification() async throws {
         let previous = gate
@@ -206,14 +232,7 @@ actor AIBackend {
             body["nonce"] = nonce
             let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
             let payload = Data("POST\n\(request.url!.path)\n".utf8) + data
-            let assertion: Data
-            do {
-                assertion = try await DCAppAttestService.shared.generateAssertion(key, clientDataHash: Data(SHA256.hash(data: payload)))
-            } catch {
-                if Self.needsNewDeviceKey(error) { throw error }
-                let detail = error as NSError
-                throw AIServiceError(code: "attestation", message: "Apple device verification failed (\(detail.domain), \(detail.code)). In Developer Settings, try Reset device verification, then check the connection again.")
-            }
+            let assertion = try await DCAppAttestService.shared.generateAssertion(key, clientDataHash: Data(SHA256.hash(data: payload)))
             request.setValue(key, forHTTPHeaderField: "X-App-Key")
             request.setValue(assertion.base64EncodedString(), forHTTPHeaderField: "X-App-Assertion")
             request.httpBody = data

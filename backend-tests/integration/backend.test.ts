@@ -97,3 +97,94 @@ test('cleanup is authenticated and removes expired batches without deleting live
     assert.equal((await database().select().from(uploads).where(eq(uploads.id,live.id))).length,1);
   }finally{if(secret===undefined)delete env.CRON_SECRET;else env.CRON_SECRET=secret;}
 });
+
+
+test('food search is free, returns normalized restaurant results, and uses shared database limits', async () => {
+  const beforeFetch = globalThis.fetch;
+  const beforeID = env.FATSECRET_CLIENT_ID, beforeSecret = env.FATSECRET_CLIENT_SECRET, beforeTier = env.FATSECRET_API_TIER;
+  env.FATSECRET_CLIENT_ID = 'fixture-id'; env.FATSECRET_CLIENT_SECRET = 'fixture-secret'; env.FATSECRET_API_TIER = 'basic';
+  let upstreamCalls = 0;
+  globalThis.fetch = async (url) => {
+    upstreamCalls++;
+    return String(url).includes('/connect/token')
+      ? Response.json({ access_token: 'fixture-token', expires_in: 86400 })
+      : Response.json({ foods: { total_results: '1', food: { food_id: '123', food_name: 'Sandwich', brand_name: 'Urbane Cafe', food_description: 'Per 1 sandwich - Calories: 800kcal | Fat: 36g' } } });
+  };
+  try {
+    const response = await api(new Request('http://localhost:3000/api/v1/foods/search', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'Urbane Cafe' }),
+    }), 'foods/search');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    const body = await response.json();
+    assert.equal(body.results[0].brand, 'Urbane Cafe'); assert.equal(body.results[0].calories, 800);
+    assert.equal(body.cacheLifetime, 0); assert.equal(upstreamCalls, 2);
+  } finally {
+    globalThis.fetch = beforeFetch;
+    for (const [name, value] of [['FATSECRET_CLIENT_ID', beforeID], ['FATSECRET_CLIENT_SECRET', beforeSecret], ['FATSECRET_API_TIER', beforeTier]]) {
+      if (value === undefined) delete env[name!]; else env[name!] = value;
+    }
+  }
+});
+
+async function scanFixture(identity: Awaited<ReturnType<typeof account>>, kind = 'image') {
+  const id = randomUUID(); uploadIds.push(id);
+  const bytes = Buffer.from('fixture');
+  await database().insert(uploads).values({ id, accountId: identity.accountId, pathname: `temporary/${id}`, kind,
+    mime: kind === 'image' ? 'image/jpeg' : 'audio/mp4', byteLength: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'), storage: 'local', expiresAt: tomorrow() });
+  await mkdir(path.dirname(localPath(id)), { recursive: true }); await writeFile(localPath(id), bytes);
+  return id;
+}
+const scanResult = { items: [{ name: 'Egg', calories: 80, portion: '1 egg', servingSize: '1 egg', servings: 1, confidence: 'medium' as const }], notes: 'Fixture' };
+const codeIs = (code: string) => (e: unknown) => (e as { code: string }).code === code;
+
+test('ten combined photo/audio scans are free; eleventh is gated and tenth replay is free', async () => {
+  const identity = { ...await account(), development: false };
+  let calls = 0, last = '';
+  const model = async () => { calls++; return scanResult; };
+  for (let i = 0; i < 10; i++) {
+    last = await scanFixture(identity, i % 2 ? 'audio' : 'image');
+    assert.deepEqual(await analyze(identity, last, model, 99), scanResult);
+  }
+  assert.deepEqual(await analyze(identity, last, model, 100), scanResult);
+  const next = await scanFixture(identity);
+  await assert.rejects(analyze(identity, next, model, 99), codeIs('subscription_required'));
+  assert.equal(calls, 10);
+  const [row] = await database().select().from(accounts).where(eq(accounts.id, identity.accountId));
+  assert.equal(row.scansUsed, 10);
+});
+
+test('100 regular entries gate scans, omitted/lower counts cannot reset eligibility, paid access works', async () => {
+  const { scanAccess } = await import('../../backend/src/server/scan-access');
+  const identity = { ...await account(), development: false };
+  const upload = await scanFixture(identity);
+  assert.equal((await scanAccess(identity, false, 100)).canScan, false);
+  assert.equal((await scanAccess(identity, false, 0)).regularLogCount, 100);
+  await assert.rejects(analyze(identity, upload, async () => scanResult), codeIs('subscription_required'));
+  assert.deepEqual(await analyze({ ...identity, testAccess: true }, upload, async () => scanResult), scanResult);
+});
+
+test('failed analysis refunds the allowance; simultaneous requests cannot take the last free slot twice', async () => {
+  const identity = { ...await account(), development: false };
+  await database().update(accounts).set({ scansUsed: 9 }).where(eq(accounts.id, identity.accountId));
+  const broken = await scanFixture(identity);
+  await assert.rejects(analyze(identity, broken, async () => { throw new Error('fixture failure'); }), codeIs('ai_unavailable'));
+  const a = await scanFixture(identity), b = await scanFixture(identity, 'audio');
+  let calls = 0;
+  const model = async () => { calls++; await new Promise(r => setTimeout(r, 200)); return scanResult; };
+  const outcomes = await Promise.allSettled([analyze(identity, a, model), analyze(identity, b, model)]);
+  assert.equal(outcomes.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(calls, 1);
+  const [row] = await database().select().from(accounts).where(eq(accounts.id, identity.accountId));
+  assert.equal(row.scansUsed, 10);
+});
+
+test('abandoned reservations expire without consuming a free scan', async () => {
+  const identity = { ...await account(), development: false };
+  await database().update(accounts).set({ scansUsed: 9 }).where(eq(accounts.id, identity.accountId));
+  const stale = await scanFixture(identity);
+  await database().update(uploads).set({ state: 'processing', scanReservedUntil: new Date(Date.now() - 1000) }).where(eq(uploads.id, stale));
+  await assert.rejects(analyze(identity, stale, async () => scanResult), codeIs('failed'));
+  assert.deepEqual(await analyze(identity, await scanFixture(identity), async () => scanResult), scanResult);
+});

@@ -1,0 +1,28 @@
+You eat. App count.
+
+Cave Cals is a simple calorie diary with a little prehistoric personality. Log what you ate, keep an eye on your daily total, and get on with your day. No account signup required.
+
+FREE EVERYDAY LOGGING
+• Search restaurant and branded foods or enter calories yourself.
+• Scan a barcode to find product information.
+• Edit calories, portions, and serving sizes.
+• Save meals and add your usual foods again quickly.
+• Review your history and set an optional daily calorie goal.
+• Track daily weigh-ins with charts and optional sharing to Apple Health. Weight history stays on this device; it does not sync through Cave Cals iCloud.
+• Open your favorite logging tools from iPhone Home Screen widgets.
+• Keep your diary on your iPhone, with private iCloud sync when available.
+
+OPTIONAL CAVE CALS+
+Meal scan: choose a food photo or screenshot and get an editable calorie estimate.
+Voice log: describe what you ate and how much, then review the foods and estimated calories.
+
+Try up to 10 combined Meal Scan and Voice Log analyses without a subscription, until you have logged 100 regular food entries. After either limit, upgrade to Cave Cals+ to continue scanning. Cave Cals+ also includes meal import from a public website link. Both plans include up to 30 photo/voice analyses per day and 300 per calendar month. Manual logging, food search, barcode lookup, saved meals, and weight tracking remain free.
+
+Choose a monthly or yearly subscription. The monthly plan offers a 3-day free trial to eligible new subscribers; the yearly plan has no free trial. Local prices and billing periods are shown before purchase. Subscriptions renew automatically unless cancelled in your Apple Account settings at least 24 hours before the current period ends.
+
+AI estimates can be inaccurate, especially for portion sizes and hidden ingredients. Review and correct each result before saving. Cave Cals is a food diary, not medical advice.
+
+Selected photos and recordings are sent to OpenAI only when you choose to analyze them. Your full diary is not sent for AI identification.
+
+Privacy: https://cavecals.vercel.app/privacy
+Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/

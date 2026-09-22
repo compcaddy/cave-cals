@@ -1,5 +1,5 @@
 import { AppStoreServerAPIClient, Environment, SignedDataVerifier, Status, type JWSTransactionDecodedPayload } from '@apple/app-store-server-library';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import roots from './certs/roots.json';
 import { APIError, bundleID, required } from './config';
 import { database } from './db';
@@ -67,7 +67,7 @@ export async function entitlement(identity: Identity) {
   return { active: !!current, expiresAt: current?.expiresAt || null, development: false };
 }
 export async function requirePaid(identity: Identity) {
-  if (!(await entitlement(identity)).active) throw new APIError(402, 'subscription_required', 'Upgrade or restore a subscription to use photo and voice logging.');
+  if (!(await entitlement(identity)).active) throw new APIError(402, 'subscription_required', 'Upgrade or restore Cave Cals+ to use this feature.');
 }
 export async function verifyPurchase(identity: Identity, signedTransaction: string) {
   if (identity.development) throw new APIError(400, 'development_mode', 'Use a physical device to test Apple purchases.');
@@ -89,6 +89,14 @@ export async function verifyPurchase(identity: Identity, signedTransaction: stri
     const others = await tx.select({ key: devices.keyId }).from(devices).where(and(eq(devices.accountId, ownerId), ne(devices.keyId, identity.keyId)));
     if (others.length >= 5) throw new APIError(403, 'device_limit', 'This subscription has reached its device limit. Contact support to reset old devices.');
     await tx.update(accounts).set({ originalTransactionId: decoded.originalTransactionId, environment: verified.environment }).where(eq(accounts.id, ownerId));
+    // Preserve trial history when restoring a purchase links an install to its owner.
+    if (ownerId !== identity.accountId) {
+      const [source] = await tx.select().from(accounts).where(eq(accounts.id, identity.accountId));
+      if (source) await tx.update(accounts).set({
+        scansUsed: sql`greatest(${accounts.scansUsed}, ${source.scansUsed})`,
+        regularLogCount: sql`greatest(${accounts.regularLogCount}, ${source.regularLogCount})`,
+      }).where(eq(accounts.id, ownerId));
+    }
     await tx.update(devices).set({ accountId: ownerId }).where(eq(devices.keyId, identity.keyId));
     return { accountId: ownerId, active: true, expiresAt: current.expiresAt };
   });

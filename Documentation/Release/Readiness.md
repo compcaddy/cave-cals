@@ -1,3 +1,16 @@
+# Current release preparation — September 21, 2026
+
+- Live Apple status was rechecked: App Store version 1.0 is READY_FOR_DISTRIBUTION and its review submission is COMPLETE. The September 17 rejection/signing notes below are historical, not current blockers.
+- Prepared app, Quick Log widget, and project generator as **1.0.3 (2)**. Created App Store version 1.0.3 (`4335c968-c59e-4bca-b90d-df21c8c67c28`) with manual release control and copied the existing listing. Updated description, What’s New, and reviewer notes are in `1.0.3/`.
+- Release archive and App Store export succeeded using Xcode automatic signing. Exported app/widget versions match. Strict recursive signature verification passed. Exported app has production App Attest/CloudKit, HealthKit, App Groups, and `get-task-allow=false`; backend origin is `https://cavecals.vercel.app`.
+- Apple processing rejected build 1 with ITMS-90683 because HealthKit also requires `NSHealthShareUsageDescription`. Added the missing explanatory string without expanding the write-only Health authorization; rebuilt and uploaded build 2.
+- Archive: `/tmp/CaveCals-1.0.3-2.xcarchive`; IPA: `/tmp/CaveCals-1.0.3-2.ipa`. Apple accepted the upload; processing and distribution status are recorded in the follow-up below when verified.
+- Release validation: 77 tests passed on iPhone 17 Pro (74 native unit tests and three weight UI tests); all 36 backend tests passed (24 unit, 12 isolated development-database integration). Production Urbane Cafe search returned HTTP 200 with 25 results, including eight Urbane items. All eight targeted iPad UI checks passed across the initial run and the focused photo-picker rerun. The photo-picker test now taps the actual image tile instead of a fixed full-screen coordinate; this fixes its iPhone-compatibility-layout failure.
+- This build includes weight tracking/optional Apple Health export, FatSecret restaurant search, safe search caching, the shared 10-scan/100-entry introductory allowance, compact editable search rows, local search ranking, and widget refinements. Backend changes and the additive database migration were already deployed before this native release.
+- Real camera/microphone, production App Attest, CloudKit sync, Health permission/export/corrections, and sandbox purchase/restore require physical-device verification; simulator fixtures do not prove them. Trainerize delivery is not verified.
+
+---
+
 # Current release status — September 17, 2026
 
 - Resubmission preparation: saved `ResubmissionReviewNotes.txt` into the live App Review details, with no demo account required. Verified Mainland China territory availability is `false` (`CANNOT_SELL`). The rejected App Store version remains 1.0 and the review submission remains `UNRESOLVED_ISSUES`; nothing was submitted. Latest uploaded build is still 1.0.1 (3), so do not submit until a current build is uploaded/selected and physical-iPad purchase/restore/paid access is verified. The reported Restore Purchases error has not been confirmed resolved.

@@ -72,5 +72,9 @@
 			<string>plus</string>
 		</dict>
 	</array>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Share weigh-ins you record in Cave Cals with Apple Health so your connected apps can use them.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Cave Cals uses Apple Health to keep the weigh-ins you choose to share up to date. Cave Cals does not read your Health history.</string>
 </dict>
 </plist>

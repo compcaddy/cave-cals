@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct FoodResult: Identifiable, Codable, Equatable {
+struct FoodResult: Identifiable, Codable, Equatable, Sendable {
     var id: String
     var name: String
     var brand: String?
@@ -9,13 +9,55 @@ struct FoodResult: Identifiable, Codable, Equatable {
     var servingDescription: String
     var barcode: String?
     var draft: EntryDraft {
-        var value = EntryDraft(name: name, calories: calories)
+        let displayName = brand.flatMap { brand in
+            !brand.isEmpty && name.range(of: brand, options: .caseInsensitive) == nil ? "\(brand) — \(name)" : nil
+        } ?? name
+        var value = EntryDraft(name: displayName, calories: calories)
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"
         return value
     }
 }
 
-protocol FoodSearchService: Sendable { func search(query: String) async throws -> [FoodResult] }
+struct FoodSearchPage: Decodable, Sendable {
+    let results: [FoodResult]
+    let cacheLifetime: TimeInterval
+}
+protocol FoodSearchService: Sendable {
+    func search(query: String) async throws -> [FoodResult]
+    func searchPage(query: String) async throws -> FoodSearchPage
+}
+extension FoodSearchService {
+    func searchPage(query: String) async throws -> FoodSearchPage {
+        FoodSearchPage(results: try await search(query: query), cacheLifetime: 3600)
+    }
+}
+
+/// Credentials live only on the backend. Search remains free and independent of paid AI access.
+actor FatSecretSearch: FoodSearchService {
+    static let shared = FatSecretSearch()
+    private let session: URLSession
+    private let baseURL: URL
+    init(session: URLSession = .shared, baseURL: URL = AIConfiguration.baseURL ?? AIConfiguration.productionURL) {
+        self.session = session; self.baseURL = baseURL
+    }
+    func search(query: String) async throws -> [FoodResult] { try await searchPage(query: query).results }
+    func searchPage(query: String) async throws -> FoodSearchPage {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/v1/foods/search"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 35)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["query": query])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw FoodServiceError.unavailable }
+        if http.statusCode == 429 { throw FoodServiceError.rateLimited }
+        guard (200...299).contains(http.statusCode) else { throw FoodServiceError.unavailable }
+        let page = try JSONDecoder().decode(FoodSearchPage.self, from: data)
+        guard page.cacheLifetime.isFinite, page.cacheLifetime >= 0,
+              page.results.allSatisfy({ $0.id.hasPrefix("fatsecret:") && !$0.name.isEmpty && !$0.servingDescription.isEmpty && $0.calories.isFinite && $0.calories >= 0 && $0.calories <= 100_000 }) else {
+            throw FoodServiceError.unavailable
+        }
+        return page
+    }
+}
 protocol BarcodeLookupService: Sendable { func lookup(barcode: String) async throws -> FoodResult? }
 
 enum FoodServiceError: LocalizedError {
@@ -115,31 +157,51 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     var results: [FoodResult] = []
     var loading = false
     var message: String?
+    private struct Cached: Codable { let results: [FoodResult]; let expiresAt: Date }
     private let provider: any FoodSearchService
-    private var cache: [String: [FoodResult]] = [:]
+    private var cache: [String: Cached] = [:]
     private let cacheURL: URL?
-    init(provider: any FoodSearchService = OpenFoodFacts.shared, persistCache: Bool = true) {
-        self.provider = provider
-        cacheURL = persistCache ? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache.json") : nil
-        if let cacheURL, let data = try? Data(contentsOf: cacheURL), let values = try? JSONDecoder().decode([String: [FoodResult]].self, from: data) { cache = values }
+    private let now: () -> Date
+    private let debounce: Duration
+    private var requestID = UUID()
+    init(provider: any FoodSearchService = FatSecretSearch.shared, persistCache: Bool = true,
+         cacheURL: URL? = nil, now: @escaping () -> Date = Date.init, debounce: Duration = .milliseconds(450)) {
+        self.provider = provider; self.now = now; self.debounce = debounce
+        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v2.json")) : nil
+        if let url = self.cacheURL, let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: Cached].self, from: data) {
+            cache = values.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() && $0.value.expiresAt <= now().addingTimeInterval(3600) }
+            persist()
+        }
+    }
+    private func persist() {
+        if let cacheURL, let data = try? JSONEncoder().encode(cache) { try? data.write(to: cacheURL, options: .atomic) }
     }
     func search(_ text: String) async {
+        let id = UUID(); requestID = id
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        message = nil; results = cache[query] ?? []; loading = false
+        cache = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
+        persist()
+        message = nil; results = []; loading = false
         guard query.count >= 2, Double(query) == nil else { return }
-        if cache[query] != nil { return }
+        if let hit = cache[query] { results = hit.results; return }
         loading = true
+        defer { if requestID == id { loading = false } }
         do {
-            try await Task.sleep(for: .milliseconds(450))
-            let values = try await provider.search(query: query)
+            try await Task.sleep(for: debounce)
+            let page = try await provider.searchPage(query: query)
             try Task.checkCancellation()
-            results = values; loading = false
-            cache[query] = values
-            if cache.count > 150 { cache.removeValue(forKey: cache.keys.sorted().first!) }
-            if let cacheURL, let data = try? JSONEncoder().encode(cache) { try? data.write(to: cacheURL, options: .atomic) }
+            guard requestID == id else { return }
+            results = page.results
+            if page.results.isEmpty {
+                message = "No online matches. Try a dish name, or add calories manually."
+            } else if page.cacheLifetime > 0 {
+                cache[query] = Cached(results: page.results, expiresAt: now().addingTimeInterval(min(page.cacheLifetime, 3600)))
+                if cache.count > 150, let oldest = cache.min(by: { $0.value.expiresAt < $1.value.expiresAt })?.key { cache.removeValue(forKey: oldest) }
+            }
+            // Never cache an empty response or a provider error. Basic FatSecret results aren't cached.
+            persist()
         } catch {
-            guard !Task.isCancelled else { return }
-            loading = false
+            guard !Task.isCancelled, requestID == id else { return }
             if let error = error as? URLError {
                 message = (error.code == .timedOut ? FoodServiceError.timedOut : .offline).localizedDescription
             } else {

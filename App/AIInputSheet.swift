@@ -370,19 +370,20 @@ struct AIInputSheet: View {
         working = true; error = nil
         operation = Task { @MainActor in
             defer { working = false }
-            await subscriptions.refresh()
+            await subscriptions.refresh(regularLogCount: store.regularLogCount)
             guard !Task.isCancelled else { return }
             guard let account = subscriptions.account else {
                 error = subscriptions.message ?? "Could not check access. Please try again."
                 return
             }
-            guard account.active else {
+            // A completed upload can always be retrieved, including the tenth free scan.
+            guard account.canScan || uploadId != nil else {
                 if subscriptions.offering != nil { showPaywall = true }
                 else { error = subscriptions.message ?? "Subscriptions could not load. Your \(mode == .photo ? "photo" : "recording") is ready; please try again." }
                 return
             }
             do {
-                let response = try await AIBackend.shared.identify(data: media, kind: mode == .photo ? "image" : "audio", mime: mode == .photo ? "image/jpeg" : "audio/mp4", existingUpload: uploadId, onUpload: { id in await MainActor.run { uploadId = id } })
+                let response = try await AIBackend.shared.identify(data: media, kind: mode == .photo ? "image" : "audio", mime: mode == .photo ? "image/jpeg" : "audio/mp4", existingUpload: uploadId, regularLogCount: store.regularLogCount, onUpload: { id in await MainActor.run { uploadId = id } })
                 try Task.checkCancellation()
                 let generatedDrafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
                 if let onMealDrafts {

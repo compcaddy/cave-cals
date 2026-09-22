@@ -7,5 +7,6 @@ export default function Home() {
     {valid ? <a className="button" href={store}>Download for iPhone</a> : <p>Coming to the App Store.</p>}
     <p className="muted">Your diary stays on your devices and in private iCloud storage. Photo and voice identification send the selected media to our backend and OpenAI when you choose to analyze it.</p>
     {process.env.NODE_ENV === 'development' && !process.env.VERCEL && <Link href="/test">Open local AI tester →</Link>}
+    <p><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>
   </main>;
 }

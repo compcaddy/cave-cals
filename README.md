@@ -1,6 +1,6 @@
 # Cave Cals
 
-A native, iPhone-only calorie logger built with SwiftUI and SwiftData. Supports iOS 17 and later. No signup is required. Manual logging is local-first; optional paid photo and voice estimates use a secure backend and OpenAI.
+A native, iPhone-only calorie logger built with SwiftUI and SwiftData. Supports iOS 17 and later. No signup is required. Manual logging is local-first; optional photo and voice estimates with an introductory free allowance use a secure backend and OpenAI.
 
 ## AI backend
 
@@ -27,8 +27,8 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 - Eight-second undo for adds/deletes; a meal's components undo as one action.
 - Local Quick Add ranks up to ten foods using smooth food-specific time windows, recent and established habits, conditional day patterns, same-day occurrence cadence, and meal-session companions. Context-specific calorie variants require repeated evidence so one outlier cannot redefine a food.
 - Meals built from today's entries or from scratch; templates expand into independently editable entries and support proportional scaling.
-- Open Food Facts food search and camera barcode lookup, manual calorie entry when the camera is unavailable, and persistent local barcode overrides.
-- Cached external searches, offline local history/meals/logging, and nonblocking network errors.
+- FatSecret food/restaurant search and Open Food Facts camera barcode lookup, manual calorie entry when the camera is unavailable, and persistent local barcode overrides.
+- Expiring positive-result search caches when the provider plan permits, offline local history/meals/logging, and nonblocking network errors.
 - SwiftData private CloudKit synchronization on signed devices, with account and sync-event status in Settings.
 - Dynamic Type, VoiceOver labels, system light/dark appearance, Schoolbell headings and hand-drawn cave icons.
 
@@ -46,13 +46,15 @@ Before TestFlight/App Store release, initialize and inspect the development Clou
 
 ## Food provider
 
-`FoodSearchService` and `BarcodeLookupService` isolate the provider. `OpenFoodFacts` uses public keyless read endpoints, a custom User-Agent, a 450 ms search debounce, a conservative rolling search/lookup budget, and timeouts. Search results are cached on disk for offline reuse. Local matches never wait for the provider.
+`FoodSearchService` and `BarcodeLookupService` isolate the providers. Food search uses the free `/api/v1/foods/search` backend endpoint and FatSecret. Barcode lookup stays on Open Food Facts. Local matches never wait for either provider. A 450 ms debounce and request identity guard prevent excessive requests and stale results after query changes.
 
-Products without calorie data are excluded. Serving calories are used only with a serving description; otherwise the UI explicitly labels the result as a 100 g / 100 ml amount. The app never mistakes a per-100 g amount for a package. Names, brands, source IDs, barcodes, and original serving descriptions are retained. User-provided barcode values take precedence and survive deletion of their original log entry.
+FatSecret credentials and OAuth tokens remain server-side. Basic search uses v1; set `FATSECRET_API_TIER=premier` after account approval to use v5 with structured default servings. Restaurant/brand names and calorie portions are retained in logged entries. Search has distributed per-IP and provider-wide quotas independent of paid AI subscriptions. See [FatSecret setup and verification](Documentation/FatSecret.md).
 
-Product data and attribution: [Open Food Facts](https://world.openfoodfacts.org), [API documentation](https://openfoodfacts.github.io/openfoodfacts-server/api/), [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Restaurant/generic food coverage depends on what the provider contains. API requests send the query or barcode; profile and diary data are not sent to Open Food Facts. RevenueCat receives anonymous purchase and paywall interaction data, as described on the privacy page.
+Empty results and errors are never cached. FatSecret Basic results are not cached; Premier positive search results expire after one hour, including across app restarts. Old unversioned caches are no longer read. Offline manual logging, diary history, saved meals, and local common-food suggestions continue to work.
 
-Before public distribution, review Open Food Facts' API usage/registration guidance and supply your preferred public support contact in the User-Agent. The developer-account email has intentionally not been embedded in outgoing requests.
+Products without usable calorie/serving data are excluded. Barcode calories are taken from a stated serving or explicitly labeled as a 100 g / 100 ml amount. User-provided barcode values take precedence and survive deletion of their original log entry.
+
+Search terms go through our backend to FatSecret; scanned barcodes go directly to Open Food Facts. Neither provider receives the diary or profile. Attribution: [fatsecret Platform API](https://platform.fatsecret.com), [Open Food Facts](https://world.openfoodfacts.org), [ODbL](https://opendatacommons.org/licenses/odbl/1-0/).
 
 ## Tests and maintenance
 
@@ -67,10 +69,14 @@ xcodebuild test -project CaveCals.xcodeproj \
 
 Source files are grouped by feature under `App/`. Tests are under `Tests/` and `UITests/`. The optional `scripts/generate_project.rb` recreates the Xcode project using the Ruby `xcodeproj` gem. It is only needed when intentionally regenerating the project after source-file changes. `scripts/make_icon.swift` regenerates the 1024-pixel icon.
 
-V1 intentionally excludes weight, macros, water, exercise, meal categories, and future meal planning.
+Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, editable history, Week/Month/Year graphs, a dismissible daily reminder, and opt-in Apple Health export. Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
+
+Macros, water, exercise, meal categories, and future meal planning remain out of scope.
 
 ## Widget calorie total
 
 The Quick Log widget shows today's total and goal beside its title (for example `500/2100`), or `500 cal` when no goal is set. The app publishes a small local snapshot after saved changes and imported iCloud updates. Widget timelines include a midnight reset; iOS controls the precise timing of widget refreshes.
 
 For signed device builds, enable **App Groups** for both the app and QuickLogWidget targets and register/select `group.com.philstarkovich.cavecals` with the same Apple Developer team. Both entitlement files already include this group. Open the updated app once to populate the widget's shared data. The widget does not contact the backend or OpenAI.
+
+Photo and voice share ten successful free scans until 100 regular food-log entries, whichever threshold comes first. See [scan access and rollout](Documentation/ScanAccess.md).

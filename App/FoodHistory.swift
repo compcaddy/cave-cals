@@ -128,14 +128,27 @@ enum FoodHistory {
             return HistoricalFood(id: key, draft: draft, uses: recent)
         }
     }
-    static func search(_ query: String, entries: [CalorieEntry]) -> [HistoricalFood] {
+    static func search(_ query: String, entries: [CalorieEntry], date: Date = Date(), calendar: Calendar = .current) -> [HistoricalFood] {
         let q = normalizedFoodName(query)
-        return foods(entries).filter { normalizedFoodName($0.draft.name).contains(q) }.sorted {
-            let a = normalizedFoodName($0.draft.name), b = normalizedFoodName($1.draft.name)
-            if (a == q) != (b == q) { return a == q }
-            if a.hasPrefix(q) != b.hasPrefix(q) { return a.hasPrefix(q) }
-            return $0.uses[0].timestamp > $1.uses[0].timestamp
+        guard !q.isEmpty else { return [] }
+        let candidates = foods(entries).filter { normalizedFoodName($0.draft.name).contains(q) }
+        let histories = Dictionary(grouping: entries.filter { $0.timestamp <= date }, by: key)
+        let contexts = Array(entries.filter { $0.timestamp <= date }.sorted { $0.timestamp > $1.timestamp }.prefix(3))
+        let scored = candidates.map { food -> (food: HistoricalFood, textRank: Int, relevance: Double) in
+            let name = normalizedFoodName(food.draft.name)
+            let textRank = name == q ? 0 : (name.hasPrefix(q) ? 1 : 2)
+            let uses = histories[food.id] ?? food.uses
+            let habit = habitStrength(uses: uses, date: date, hasRecentHistory: false)
+            let time = 0.25 + 2.75 * timePatternProbability(uses: uses, date: date, calendar: calendar, hasRecentHistory: false)
+            let day = conditionalDayFactor(uses: uses, date: date, calendar: calendar)
+            let session = sessionFactor(candidateKey: food.id, contexts: contexts, histories: histories, date: date, calendar: calendar)
+            return (food, textRank, habit * time * day * session)
         }
+        return scored.sorted {
+            if $0.textRank != $1.textRank { return $0.textRank < $1.textRank }
+            if $0.relevance != $1.relevance { return $0.relevance > $1.relevance }
+            return normalizedFoodName($0.food.draft.name) < normalizedFoodName($1.food.draft.name)
+        }.map(\.food)
     }
     static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = []) -> [HistoricalFood] {
         let eligible = entries

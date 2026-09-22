@@ -76,7 +76,7 @@ private struct QuickLogView: View {
         let total = snapshot.total(on: entry.date)
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(total.formatted(.number.precision(.fractionLength(0))))
-                .font(.cave(style).bold())
+                .font(family == .systemSmall ? .cave(.subheadline).weight(.black) : .cave(style).bold())
                 .foregroundStyle(.primary)
                 .accessibilityLabel("Today: \(Int(total.rounded())) calories")
             Spacer(minLength: 0)
@@ -93,6 +93,7 @@ private struct QuickLogView: View {
         }
         .lineLimit(1).minimumScaleFactor(0.65)
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, family == .systemSmall ? 8 : 0)
     }
 
     private func actionLink(_ action: LoggingAction, width: CGFloat, height: CGFloat) -> some View {

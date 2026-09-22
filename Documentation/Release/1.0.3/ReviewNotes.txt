@@ -1,0 +1,7 @@
+No account signup or demo login is required. Manual calorie logging, food/restaurant search, barcode lookup, saved meals, and weight tracking are free.
+
+New in 1.0.3: the person icon opens You, with the calorie goal and optional Track weight setting. Enable Track weight to log daily or historical weigh-ins and see week/month/year charts. Save to Apple Health requests write access only for body mass. Local weight tracking works without Health permission. The app does not read Health data or send weight records to our servers, AI providers, or advertisers.
+
+Meal Scan and Voice Log share an introductory allowance of 10 successful analyses. The allowance also ends at 100 regular food-log entries. Failed analyses do not consume it. Existing subscribers retain access. To view subscription options immediately, open You and select the Cave Cals+ upgrade option. Public website meal import requires Cave Cals+.
+
+Photo/voice analysis requires an internet connection and a physical device for App Attest. Apple sandbox purchases and restore are supported. Users review and edit AI estimates before saving. Food search uses FatSecret; barcode lookup uses Open Food Facts.

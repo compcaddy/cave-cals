@@ -2,10 +2,11 @@
 Requires the workspace Sharp dependency, ImageMagick, and Potrace.
 """
 from pathlib import Path
-import json, subprocess, tempfile
+import json, subprocess, tempfile, sys
 root = Path(__file__).resolve().parent.parent
 # Deliberately uneven contours and broad strokes remain legible at toolbar sizes.
 paths = {
+'Person': 'M32 7 C44 6 47 15 45 23 C43 31 36 35 29 32 C21 31 18 24 19 17 C20 10 25 6 32 7 Z M9 56 L10 49 Q12 39 24 38 M24 38 Q32 43 41 38 Q53 40 55 50 L55 57 M9 56 Q30 58 55 57',
 'Pencil': 'M12 44 L17 31 L42 7 Q46 5 50 10 L55 16 Q57 19 53 23 L29 47 L12 52 Z M18 32 L29 44 M39 11 L50 23 M13 49 L20 47',
 'ChevronLeft': 'M41 10 L22 30 Q20 32 23 35 L41 53',
 'ChevronRight': 'M22 10 L41 30 Q44 32 41 35 L22 53',
@@ -24,6 +25,8 @@ paths = {
 }
 with tempfile.TemporaryDirectory() as temp:
     for key, path in paths.items():
+        if len(sys.argv) > 1 and key not in sys.argv[1:]:
+            continue
         name = 'Cave' + key
         svg = root / 'Artwork/CaveIcons' / (name + '.svg')
         stroke_width = 4.8 if key == 'Pencil' else 5.5

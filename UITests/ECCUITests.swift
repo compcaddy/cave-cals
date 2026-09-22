@@ -45,7 +45,13 @@ final class ECCUITests: XCTestCase {
         app.buttons["Quick Add"].tap()
         search.tap()
         search.typeText("Ban")
-        XCTAssertTrue(app.buttons["Add \"Ban\", enter calories"].waitForExistence(timeout: 3))
+        let manualAdd = app.buttons["Add \"Ban\", enter calories"]
+        XCTAssertTrue(manualAdd.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.otherElements["calorieSummary"].exists)
+        XCTAssertFalse(app.buttons["Settings"].exists)
+        XCTAssertFalse(app.buttons["searchQuickCalories"].exists)
+        XCTAssertGreaterThan(manualAdd.frame.minY, search.frame.maxY)
+        XCTAssertTrue(app.staticTexts["Results"].exists)
         app.buttons["Clear search"].tap()
         XCTAssertTrue(app.buttons["Quick Add"].isSelected)
         XCTAssertTrue(app.buttons["searchQuickCalories"].exists)
@@ -57,6 +63,33 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 3)); add.tap()
         closeSearchDrawer()
     }
+    func testSearchTitleEditsAndOnlyPlusAdds() {
+        let search = app.textFields["foodSearch"]
+        search.tap()
+        search.typeText("Banana")
+        let row = app.cells.containing(.button, identifier: "foodDetails-Banana").firstMatch
+        let details = row.buttons["foodDetails-Banana"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertEqual(details.label, "Edit Banana")
+        XCTAssertTrue(details.staticTexts["Banana"].exists)
+        XCTAssertTrue(details.staticTexts.matching(NSPredicate(format: "label CONTAINS ' · 110 Cals'")).firstMatch.exists)
+        details.tap()
+        XCTAssertTrue(app.textFields["entryName"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["entryName"].value as? String, "Banana")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertEqual(search.value as? String, "Banana")
+        XCTAssertFalse(app.buttons["Undo"].exists)
+        let add = row.buttons.matching(identifier: "Add Banana")
+        XCTAssertEqual(add.count, 1)
+        add.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        assertSummary("110 of 2,100 calories")
+        app.buttons["Undo"].firstMatch.tap()
+        assertSummary("0 of 2,100 calories")
+    }
+
     func testSearchAddReturnsToLoggedAndUndoRemovesIt() {
         let search = app.textFields["foodSearch"]
         search.tap()
@@ -359,6 +392,19 @@ final class ReleaseScreenshotTests: XCTestCase {
 }
 
 final class AICaptureFlowTests: XCTestCase {
+    func testMealScanOpensWithoutUpfrontPaywall() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--screenshots"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Photo entry"].waitForExistence(timeout: 5))
+        app.buttons["Photo entry"].tap()
+        XCTAssertTrue(app.navigationBars["Meal Scan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["captureCancel"].exists)
+        XCTAssertFalse(app.otherElements["aiUpgradePaywall"].exists)
+        app.buttons["captureCancel"].tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+    }
+
     func testMealPhotoSelectionAndRemovalWithoutUpfrontPaywall() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -376,8 +422,10 @@ final class AICaptureFlowTests: XCTestCase {
         XCTAssertFalse(app.switches["aiConsent"].exists)
         app.buttons["aiPhotoPicker"].tap()
         XCTAssertTrue(app.buttons["Photos"].waitForExistence(timeout: 5))
-        // The simulator fixture is imported before this test; first tile in the system picker.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.39)).tap()
+        // Select a real picker tile so this also works in iPad's iPhone compatibility layout.
+        let photo = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 5), "Import a photo fixture into the simulator before running this test.")
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["Remove photo"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Scan and Analyze"].isEnabled)
         XCTAssertFalse(app.buttons["aiPaywall"].exists)
@@ -394,13 +442,13 @@ final class AICaptureFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
         app.buttons["Logged"].tap()
         app.buttons["Voice entry"].tap()
-        XCTAssertTrue(app.navigationBars["Voice logging"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Start Recording"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["aiRecord"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Up to 60 seconds"].exists)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Analyze sends this recording'")).firstMatch.exists)
         XCTAssertFalse(app.buttons["aiPaywall"].exists)
         XCTAssertFalse(app.switches["aiConsent"].exists)
-        XCTAssertFalse(app.navigationBars["Voice logging"].buttons["Cancel"].exists)
+        XCTAssertFalse(app.navigationBars["Speak Food"].buttons["Cancel"].exists)
         let cancel = app.buttons["captureCancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(cancel.frame.midY, app.frame.height * 0.75)

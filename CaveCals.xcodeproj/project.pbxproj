@@ -25,18 +25,22 @@
 		317EC68685ECA3B2B035EC07 /* ECCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C28A2360433059F3D4A800 /* ECCTests.swift */; };
 		35E5B82CCF58C5A52924F0E8 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */; };
 		39CEC742B684188B0F99300C /* LoggingAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F2050A1AA162B13C70E09B /* LoggingAction.swift */; };
+		3FE1EF03536DB20CF9255EAA /* WeightTrackingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C07BF5FE2BA6A0A795409D /* WeightTrackingUITests.swift */; };
 		477BBF0EB4E89C3423D6318F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
 		4CA3A27C87A131EBC3CF7E51 /* CaveIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B627F5DE7B765F759D4C456 /* CaveIcon.swift */; };
 		4D20A17E184A713A9C9FED1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3309369A483B862BEEDEA084 /* Assets.xcassets */; };
 		4E7B1B71B0ED7650AA0C64FF /* LoggingActionRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */; };
 		522662E0D3EFC4510F1CD187 /* CaveCalsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E23E99F767CFFDE893A6C5C /* CaveCalsApp.swift */; };
+		5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */; };
 		59D0E4462EF36DD9CD7C5883 /* AIInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17492053FBE305D6482D24C /* AIInputSheet.swift */; };
 		5CEB3936BCDEB6AA9E4B548C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
 		7053D018ED3D96CE1E0AC879 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6DCC4E83042698A870482163 /* AVFoundation.framework */; };
 		749CD1F7A48E7ACDB3E520BE /* CalorieWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02756BF619D652D62B1C0801 /* CalorieWidgetTests.swift */; };
 		74E38313007017D8F76C2E9B /* AISubscriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB099EDFFF0CD95043CFD6B /* AISubscriptions.swift */; };
+		79C0D2A8B1BFC35F7ADC178C /* WeightTrackingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69432E70389C532222506CFE /* WeightTrackingTests.swift */; };
 		7E0676A629A8B0631D6B0B9F /* QuickLogWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F22CF4487F14C6E5AA3226F /* QuickLogWidget.swift */; };
 		8D55ABD4E37F9704ACA7FC19 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
+		945E0C534E7C334D3A32514E /* WeightViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294EBEE8DA9D387437E6085E /* WeightViews.swift */; };
 		96323748F9DC17819716FD77 /* FoodProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3F508E7A7C05D60934A294 /* FoodProvider.swift */; };
 		983832F717BA4D3D8B789E72 /* LoggingAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F2050A1AA162B13C70E09B /* LoggingAction.swift */; };
 		AACC11000000000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = AACC11000000000000000002 /* Fonts */; };
@@ -50,6 +54,7 @@
 		DF937A6483ACE0B29A1ED969 /* FoodHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9A5D9742D425FCFEB08983 /* FoodHistory.swift */; };
 		E114D3C4E62EB2E1924E6E13 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */; };
 		E215968B531C3F626A9EC8F2 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02F307EB109C46B14F971CA4 /* CloudKit.framework */; };
+		F630A3BB15EECFC6C9AB4D58 /* WeightHealthExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */; };
 		F6EBDF603D5065461DEFD5EA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 478C002A46CD3337FA7531CC /* RevenueCat */; };
 		F7E222213BDE0B50CD1DA2ED /* AIDeveloperSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E7486514F9CFE0D95E4D4D /* AIDeveloperSettings.swift */; };
 /* End PBXBuildFile section */
@@ -97,11 +102,14 @@
 		02F307EB109C46B14F971CA4 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
 		04F2050A1AA162B13C70E09B /* LoggingAction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoggingAction.swift; sourceTree = "<group>"; };
 		06D20150EE354567305B2E08 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = App/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightHealthExporter.swift; sourceTree = "<group>"; };
+		14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightTracking.swift; sourceTree = "<group>"; };
 		1C6E37BAB5D9CCB6184E9D19 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1CAFD4B9FB828367FF05E161 /* Backend.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Backend.xcconfig; path = App/Backend.xcconfig; sourceTree = "<group>"; };
 		1E23E99F767CFFDE893A6C5C /* CaveCalsApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaveCalsApp.swift; sourceTree = "<group>"; };
 		222BD8601E865F5C212C215F /* AIIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIIntegrationTests.swift; sourceTree = "<group>"; };
 		25E7486514F9CFE0D95E4D4D /* AIDeveloperSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIDeveloperSettings.swift; sourceTree = "<group>"; };
+		294EBEE8DA9D387437E6085E /* WeightViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightViews.swift; sourceTree = "<group>"; };
 		29C28A2360433059F3D4A800 /* ECCTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ECCTests.swift; sourceTree = "<group>"; };
 		2ADCFB9B4FE564726F1C9ACC /* QuickLogWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = QuickLogWidget.entitlements; sourceTree = "<group>"; };
 		3309369A483B862BEEDEA084 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = App/Assets.xcassets; sourceTree = "<group>"; };
@@ -112,6 +120,7 @@
 		5B627F5DE7B765F759D4C456 /* CaveIcon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaveIcon.swift; sourceTree = "<group>"; };
 		60F75519FD798D28842B739B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		67750F0D12D6A67FAD6885ED /* CaveCals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CaveCals.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		69432E70389C532222506CFE /* WeightTrackingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightTrackingTests.swift; sourceTree = "<group>"; };
 		6DCC4E83042698A870482163 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
 		6EB099EDFFF0CD95043CFD6B /* AISubscriptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AISubscriptions.swift; sourceTree = "<group>"; };
 		6F22CF4487F14C6E5AA3226F /* QuickLogWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLogWidget.swift; sourceTree = "<group>"; };
@@ -131,6 +140,7 @@
 		D262B99BD0EC759215AA3C57 /* ECCUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ECCUITests.swift; sourceTree = "<group>"; };
 		DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		EC6918516005A73F3528519C /* CaveIcons.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = CaveIcons.xcassets; sourceTree = "<group>"; };
+		F6C07BF5FE2BA6A0A795409D /* WeightTrackingUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightTrackingUITests.swift; sourceTree = "<group>"; };
 		F82709D277285BC739A30C91 /* MealsAndSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MealsAndSettings.swift; sourceTree = "<group>"; };
 		FCD08D48313CFB97762BC365 /* LoggingActionUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoggingActionUITests.swift; sourceTree = "<group>"; };
 		FCF427EB93D36B9097A855A6 /* AppStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
@@ -181,6 +191,7 @@
 			children = (
 				D262B99BD0EC759215AA3C57 /* ECCUITests.swift */,
 				FCD08D48313CFB97762BC365 /* LoggingActionUITests.swift */,
+				F6C07BF5FE2BA6A0A795409D /* WeightTrackingUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -240,6 +251,7 @@
 				222BD8601E865F5C212C215F /* AIIntegrationTests.swift */,
 				C8A6FED4ACAFD031C423A752 /* LoggingActionTests.swift */,
 				02756BF619D652D62B1C0801 /* CalorieWidgetTests.swift */,
+				69432E70389C532222506CFE /* WeightTrackingTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -272,6 +284,9 @@
 				A17492053FBE305D6482D24C /* AIInputSheet.swift */,
 				25E7486514F9CFE0D95E4D4D /* AIDeveloperSettings.swift */,
 				9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */,
+				14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */,
+				0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */,
+				294EBEE8DA9D387437E6085E /* WeightViews.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -474,6 +489,9 @@
 				4E7B1B71B0ED7650AA0C64FF /* LoggingActionRouter.swift in Sources */,
 				186180071911FF89526CB293 /* CalorieWidgetSnapshot.swift in Sources */,
 				4CA3A27C87A131EBC3CF7E51 /* CaveIcon.swift in Sources */,
+				5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */,
+				F630A3BB15EECFC6C9AB4D58 /* WeightHealthExporter.swift in Sources */,
+				945E0C534E7C334D3A32514E /* WeightViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +514,7 @@
 				1D7A4AB47066E3C6597ADB5C /* AIIntegrationTests.swift in Sources */,
 				24858B8A71CE98CCED1B3F26 /* LoggingActionTests.swift in Sources */,
 				749CD1F7A48E7ACDB3E520BE /* CalorieWidgetTests.swift in Sources */,
+				79C0D2A8B1BFC35F7ADC178C /* WeightTrackingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -505,6 +524,7 @@
 			files = (
 				0E46CDDC94EF85B49D2ACDAD /* ECCUITests.swift in Sources */,
 				01D68549EFB4A03054092F20 /* LoggingActionUITests.swift in Sources */,
+				3FE1EF03536DB20CF9255EAA /* WeightTrackingUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -543,7 +563,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCals.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -556,7 +576,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -577,7 +597,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -588,7 +608,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.QuickLogWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -606,10 +626,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.ECCUITests;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -629,10 +649,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.ECCUITests;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -656,7 +676,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCals.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -669,7 +689,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -688,10 +708,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.ECCTests;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -712,10 +732,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.ECCTests;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -857,7 +877,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -868,7 +888,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.philstarkovich.cavecals.QuickLogWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;

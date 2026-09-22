@@ -5,6 +5,10 @@ import CoreData
 import WidgetKit
 
 @MainActor @Observable final class AppStore {
+    private static let regularEntryIDsKey = "regularEntryIDs.v1"
+    private(set) var regularLogCount = 0
+    private var regularEntryIDs: Set<String> = []
+    private let persistsUsage: Bool
     private static let pinnedFoodIDsKey = "pinnedFoodIDs.v1"
     private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
     let container: ModelContainer
@@ -30,8 +34,9 @@ import WidgetKit
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
 
-    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true, preferences: UserDefaults = .standard) {
+    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true, persistsUsage: Bool = true, preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        self.persistsUsage = persistsUsage
         pinnedFoodIDs = preferences.stringArray(forKey: Self.pinnedFoodIDsKey) ?? []
         pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
         self.publishesWidget = publishesWidget
@@ -43,6 +48,19 @@ import WidgetKit
         do {
             profiles = try context.fetch(FetchDescriptor<UserProfile>())
             entries = try context.fetch(FetchDescriptor<CalorieEntry>(sortBy: [SortDescriptor(\.timestamp), SortDescriptor(\.componentOrder), SortDescriptor(\.createdAt)]))
+            // Remember up to the eligibility threshold, including deleted entries. Imported
+            // iCloud rows and edits are deduplicated by entry ID; AI results do not count.
+            var seen = regularEntryIDs
+            if persistsUsage { seen.formUnion(preferences.stringArray(forKey: Self.regularEntryIDsKey) ?? []) }
+            if seen.count < 100 {
+                for entry in entries where !entry.sourceType.hasPrefix("ai") {
+                    seen.insert(entry.id.uuidString)
+                    if seen.count >= 100 { break }
+                }
+                if persistsUsage { preferences.set(Array(seen), forKey: Self.regularEntryIDsKey) }
+            }
+            regularEntryIDs = seen
+            regularLogCount = min(100, seen.count)
             goals = try context.fetch(FetchDescriptor<DailyGoal>())
             meals = try context.fetch(FetchDescriptor<SavedMeal>(sortBy: [SortDescriptor(\.name)]))
             barcodes = try context.fetch(FetchDescriptor<BarcodeFood>())
@@ -223,11 +241,11 @@ enum Persistence {
     }
     @MainActor private static func makeConfigured(inMemory: Bool, cloud: Bool) throws -> AppStore {
         let config = ModelConfiguration("CaveCals", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
-        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory) }
+        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory, persistsUsage: !inMemory) }
         catch {
             guard cloud else { throw error }
             let local = ModelConfiguration("CaveCals", schema: schema, cloudKitDatabase: .none)
-            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]), publishesWidget: !inMemory)
+            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]), publishesWidget: !inMemory, persistsUsage: !inMemory)
             store.syncStatus = "iCloud unavailable · saved locally"
             return store
         }

@@ -9,6 +9,7 @@ import RevenueCatUI
     var trialEligible: Set<String> = []
     var busy = false
     var message: String?
+    var messageIsError = false
     var offering: Offering?
 
     private func connectRevenueCat() async {
@@ -24,11 +25,11 @@ import RevenueCatUI
         }
         offering = try? await Purchases.shared.offerings().current
     }
-    func refresh() async {
+    func refresh(regularLogCount: Int = 0) async {
         guard !busy else { return }
         busy = true; defer { busy = false }
         do {
-            account = try await AIBackend.shared.status()
+            account = try await AIBackend.shared.status(regularLogCount: regularLogCount)
             if account?.active == false && account?.testing != true {
                 for await result in StoreKit.Transaction.currentEntitlements {
                     if case .verified(let transaction) = result, account?.productIds.contains(transaction.productID) == true {
@@ -49,7 +50,11 @@ import RevenueCatUI
             }
             await connectRevenueCat()
             message = nil
-        } catch { message = error.localizedDescription }
+            messageIsError = false
+        } catch {
+            message = error.localizedDescription
+            messageIsError = true
+        }
     }
     @discardableResult
     func buy(_ product: StoreKit.Product) async -> (userCancelled: Bool, error: Error?) {
@@ -61,7 +66,7 @@ import RevenueCatUI
                 guard case .verified(let transaction) = verification else { throw AIServiceError(code:"purchase",message:"The purchase could not be verified.") }
                 try await AIBackend.shared.purchase(verification.jwsRepresentation)
                 await transaction.finish()
-                self.account = try await AIBackend.shared.status(); message = nil
+                self.account = try await AIBackend.shared.status(); message = nil; messageIsError = false
                 await connectRevenueCat()
                 if Purchases.isConfigured { _ = try? await Purchases.shared.syncPurchases() }
                 return (false, nil)
@@ -69,7 +74,11 @@ import RevenueCatUI
             case .userCancelled: return (true, nil)
             @unknown default: throw AIServiceError(code:"purchase",message:"The purchase could not be completed.")
             }
-        } catch { message = error.localizedDescription; return (false, error) }
+        } catch {
+            message = error.localizedDescription
+            messageIsError = true
+            return (false, error)
+        }
     }
     @discardableResult
     func restore() async -> (success: Bool, error: Error?) {
@@ -84,10 +93,15 @@ import RevenueCatUI
             }
             account = try await AIBackend.shared.status()
             message = restored ? "Purchase restored." : "No active subscription was found for this App Store account."
+            messageIsError = false
             await connectRevenueCat()
             if Purchases.isConfigured { _ = try? await Purchases.shared.syncPurchases() }
             return (restored && account?.active == true, nil)
-        } catch { message = error.localizedDescription; return (false, error) }
+        } catch {
+            message = error.localizedDescription
+            messageIsError = true
+            return (false, error)
+        }
     }
     static func listenForPurchases() async {
         for await result in StoreKit.Transaction.updates {
@@ -160,6 +174,7 @@ struct AIUpgradePaywall: View {
 }
 
 struct AISubscriptionSection: View {
+    @Environment(AppStore.self) private var store
     let subscriptions: AISubscriptions
     let openPaywall: () -> Void
 
@@ -187,6 +202,16 @@ struct AISubscriptionSection: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    if subscriptions.messageIsError {
+                        Button("Try Again") {
+                            Task { await subscriptions.refresh(regularLogCount: store.regularLogCount) }
+                        }
+                        .buttonStyle(.bordered)
+                        .frame(minHeight: 44)
+                        .disabled(subscriptions.busy)
+                        .accessibilityIdentifier("retryAIConnection")
+                    }
                 }
 
                 membershipActions
@@ -219,6 +244,14 @@ struct AISubscriptionSection: View {
     private var upgradeInvitation: some View {
         VStack(spacing: 12) {
             VStack(spacing: 4) {
+                if let account = subscriptions.account, account.canScan {
+                    Text("\(account.freeScansRemaining) free scans remaining")
+                        .font(.cave(.headline))
+                    Text("Shared between Meal Scan and Voice Log, until you’ve logged 100 regular food entries.")
+                        .font(.cave(.footnote))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 Text("Smarter logging, carved for real life.")
                     .font(.cave(.headline))
                     .multilineTextAlignment(.center)

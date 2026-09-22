@@ -22,6 +22,7 @@ enum CaveGlyph: String, CaseIterable {
     case phone = "CavePhone"
     case warning = "CaveWarning"
     case gear = "CaveGear"
+    case person = "CavePerson"
 }
 
 /// Single-color vector artwork inherits its parent's foreground style in either appearance.

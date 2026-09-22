@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
     @State private var showingPaywall = false
+    @State private var weightEditor: WeightEditorRoute?
+    @Environment(WeightStore.self) private var weights
 
     var body: some View {
         NavigationStack {
@@ -15,8 +17,9 @@ struct SettingsView: View {
                         HStack(spacing: 12) {
                             Text("Daily calorie goal").foregroundStyle(.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22)
+                            CaveIcon(.pencil, size: 22).foregroundStyle(.blue)
                             Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
+                                .font(.cave(.title3))
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: true, vertical: false)
                         }.frame(minHeight: 44).contentShape(Rectangle())
@@ -27,26 +30,32 @@ struct SettingsView: View {
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
                 }
+                WeightProfileSections(editor: $weightEditor)
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
                 if AIConfiguration.developerSettingsAvailable {
                     Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
                 }
                 Section("iCloud") {
                     Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
-                    Text("Your entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device, with optional sharing to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 Section("About") {
                     Text(appVersionLabel)
-                    Link("Food data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
+                    Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!)
+                    Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
+                    Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Search terms and scanned barcodes are sent to Open Food Facts to find products. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 legalLinks
             }
-            .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("You").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
+            }
+            .sheet(item: $weightEditor) { route in
+                WeightEditorSheet(record: route.record, unit: weights.unit)
             }
             .navigationDestination(isPresented: $showingPaywall) {
                 AIUpgradePaywall(
@@ -54,7 +63,7 @@ struct SettingsView: View {
                     onDismissRequested: { showingPaywall = false }
                 )
             }
-            .task { await store.checkCloud(); await aiSubscriptions.refresh() }
+            .task { await store.checkCloud(); await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
         }
     }
 
@@ -335,6 +344,7 @@ struct MealFoodPicker: View {
                 }
                 Section("Food search") {
                     ForEach(search.results) { food in row(food.draft) }
+                    if !search.results.isEmpty { Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!).font(.cave(.caption2)) }
                     if search.loading { ProgressView("Searching foods…") }
                     if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
                 }
@@ -347,7 +357,7 @@ struct MealFoodPicker: View {
         }
     }
     private func row(_ draft: EntryDraft) -> some View {
-        FoodRow(name: draft.name, calories: draft.calories, add: { var copy = draft; copy.id = UUID(); copy.entryID = nil; selected(copy); dismiss() }, edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
+        FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, add: { var copy = draft; copy.id = UUID(); copy.entryID = nil; selected(copy); dismiss() }, edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
     }
 }
 

@@ -23,7 +23,7 @@ export async function signUpload(request: Request, identity: Identity, input: z.
   const id = randomUUID();
   const pathname = `temporary/${identity.accountId}/${id}`;
   const storage = localDevelopment(request) && process.env.LOCAL_UPLOADS === 'true' ? 'local' : 'blob';
-  const upload: Upload = { id, accountId: identity.accountId, pathname, ...input, storage, state: 'pending', result: null, createdAt: new Date(), expiresAt: new Date(Date.now() + 24*3600000) };
+  const upload: Upload = { id, accountId: identity.accountId, pathname, ...input, storage, state: 'pending', scanReservedUntil: null, result: null, createdAt: new Date(), expiresAt: new Date(Date.now() + 24*3600000) };
   let uploadURL: string;
   if (storage === 'local') uploadURL = `${new URL(request.url).origin}/api/dev/upload/${id}`;
   else {

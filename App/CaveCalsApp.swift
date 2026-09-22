@@ -5,11 +5,24 @@ import CoreData
     @UIApplicationDelegateAdaptor(QuickActionAppDelegate.self) private var appDelegate
     @State private var store: AppStore?
     @State private var failure: String?
+    @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
     init() {
         let navFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 20)!)
         UINavigationBar.appearance().titleTextAttributes = [.font: navFont]
         UINavigationBar.appearance().largeTitleTextAttributes = [.font: UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 36)!)]
         UIBarButtonItem.appearance().setTitleTextAttributes([.font: navFont], for: .normal)
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--weight-preview") {
+            let preview = WeightStore(inMemory: true)
+            preview.setTracking(true); preview.setUnit(.pounds)
+            for daysAgo in (0..<90).reversed() where daysAgo % 9 != 4 {
+                let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
+                let pounds = 179.8 + Double(daysAgo) * 0.055 + sin(Double(daysAgo) * 0.8) * 0.6
+                preview.save(kilograms: WeightUnit.pounds.kilograms(pounds), date: date)
+            }
+            _weights = State(initialValue: preview)
+        }
+        #endif
         do {
             var screenshots = false
             #if DEBUG && targetEnvironment(simulator)
@@ -42,7 +55,7 @@ import CoreData
     var body: some Scene {
         WindowGroup {
             if let store {
-                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared)
+                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights)
                     .modelContainer(store.container).tint(.blue).accentColor(.blue)
                     .onOpenURL { LoggingActionRouter.shared.open(url: $0) }
             } else {
@@ -55,6 +68,7 @@ import CoreData
 struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.scenePhase) private var phase
+    @Environment(WeightStore.self) private var weights
     var body: some View {
         @Bindable var store = store
         Group {
@@ -63,9 +77,9 @@ struct RootView: View {
         .alert("Couldn’t save changes", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
-        .task { await store.checkCloud() }
+        .task { await store.checkCloud(); await weights.syncHealth() }
         .task { await AISubscriptions.listenForPurchases() }
-        .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud() } } }
+        .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSPersistentCloudKitContainer.eventChangedNotification)) { store.cloudEvent($0) }
