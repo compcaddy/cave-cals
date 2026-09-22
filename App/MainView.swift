@@ -827,6 +827,7 @@ struct FoodRow: View {
     private var subtitle: String {
         var parts = [detail ?? ""].filter { !$0.isEmpty }
         if !suggestionLayout, let calories { parts.append("\(calories.calorieText) Cals") }
+        if !suggestionLayout, store.tracksMacros, let macros { parts.append(macros.compactText) }
         return parts.joined(separator: " · ")
     }
     var body: some View {
@@ -843,8 +844,11 @@ struct FoodRow: View {
                             }
                             Text(name).font(.cave(.subheadline).weight(confirming ? .bold : .regular)).foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(2)
                         }
-                        if !subtitle.isEmpty { Text(subtitle).font(.cave(.caption)).foregroundStyle(.secondary).lineLimit(2) }
-                        if store.tracksMacros, let macros { MacroLine(summary: macros) }
+                        if !subtitle.isEmpty {
+                            Text(subtitle).font(.cave(.caption)).foregroundStyle(.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.75)
+                        }
+                        if suggestionLayout, store.tracksMacros, let macros { MacroLine(summary: macros) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     if suggestionLayout, let calories {
                         Text(calories.calorieText).font(.cave(.body).weight(.semibold)).monospacedDigit()

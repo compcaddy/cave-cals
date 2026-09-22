@@ -3,7 +3,7 @@ import SwiftUI
 struct MacroLine: View {
     let summary: MacroSummary
     var body: some View {
-        Text(MacroKind.allCases.map { "\($0.shortTitle) \(summary.total($0).text)" }.joined(separator: " · ") + " g")
+        Text(summary.compactText)
             .font(.cave(.caption)).foregroundStyle(.secondary)
             .accessibilityLabel(summary.accessibilityText)
     }

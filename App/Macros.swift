@@ -45,7 +45,7 @@ enum MacroKind: String, CaseIterable, Identifiable {
     case protein, netCarbs, fat
     var id: String { rawValue }
     var title: String { switch self { case .protein: "Protein"; case .netCarbs: "Net carbs"; case .fat: "Fat" } }
-    var shortTitle: String { switch self { case .protein: "P"; case .netCarbs: "Net C"; case .fat: "F" } }
+    var shortTitle: String { switch self { case .protein: "P"; case .netCarbs: "C"; case .fat: "F" } }
     var keyPath: WritableKeyPath<MacroNutrients, Double?> {
         switch self { case .protein: \.protein; case .netCarbs: \.netCarbs; case .fat: \.fat }
     }
@@ -72,6 +72,9 @@ struct MacroSummary {
         return MacroTotal(grams: values.isEmpty ? 0 : known.isEmpty ? nil : known.reduce(0, +),
                           incomplete: known.count < values.count,
                           estimated: values.contains { $0?[keyPath: kind.estimateKeyPath] == true })
+    }
+    var compactText: String {
+        MacroKind.allCases.map { "\($0.shortTitle) \(total($0).text)" }.joined(separator: " · ") + " g"
     }
     var accessibilityText: String {
         MacroKind.allCases.map { kind in
