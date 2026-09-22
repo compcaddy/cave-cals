@@ -53,7 +53,7 @@ for title,body in [
  ('Built','A short optional onboarding flow estimates an editable daily calorie target. Existing users can build or update a plan from You.'),
  ('Kept simple','Five setup steps plus welcome. Manual and no-goal routes stay visible. No signup, paywall, or permission requests during setup.'),
  ('Prepared','A 30-day launch proposal, four video scripts, App Store and community drafts, three ad concepts with two variants, a recorded walkthrough, and a volunteer feedback guide.'),
- ('Pushed','Branch: codex/onboarding-and-launch. Baseline 35b5286 was pushed first. Core onboarding: 70cfa47. Latest app refinement: e2c8be8, including accessible layout and precise pace labels.')]:
+ ('Pushed','Branch: codex/onboarding-and-launch. Baseline 35b5286 was pushed first. Core onboarding: 70cfa47. Draft PR #1 isolates the new work from earlier macro changes.')]:
     y=heading(title,y);y=text(body,48,y)-28
 c.setFillColor(HexColor('#E5F2FF'));c.roundRect(48,128,516,116,16,fill=1,stroke=0)
 text('<b>Review before release</b><br/>This is not a TestFlight or App Store upload. No advertisements, posts, outreach, or paid campaigns were launched. The proposed media budget is not a spending commitment.',66,224,480)
@@ -91,7 +91,7 @@ for h,b in [
  ('Small screens and older iOS passed','iPhone SE: calculated plan and largest text on iOS 26; calculated plan and minor/manual route on iOS 17.2. Visual review found and fixed large footer controls obscuring questions.'),
  ('iPad and existing behavior passed','Calculated and minor/manual flows pass in iPad compatibility mode. Existing manual-goal editing/cancel, skip-goal, and pending voice shortcut checks also pass.'),
  ('Visual and website checks','Screenshots and walkthrough reviewed; metric pace labels corrected. Website build and TypeScript pass. The missing download-button fallback is fixed and checked locally. Website/privacy changes remain undeployed.'),
- ('Release checks remain separate','No new archive/upload. Physical Health export, CloudKit production sync, camera and App Attest still need release verification. Earlier macro schema work remains. The existing Swift 6 isolation warning is unchanged.')]:
+ ('Build follow-up and release limits','Resolved the existing Swift 6 router warning; seven focused shortcut/routing tests pass. No archive/upload. Physical Health, production CloudKit, camera and App Attest checks, plus earlier macro schema work, remain separate.')]:
     y=heading(h,y);y=text(b,48,y)-22
 c.showPage()
 

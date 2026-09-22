@@ -8,7 +8,8 @@
 - Walkthrough review: a scripted iPhone simulator recording is included in the launch packet. It exposed metric pace labels rounding 0.25/0.75 kg to 0.2/0.8; labels now show the actual metric choices, and the calculated flow passed again. The recording uses synthetic test data.
 - Older OS: calculated plan/weight integration and the minor/manual route pass on iPhone SE (3rd generation), iOS 17.2. Result bundle `test_sim_2026-09-22T19-43-49-958Z_pid70570_72b9ad13.xcresult` confirms the runtime; target and manual-route screenshots were inspected.
 - Launch-path follow-up: the public website still showed “Coming to the App Store” despite the verified public listing. Source now falls back to the app's real download URL and includes a privacy link. Backend production build and TypeScript pass; a local production-server request with `APP_STORE_URL` empty confirms the correct anchor and no coming-soon text. The website changes remain undeployed.
-- This is source work only, not an uploaded build or App Store release. Physical Health export, CloudKit production sync and App Attest remain separate release checks. The existing LoggingActionRouter Swift 6 isolation warning remains.
+- Build follow-up: resolved the existing LoggingActionRouter Swift 6 isolation warning by resolving the shared router inside its main-actor method instead of in a default argument. Seven focused routing/shortcut tests pass, and the follow-up build reports no warnings.
+- This is source work only, not an uploaded build or App Store release. Physical Health export, CloudKit production sync and App Attest remain separate release checks.
 
 ---
 

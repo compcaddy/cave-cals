@@ -59,7 +59,8 @@ enum CalorieLoggingChoice: String, AppEnum {
         .quickCalories: "Quick Calories"
     ]
 
-    @MainActor func open(using router: LoggingActionRouter = .shared) {
+    @MainActor func open(using router: LoggingActionRouter? = nil) {
+        let router = router ?? .shared
         switch self {
         case .voice: router.open(.voice)
         case .meal: router.open(.image)
