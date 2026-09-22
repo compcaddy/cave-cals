@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
     @State private var planningCalories = false
+    @State private var forgettingPlan = false
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
@@ -34,6 +35,10 @@ struct SettingsView: View {
                 Section {
                     Button(weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan") { planningCalories = true }
                         .accessibilityIdentifier("caloriePlan")
+                    if weights.caloriePlan != nil {
+                        Button("Forget plan details", role: .destructive) { forgettingPlan = true }
+                            .foregroundStyle(.red).accessibilityIdentifier("forgetCaloriePlan")
+                    }
                 }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
@@ -61,6 +66,12 @@ struct SettingsView: View {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
             }
             .fullScreenCover(isPresented: $planningCalories) { OnboardingView(isRevising: true) }
+            .alert("Forget plan details?", isPresented: $forgettingPlan) {
+                Button("Cancel", role: .cancel) { }
+                Button("Forget details", role: .destructive) { weights.forgetCaloriePlan() }
+            } message: {
+                Text("Removes your saved age, gender, height, and plan answers. Your calorie goal and weigh-ins stay.")
+            }
             .sheet(item: $weightEditor) { route in
                 WeightEditorSheet(record: route.record, unit: weights.unit)
             }

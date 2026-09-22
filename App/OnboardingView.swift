@@ -6,6 +6,7 @@ struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step = 0
+    @State private var resultBackStep = 4
     @State private var gender: PlanGender?
     @State private var age = ""
     @State private var height = ""
@@ -27,6 +28,10 @@ struct OnboardingView: View {
     @FocusState private var field: String?
     var isRevising = false
 
+    private var parsedAge: Int? {
+        guard let value = WeightUnit.parse(age), (1...120).contains(value), value.rounded() == value else { return nil }
+        return Int(value)
+    }
     private var parsedHeight: Double? {
         guard let h = WeightUnit.parse(height) else { return nil }
         if unit == .kilograms { return h }
@@ -34,7 +39,7 @@ struct OnboardingView: View {
         return (h * 12 + i) * 2.54
     }
     private var input: CaloriePlanInput? {
-        guard let gender, let age = Int(age), let cm = parsedHeight,
+        guard let gender, let age = parsedAge, let cm = parsedHeight,
               let current = WeightUnit.parse(weight), let activity else { return nil }
         let target = intent == .maintain ? current : WeightUnit.parse(goalWeight)
         guard let target else { return nil }
@@ -44,7 +49,7 @@ struct OnboardingView: View {
     private var estimate: CaloriePlanEstimate? { input.flatMap { CaloriePlanner.estimate($0, clinicianSupport: clinicianSupport) } }
     private var manualReason: String? {
         if clinicianSupport { return "A clinician can help set a target that fits your needs. You can still log food here." }
-        if let age = Int(age), !(18...80).contains(age) { return "This estimate is for adults 18–80. Use a target from your clinician instead." }
+        if let age = parsedAge, !(18...80).contains(age) { return "This estimate is for adults 18–80. Use a target from your clinician instead." }
         if gender?.coefficient == nil { return "This equation uses female or male reference values. You can set your own target instead." }
         guard let input else { return "Check your details to build a plan." }
         return CaloriePlanner.validationMessage(input, clinicianSupport: clinicianSupport)
@@ -52,7 +57,7 @@ struct OnboardingView: View {
     }
     private var validStep: Bool {
         switch step {
-        case 1: return gender != nil && Int(age).map { (1...120).contains($0) } == true
+        case 1: return gender != nil && parsedAge != nil
         case 2: return parsedHeight.map { (90...260).contains($0) } == true && WeightUnit.parse(weight).map { (20...400).contains(unit.kilograms($0)) } == true
         case 3: return activity != nil
         case 4: return intent == .maintain || WeightUnit.parse(goalWeight).map { (20...400).contains(unit.kilograms($0)) } == true
@@ -61,7 +66,8 @@ struct OnboardingView: View {
         }
     }
     private var title: String {
-        ["", "A little about you", "Your starting point", "Your usual day", "Your goal. Your pace.", "Your starting target"][step]
+        if step == 5 && estimate == nil { return "Start your way" }
+        return ["", "A little about you", "Your starting point", "Your usual day", "Your goal. Your pace.", "Your starting target"][step]
     }
     var body: some View {
         NavigationStack {
@@ -84,9 +90,12 @@ struct OnboardingView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if step > 0 {
-                        Button { changeStep(step == 5 && input == nil ? 1 : step - 1) } label: { CaveIcon(.chevronLeft, size: 20).frame(width: 44, height: 44) }
+                        Button { changeStep(step == 5 ? resultBackStep : step - 1) } label: { CaveIcon(.chevronLeft, size: 20).frame(width: 44, height: 44) }
                             .accessibilityLabel("Back").accessibilityIdentifier("onboardingBack")
                     } else if isRevising { Button("Cancel") { dismiss() } }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isRevising && step > 0 { Button("Cancel") { dismiss() } }
                 }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { field = nil } }
             }
@@ -140,7 +149,7 @@ struct OnboardingView: View {
                 }
             } else { numberField("Height", text: $height, suffix: "cm", id: "planHeight") }
             numberField("Current weight", text: $weight, suffix: unit.rawValue, id: "planWeight")
-            Text("Your details stay on this device. No photos or Health access needed.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                Text("Your plan details stay on this device.").font(.cave(.footnote)).foregroundStyle(.secondary)
         case 3:
             Text("Include work, walking, and exercise.").foregroundStyle(.secondary)
             ForEach(PlanActivity.allCases) { value in
@@ -165,6 +174,10 @@ struct OnboardingView: View {
                         .accessibilityLabel("Daily calorie target").accessibilityIdentifier("planCalories")
                     Text("Tap to adjust").font(.cave(.caption)).foregroundStyle(.secondary)
                 }.padding(24).frame(maxWidth: .infinity).background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
+                if !validStep {
+                    Text("Enter \(Int(gender?.minimumCalories ?? 1500).formatted())–6,000 calories, or go back to change your plan.")
+                        .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planTargetValidation")
+                }
                 if estimate.paceLimited { Text("We eased the pace to keep your starting target higher.").font(.cave(.subheadline)) }
                 Text("An estimate, not a promise. Track for a few weeks and adjust with your progress.").font(.cave(.subheadline)).foregroundStyle(.secondary)
                 Toggle("Track my weight", isOn: $trackWeight).accessibilityIdentifier("planTrackWeight")
@@ -193,12 +206,16 @@ struct OnboardingView: View {
     private var footer: some View {
         VStack(spacing: 4) {
             if step == 5 && estimate == nil {
-                Button("Set my own goal") { showingManual = true }.buttonStyle(.borderedProminent).controlSize(.large)
+                Button { showingManual = true } label: {
+                    Text("Set my own goal").multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).controlSize(.large)
                     .accessibilityIdentifier("manualSetup")
                 Button("Start without a goal") { finishWithoutGoal() }.frame(minHeight: 44).accessibilityIdentifier("skipGoal")
             } else {
                 Button { advance() } label: {
                     Text(step == 0 ? "Build my plan" : step == 5 ? (isRevising ? "Save my plan" : "Let’s go") : "Continue")
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(.borderedProminent).disabled(!validStep || saving).accessibilityIdentifier("onboardingContinue")
                 if step == 0 {
@@ -240,10 +257,10 @@ struct OnboardingView: View {
     private func advance() {
         guard validStep else { return }
         if step == 5 { save(); return }
-        if step == 1 && (clinicianSupport || gender?.coefficient == nil || !(18...80).contains(Int(age) ?? 0)) {
-            error = nil; changeStep(5); return
+        if step == 1 && (clinicianSupport || gender?.coefficient == nil || !(18...80).contains(parsedAge ?? 0)) {
+            resultBackStep = 1; error = nil; changeStep(5); return
         }
-        if step == 4 { calorieGoal = estimate.map { String(Int($0.calories)) } ?? "" }
+        if step == 4 { resultBackStep = 4; calorieGoal = estimate.map { String(Int($0.calories)) } ?? "" }
         changeStep(step + 1)
     }
     private func finishWithoutGoal() {

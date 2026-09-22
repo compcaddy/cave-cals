@@ -21,6 +21,15 @@ final class OnboardingUITests: XCTestCase {
     private func capture(_ name: String) {
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
     }
+    private func replace(_ id: String, with text: String) {
+        let field = app.textFields[id]
+        let old = field.value as? String ?? ""
+        // Centered numbers put a center tap inside the text; tap its trailing edge.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + text)
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        XCTAssertEqual(field.value as? String, text)
+    }
     private func basics() {
         next()
         XCTAssertFalse(app.buttons["onboardingContinue"].isEnabled)
@@ -77,5 +86,46 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertFalse(app.textFields["planCalories"].exists)
         app.buttons["onboardingBack"].tap()
         XCTAssertEqual(app.textFields["planGoalWeight"].value as? String, "40")
+    }
+    func testMaintenanceCustomTargetAndForgettingDetails() {
+        basics()
+        app.segmentedControls["planIntent"].buttons["Maintain weight"].tap(); next()
+        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2600")
+        replace("planCalories", with: "400")
+        XCTAssertFalse(app.buttons["onboardingContinue"].isEnabled)
+        XCTAssertTrue(app.staticTexts["planTargetValidation"].exists)
+        replace("planCalories", with: "2500")
+        next()
+        app.buttons["Settings"].tap()
+        app.buttons["forgetCaloriePlan"].tap()
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["forgetCaloriePlan"].exists)
+        app.buttons["forgetCaloriePlan"].tap(); app.buttons["Forget details"].tap()
+        XCTAssertFalse(app.buttons["forgetCaloriePlan"].exists)
+        XCTAssertTrue(app.buttons["caloriePlan"].label.contains("Build"))
+        XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,500")
+        XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
+    }
+    func testManualRouteBackReturnsToAboutYouAfterRevisingAnswers() {
+        basics()
+        app.buttons["onboardingBack"].tap()
+        app.buttons["onboardingBack"].tap()
+        app.buttons["onboardingBack"].tap()
+        app.buttons["gender-Prefer not to say"].tap(); next()
+        XCTAssertTrue(app.buttons["manualSetup"].exists)
+        app.buttons["onboardingBack"].tap()
+        XCTAssertTrue(app.buttons["gender-Prefer not to say"].exists)
+    }
+    func testLargestTextCanFinishWithoutAGoal() {
+        app.terminate()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        next()
+        app.buttons["gender-Male"].tap()
+        enter("planAge", "16"); next()
+        capture("04 Large text manual route")
+        XCTAssertTrue(app.buttons["skipGoal"].isHittable)
+        app.buttons["skipGoal"].tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
 }

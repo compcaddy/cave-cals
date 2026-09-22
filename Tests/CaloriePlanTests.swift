@@ -91,4 +91,21 @@ import XCTest
         XCTAssertNil(store.caloriePlan)
         XCTAssertTrue(store.tracking)
     }
+    func testForgettingPlanRemovesAnswersButPreservesWeightAndPreferences() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("weights.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = WeightStore(fileURL: url)
+        XCTAssertTrue(store.saveCaloriePlan(SavedCaloriePlan(input: input(), calorieGoal: 2050), unit: .kilograms, trackWeight: true))
+        let records = store.records
+        XCTAssertTrue(store.forgetCaloriePlan())
+        let reopened = WeightStore(fileURL: url)
+        XCTAssertNil(reopened.caloriePlan)
+        XCTAssertEqual(reopened.records, records)
+        XCTAssertEqual(reopened.unit, .kilograms)
+        XCTAssertTrue(reopened.tracking)
+        XCTAssertFalse(reopened.healthSharing)
+        let json = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(json.contains("heightCM"))
+        XCTAssertFalse(json.contains("goalKG"))
+    }
 }

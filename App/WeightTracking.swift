@@ -105,6 +105,10 @@ private struct WeightFile: Codable {
 
     func setTracking(_ enabled: Bool) { var next = data; next.tracking = enabled; _ = persist(next) }
     func setUnit(_ unit: WeightUnit) { var next = data; next.unit = unit; _ = persist(next) }
+    @discardableResult func forgetCaloriePlan() -> Bool {
+        var next = data; next.caloriePlan = nil
+        return persist(next)
+    }
 
     @discardableResult func save(kilograms: Double, date: Date, id: UUID? = nil, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard Self.valid(kilograms), date <= now else { error = "Enter a valid weight and a date no later than today."; return false }

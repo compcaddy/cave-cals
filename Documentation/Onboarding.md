@@ -49,4 +49,6 @@ Saved plan inputs, selected calorie target, and creation time are an optional fi
 
 Unfinished answers live only in view state and are discarded when the app exits. The saved plan can be revisited in You. Apple Health export retains its existing explicit opt-in. If a file write fails the user stays in setup; the app does not pretend the plan was saved. A diary write failure also leaves setup open for retry.
 
-This work is a source change, not an App Store/TestFlight submission. Prior macro CloudKit release requirements still apply. Published privacy/App Store disclosures should be checked against this on-device processing before the next release.
+You -> Forget plan details removes saved inputs and the saved plan snapshot after confirmation. It preserves the active daily goal, weigh-ins, unit, tracking preference, and Health-sharing setting. Editing the target shows a concise supported-range message if it cannot be saved. Revising users can cancel from any step, and a manual-only result returns directly to the question that led there.
+
+This work is a source change, not an App Store/TestFlight submission. Prior macro CloudKit release requirements still apply. The website privacy source now describes local plan/weight storage and optional Health exports; it still needs to be deployed alongside the release. App Store disclosures should be checked against this on-device processing before the next release.
