@@ -41,3 +41,8 @@ The owner chose to handle Vercel deployment. No new iOS archive/upload was perfo
 ### Backend production deployment follow-up
 
 The owner completed Fixie setup and requested verification. Deployment `dpl_31vm8WLrxiSxhoQYaY8WNGzuQQUH` is now READY on `https://cavecals.vercel.app` and includes the prepared scan-allowance backend alongside Fixie search support. The database migration had already been applied. A native build/distribution remains necessary for the updated app-side paywall gate; no iOS archive or upload was performed in this deployment.
+
+
+## Native release follow-up — September 21, 2026
+
+Version **1.0.3 (2)** now includes these changes in App Store Connect, with Apple processing VALID and explicit Internal Testers membership (IN_BETA_TESTING). App Store version 1.0.3 is prepared with this build but has not been submitted for review or publicly released. See [current release readiness](Release/Readiness.md) for validation and outstanding physical-device checks.

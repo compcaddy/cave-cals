@@ -1,0 +1,26 @@
+{
+  "checkedDate": "2026-09-21",
+  "version": "1.0.3",
+  "buildNumber": "2",
+  "appId": "6809208501",
+  "appStoreVersionId": "4335c968-c59e-4bca-b90d-df21c8c67c28",
+  "buildId": "4d6bad88-f68e-4bfb-9a69-4371ba5002f9",
+  "processingState": "VALID",
+  "internalBuildState": "IN_BETA_TESTING",
+  "internalGroupId": "0aa5b575-10c4-4ef9-9cc7-4a50257b7816",
+  "appStoreState": "PREPARE_FOR_SUBMISSION",
+  "releaseType": "MANUAL",
+  "usesNonExemptEncryption": false,
+  "validation": {
+    "blocking": 0,
+    "errors": 0,
+    "warnings": 2
+  },
+  "sourceCommit": "5d52b0e",
+  "tests": {
+    "iPhone": 77,
+    "iPad": 8,
+    "backend": 36
+  },
+  "remaining": "Physical-device Health sharing and purchase/restore verification before review submission."
+}

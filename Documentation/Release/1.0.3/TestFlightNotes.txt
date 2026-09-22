@@ -1,0 +1,9 @@
+New: daily weigh-ins with week/month/year charts, optional Apple Health sharing, restaurant search powered by FatSecret, and a shared introductory allowance of 10 photo/voice analyses until 100 regular food-log entries.
+
+Please check on your physical device:
+• Enable weight tracking in You; log, edit and delete a weigh-in.
+• Enable Save to Apple Health; verify the measurement, correction and deletion in Health. Also check denied permission and retry.
+• Search Urbane Cafe; tap a result to edit, or blue + to add.
+• Try Meal Scan and Voice Log, then check subscription purchase, cancel and restore on iPhone/iPad.
+
+Weight history remains on this device; optional Apple Health copies are separate. Trainerize delivery is not verified.

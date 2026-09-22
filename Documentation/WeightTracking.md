@@ -54,3 +54,8 @@ Physical-device checks still required:
 5. Test iPhone and iPad compatibility, accessibility text sizes, locale decimal entry, and midnight/time-zone changes.
 
 No release version/build changes or upload are included in this feature. The repository currently has an existing app/widget build-number mismatch; reconcile versions before an archive.
+
+
+## Native release follow-up — September 21, 2026
+
+Version **1.0.3 (2)** now includes these changes in App Store Connect, with Apple processing VALID and explicit Internal Testers membership (IN_BETA_TESTING). App Store version 1.0.3 is prepared with this build but has not been submitted for review or publicly released. See [current release readiness](Release/Readiness.md) for validation and outstanding physical-device checks.

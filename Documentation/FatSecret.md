@@ -88,3 +88,8 @@ After the owner connected Fixie and added its IP addresses to FatSecret, confirm
 Both live `Urbane Cafe` and `Urbane` searches returned HTTP 200, with eight Urbane Cafe menu items among the first 25 results. Verified examples: So-Cal Sandwich (800 kcal per sandwich), Salmon Bowl (745 kcal per bowl), Chocolate Chip Cookie (300 kcal per cookie). These are real provider responses through the production endpoint, not test fixtures. Basic-tier `cacheLifetime` remains zero. The prior IP-denial blocker is resolved.
 
 Production smoke checks: privacy 200; private development test page 404; unsigned account/status 401. Vercel build succeeded. No additional code changes or iOS release were needed for this connection activation; the simulator build already using the FatSecret endpoint can retry its search. The App Store binary still requires its separately planned native update.
+
+
+## Native release follow-up — September 21, 2026
+
+Version **1.0.3 (2)** now includes these changes in App Store Connect, with Apple processing VALID and explicit Internal Testers membership (IN_BETA_TESTING). App Store version 1.0.3 is prepared with this build but has not been submitted for review or publicly released. See [current release readiness](Release/Readiness.md) for validation and outstanding physical-device checks.
