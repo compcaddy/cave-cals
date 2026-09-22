@@ -65,6 +65,31 @@ struct CalorieProgressSegments: Equatable {
     }
 }
 
+private struct CalorieProgressBackground: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let total: Double
+    let goal: Double?
+
+    var body: some View {
+        let segments = CalorieProgressSegments(total: total, goal: goal ?? 0)
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Color.primary.opacity(0.04)
+                HStack(spacing: 0) {
+                    Color.accentColor.opacity(0.18).frame(width: geometry.size.width * segments.blue)
+                    Color.orange.opacity(0.20).frame(width: geometry.size.width * segments.orange)
+                    Color.red.opacity(0.16).frame(width: geometry.size.width * segments.red)
+                    Spacer(minLength: 0)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: segments)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
 struct MainView: View {
     @Environment(AppStore.self) private var store
     @Environment(WeightStore.self) private var weights
@@ -380,29 +405,14 @@ struct MainView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 80)
+            .background { CalorieProgressBackground(total: total, goal: goal) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
+            .accessibilityValue(goal.map { "\((max(total / $0, 0) * 100).calorieText) percent of goal" } ?? "")
             .accessibilityIdentifier("calorieSummary")
-            if let goal {
-                let segments = CalorieProgressSegments(total: total, goal: goal)
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.primary.opacity(0.08))
-                        HStack(spacing: 0) {
-                            Color.accentColor.frame(width: geometry.size.width * segments.blue)
-                            Color.orange.frame(width: geometry.size.width * segments.orange)
-                            Color.red.frame(width: geometry.size.width * segments.red)
-                            Spacer(minLength: 0)
-                        }
-                        .clipShape(Capsule())
-                    }
-                }
-                .frame(height: 9)
-                .animation(.easeInOut(duration: 0.25), value: segments)
-                .accessibilityLabel("Goal progress")
-                .accessibilityValue("\((max(total / goal, 0) * 100).calorieText) percent")
-            }
             if store.tracksMacros {
                 DailyMacrosView(summary: MacroSummary(store.dayEntries(selected).map(EntryDraft.init)), goals: store.macroGoals(selected))
             }
