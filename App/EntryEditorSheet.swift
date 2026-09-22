@@ -113,6 +113,9 @@ struct EntryEditorSheet: View {
                             .accessibilityIdentifier("pinOnQuickAdd")
                     }
                 }
+                if draft.externalID?.hasPrefix("fatsecret:") == true {
+                    Section { FatSecretAttribution() }
+                }
                 if draft.entryID != nil, onSaveComponent == nil {
                     Section {
                         Button("Delete Entry", role: .destructive) {

@@ -6,6 +6,15 @@ enum HomeListMode: String, CaseIterable {
     case meals
 }
 
+struct FatSecretAttribution: View {
+    var body: some View {
+        Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!)
+            .font(.cave(.caption2))
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("fatSecretAttribution")
+    }
+}
+
 enum MainSheet: Identifiable {
     case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, barcode(Date), meal(UUID, Date), photo, voice, calendar
     case weighIn
@@ -80,6 +89,21 @@ struct MainView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var summarySize = 32.0
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var showsFatSecretAttribution: Bool {
+        if !cleanQuery.isEmpty {
+            return !search.results.isEmpty
+                || localSearchFoods.contains { $0.draft.externalID?.hasPrefix("fatsecret:") == true }
+                || store.meals.contains {
+                    normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery))
+                        && $0.items.contains { $0.externalID?.hasPrefix("fatsecret:") == true }
+                }
+        }
+        switch listMode {
+        case .logged: return store.dayEntries(selected).contains { $0.externalID?.hasPrefix("fatsecret:") == true }
+        case .quickAdd: return suggestedFoods.contains { $0.draft.externalID?.hasPrefix("fatsecret:") == true }
+        case .meals: return store.meals.contains { $0.items.contains { $0.externalID?.hasPrefix("fatsecret:") == true } }
+        }
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -140,6 +164,9 @@ struct MainView: View {
                                 }
                             }
                         }.listSectionSeparator(.hidden)
+                    }
+                    if showsFatSecretAttribution {
+                        FatSecretAttribution().listRowSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain).scrollDismissesKeyboard(.interactively)
@@ -430,7 +457,6 @@ struct MainView: View {
                 }
             }
             if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
-            if !search.results.isEmpty { Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!).font(.cave(.caption2)).foregroundStyle(.secondary) }
         }
         }
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))

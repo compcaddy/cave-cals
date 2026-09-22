@@ -93,3 +93,12 @@ Production smoke checks: privacy 200; private development test page 404; unsigne
 ## Native release follow-up — September 21, 2026
 
 Version **1.0.3 (2)** now includes these changes in App Store Connect, with Apple processing VALID and explicit Internal Testers membership (IN_BETA_TESTING). App Store version 1.0.3 is prepared with this build but has not been submitted for review or publicly released. See [current release readiness](Release/Readiness.md) for validation and outstanding physical-device checks.
+
+
+## Premier Free attribution — September 21, 2026
+
+Checked https://platform.fatsecret.com/attribution after the owner received Premier Free access. The approved text link is sufficient; a logo is optional. The exact website snippet is already live: `<a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a>`.
+
+Added `Powered by fatsecret nutrition API (www.fatsecret.com)` to the existing App Store 1.0.3 description via App Store Connect, preserving the owner's other listing edits. The native approved link remains in You/About and now also appears on each food-content screen when FatSecret data is displayed: online/local search, Logged, Quick Add, Meals, food editing, meal editing/from-today selection, and meal portion/add. Saved records retain their `fatsecret:` identifiers, so the credit remains after logging or editing.
+
+These additional native credits are prepared in 1.0.3 (3). The previously uploaded build 2 is already WAITING_FOR_REVIEW, as observed during this change; no review submission was withdrawn or replaced. The Premier API tier setting is separate from these attribution changes.

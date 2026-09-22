@@ -1,4 +1,4 @@
-You eat. App count.
+You eat. App count. Weght Drop.
 
 Cave Cals is a simple calorie diary with a little prehistoric personality. Log what you ate, keep an eye on your daily total, and get on with your day. No account signup required.
 
@@ -26,3 +26,5 @@ Selected photos and recordings are sent to OpenAI only when you choose to analyz
 
 Privacy: https://cavecals.vercel.app/privacy
 Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
+Powered by fatsecret nutrition API (www.fatsecret.com)

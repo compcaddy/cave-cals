@@ -189,6 +189,10 @@ struct MealEditorSheet: View {
                     }
                 }
                 Section { HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal").fontWeight(.semibold) } }
+                if (route.fromToday ? store.dayEntries(Date()).map(EntryDraft.init) : items)
+                    .contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
+                    Section { FatSecretAttribution() }
+                }
             }
             .navigationTitle(route.meal == nil ? "New Meal" : "Edit Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -344,9 +348,12 @@ struct MealFoodPicker: View {
                 }
                 Section("Food search") {
                     ForEach(search.results) { food in row(food.draft) }
-                    if !search.results.isEmpty { Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!).font(.cave(.caption2)) }
                     if search.loading { ProgressView("Searching foods…") }
                     if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
+                }
+                if !search.results.isEmpty || FoodHistory.search(query, entries: store.entries)
+                    .contains(where: { $0.draft.externalID?.hasPrefix("fatsecret:") == true }) {
+                    FatSecretAttribution()
                 }
             }
             .searchable(text: $query, prompt: "Search food or enter calories")
@@ -379,6 +386,9 @@ struct MealAddSheet: View {
                         }
                     }
                     Section { HStack { Text("Total"); Spacer(); Text("\(meal.items.reduce(0) { $0 + ($1.calories * factor).rounded() }.calorieText) cal").bold() } }
+                    if meal.items.contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
+                        Section { FatSecretAttribution() }
+                    }
                 }
             }
             .navigationTitle(meal?.name ?? "Meal").navigationBarTitleDisplayMode(.inline)

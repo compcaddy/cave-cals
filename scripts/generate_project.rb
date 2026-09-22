@@ -42,7 +42,7 @@ project.targets.each do |target|
     s['GENERATE_INFOPLIST_FILE'] = 'YES'
     s['PRODUCT_BUNDLE_IDENTIFIER'] = "com.philstarkovich.cavecals#{target == app ? '' : '.' + target.name}"
     s['MARKETING_VERSION'] = '1.0.3'
-    s['CURRENT_PROJECT_VERSION'] = '2'
+    s['CURRENT_PROJECT_VERSION'] = '3'
     s['SWIFT_EMIT_LOC_STRINGS'] = 'YES'
     s['SUPPORTS_MACCATALYST'] = 'NO'
     s['SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD'] = 'NO'
