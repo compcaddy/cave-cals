@@ -154,11 +154,9 @@ struct MainView: View {
                                 Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
                                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                                         Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                                .lineLimit(1).truncationMode(.tail)
-                                            if store.tracksMacros { MacroLine(summary: MacroSummary([EntryDraft(entry)])) }
-                                        }.frame(maxWidth: .infinity, alignment: .leading)
+                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                                            .lineLimit(1).truncationMode(.tail)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(entry.totalCalories.calorieText)
                                             .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
                                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
@@ -171,7 +169,6 @@ struct MainView: View {
                                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                                 .listRowSeparator(.hidden)
                                 .accessibilityIdentifier("entry-\(entry.id)")
-                                .accessibilityValue(store.tracksMacros ? MacroSummary([EntryDraft(entry)]).accessibilityText : "")
                                 .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
                                 .contextMenu {
                                     Button {
