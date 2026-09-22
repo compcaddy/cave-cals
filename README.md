@@ -19,7 +19,7 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 
 ## Features
 
-- Optional daily-goal setup, with local persistence; no name is requested.
+- Short optional onboarding estimates an editable calorie goal from body details, activity, and preferred pace. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
 - Daily date navigation, disabled future dates, day status, and historical editing.
 - Calorie total and chronological entries; target/remaining amounts appear only when a goal is set. Goals can be enabled or removed in Settings without changing historical targets.
 - unified Logged / Quick Add screen, calorie shortcuts, barcode scanning, meal scanning and voice logging.
@@ -71,7 +71,7 @@ Source files are grouped by feature under `App/`. Tests are under `Tests/` and `
 
 Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, editable history, Week/Month/Year graphs, a dismissible daily reminder, and opt-in Apple Health export. Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 
-Macros, water, exercise, meal categories, and future meal planning remain out of scope.
+Optional protein, net-carb, and fat tracking is on by default; goals and estimates are available. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
 
 ## Widget calorie total
 

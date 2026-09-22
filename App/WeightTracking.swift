@@ -38,6 +38,7 @@ private struct WeightFile: Codable {
     var unit: WeightUnit = Locale.current.measurementSystem == .us ? .pounds : .kilograms
     var dismissedDay: String?
     var healthSharing = false
+    var caloriePlan: SavedCaloriePlan?
     var records: [WeightRecord] = []
 }
 
@@ -50,6 +51,7 @@ private struct WeightFile: Codable {
     private(set) var connecting = false
     var error: String?
     private(set) var healthMessage: String?
+    var caloriePlan: SavedCaloriePlan? { data.caloriePlan }
     var tracking: Bool { data.tracking }
     var unit: WeightUnit { data.unit }
     var healthSharing: Bool { data.healthSharing }
@@ -85,6 +87,22 @@ private struct WeightFile: Codable {
     func dismissToday(_ now: Date = Date(), calendar: Calendar = .current) {
         var next = data; next.dismissedDay = Day.key(now, calendar: calendar); _ = persist(next)
     }
+    @discardableResult func saveCaloriePlan(_ plan: SavedCaloriePlan, unit: WeightUnit, trackWeight: Bool, now: Date = Date()) -> Bool {
+        guard CaloriePlanner.estimate(plan.input) != nil,
+              plan.calorieGoal.isFinite, plan.calorieGoal >= plan.input.gender.minimumCalories, plan.calorieGoal <= 6000 else {
+            error = "Check your plan before saving."; return false
+        }
+        var next = data
+        next.caloriePlan = plan; next.unit = unit; next.tracking = trackWeight
+        if trackWeight && record(on: now) == nil {
+            next.records.append(WeightRecord(date: now, kilograms: plan.input.weightKG))
+        }
+        guard persist(next) else { return false }
+        // Existing Health authorization is respected; onboarding never requests it.
+        Task { await syncHealth() }
+        return true
+    }
+
     func setTracking(_ enabled: Bool) { var next = data; next.tracking = enabled; _ = persist(next) }
     func setUnit(_ unit: WeightUnit) { var next = data; next.unit = unit; _ = persist(next) }
 

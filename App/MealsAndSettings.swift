@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
+    @State private var planningCalories = false
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
@@ -29,6 +30,10 @@ struct SettingsView: View {
                     .accessibilityLabel("Daily calorie goal")
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
+                }
+                Section {
+                    Button(weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan") { planningCalories = true }
+                        .accessibilityIdentifier("caloriePlan")
                 }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
@@ -55,6 +60,7 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
             }
+            .fullScreenCover(isPresented: $planningCalories) { OnboardingView(isRevising: true) }
             .sheet(item: $weightEditor) { route in
                 WeightEditorSheet(record: route.record, unit: weights.unit)
             }

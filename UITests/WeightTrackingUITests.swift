@@ -5,8 +5,8 @@ final class WeightTrackingUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
-        XCTAssertTrue(app.buttons["Me Start Now"].waitForExistence(timeout: 10))
-        app.buttons["Me Start Now"].tap()
+        XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
+        app.buttons["skipGoal"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
     private func openProfile() {

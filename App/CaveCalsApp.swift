@@ -72,7 +72,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.profile == nil { SetupView() } else { MainView() }
+            if store.profile == nil { OnboardingView() } else { MainView() }
         }
         .alert("Couldn’t save changes", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
@@ -92,10 +92,12 @@ struct SetupView: View {
     @State private var goal: String
     @FocusState private var editingGoal: Bool
     let isAdjustingGoal: Bool
+    var onSaved: (() -> Void)?
     @ScaledMetric(relativeTo: .title) private var goalFontSize = 76.0
-    init(goal: Double? = 2100, isAdjustingGoal: Bool = false) {
+    init(goal: Double? = 2100, isAdjustingGoal: Bool = false, onSaved: (() -> Void)? = nil) {
         _goal = State(initialValue: goal.map(Self.formattedGoal) ?? "")
         self.isAdjustingGoal = isAdjustingGoal
+        self.onSaved = onSaved
     }
     var body: some View {
         GeometryReader { geometry in
@@ -194,7 +196,10 @@ struct SetupView: View {
     }
 
     private func saveGoal(_ value: Double?) {
-        if store.saveGoal(value), isAdjustingGoal { dismiss() }
+        if store.saveGoal(value) {
+            if isAdjustingGoal { dismiss() }
+            onSaved?()
+        }
     }
 
     private func headlineLine(_ text: String, width: CGFloat, height: CGFloat) -> some View {

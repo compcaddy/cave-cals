@@ -5,10 +5,13 @@ final class ECCUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
-        XCTAssertTrue(app.textFields["profileGoal"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["manualSetup"].waitForExistence(timeout: 10))
+        app.buttons["manualSetup"].tap()
+        XCTAssertTrue(app.textFields["profileGoal"].waitForExistence(timeout: 5))
+        app.textFields["profileGoal"].tap(); app.textFields["profileGoal"].typeText("2100")
         XCTAssertFalse(app.textFields["profileName"].exists)
-        XCTAssertTrue(app.buttons["Me Start Now"].isEnabled)
-        app.buttons["Me Start Now"].tap()
+        XCTAssertTrue(app.buttons["Save Changes"].isEnabled)
+        app.buttons["Save Changes"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
     private func closeSearchDrawer() {

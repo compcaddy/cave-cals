@@ -1,3 +1,12 @@
+# Short onboarding — September 22, 2026
+
+- Fresh branch `codex/onboarding-and-launch` starts from fully pushed `35b5286`; no earlier changes were left uncommitted.
+- Optional five-step setup plus welcome estimates an editable calorie target, with direct manual/no-goal routes. Existing profiles are not forced through it. Body details, activity, goal and pace stay in the protected local weight file; accepted calorie goals retain existing diary/iCloud behavior. See [Onboarding.md](../Onboarding.md) for primary sources and calculation limits.
+- Verification: all 93 native unit tests passed. Four onboarding UI scenarios pass on iPhone, including metric/imperial conversion and manual-only cases; the calculated-plan and minor/manual flows also pass in iPad iPhone compatibility mode. Manual-goal editing/cancel and a pending voice shortcut through setup pass. The voice shortcut test was updated from the old title to the current “Speak Food.” Visual review caught and fixed retained scrolling between steps.
+- This is source work only, not an uploaded build or App Store release. Physical Health export, CloudKit production sync and App Attest remain separate release checks. The existing LoggingActionRouter Swift 6 isolation warning remains.
+
+---
+
 # Macros implementation — September 22, 2026
 
 - Previous work was clean and synchronized with `origin/main` at `dfb7839` before creating `codex/macros-tracking`. This feature is a separate changeset.
