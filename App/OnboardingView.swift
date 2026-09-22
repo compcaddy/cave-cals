@@ -156,7 +156,7 @@ struct OnboardingView: View {
                 }
             } else { numberField("Height", text: $height, suffix: "cm", id: "planHeight") }
             numberField("Current weight", text: $weight, suffix: unit.rawValue, id: "planWeight")
-                Text("Your plan details stay on this device.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                Text("Your answers stay on this device.").font(.cave(.footnote)).foregroundStyle(.secondary)
         case 3:
             Text("Include work, walking, and exercise.").foregroundStyle(.secondary)
             ForEach(PlanActivity.allCases) { value in
@@ -255,7 +255,8 @@ struct OnboardingView: View {
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : []).accessibilityIdentifier(id)
     }
     private func paceTitle(_ kg: Double) -> String {
-        "\(unit.display(kg).formatted(.number.precision(.fractionLength(1)))) \(unit.rawValue) per week"
+        let precision = unit == .kilograms ? 2 : 1
+        return "\(unit.display(kg).formatted(.number.precision(.fractionLength(0...precision)))) \(unit.rawValue) per week"
     }
     private func changeStep(_ next: Int) {
         field = nil; error = nil

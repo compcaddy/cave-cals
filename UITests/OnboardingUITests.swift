@@ -14,13 +14,16 @@ final class OnboardingUITests: XCTestCase {
         }
     }
     private func next() { let button = app.buttons["onboardingContinue"]; reveal(button); button.tap() }
-    private func enter(_ id: String, _ text: String) {
-        let field = app.textFields[id]
+    private func revealField(_ field: XCUIElement) {
         for _ in 0..<5 {
             let button = app.buttons["onboardingContinue"]
             if field.isHittable && field.frame.maxY < button.frame.minY - 10 { break }
             app.scrollViews.firstMatch.swipeUp()
         }
+    }
+    private func enter(_ id: String, _ text: String) {
+        let field = app.textFields[id]
+        revealField(field)
         field.tap(); field.typeText(text)
         if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
     }
@@ -29,6 +32,7 @@ final class OnboardingUITests: XCTestCase {
     }
     private func replace(_ id: String, with text: String) {
         let field = app.textFields[id]
+        revealField(field)
         let old = field.value as? String ?? ""
         // Centered numbers put a center tap inside the text; tap its trailing edge.
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
@@ -48,6 +52,8 @@ final class OnboardingUITests: XCTestCase {
     func testCalculatedPlanAndWeightIntegration() {
         capture("01 Welcome")
         basics()
+        XCTAssertTrue(app.buttons["pace-0.25"].label.contains("0.25 kg per week"))
+        XCTAssertTrue(app.buttons["pace-0.75"].label.contains("0.75 kg per week"))
         enter("planGoalWeight", "80")
         app.buttons["pace-0.5"].tap(); next()
         XCTAssertTrue(app.textFields["planCalories"].waitForExistence(timeout: 5))
@@ -134,5 +140,29 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["skipGoal"].isHittable)
         app.buttons["skipGoal"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+    }
+    func testLargestTextCanCompleteCalculatedPlan() {
+        app.terminate()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        basics()
+        enter("planGoalWeight", "80")
+        let pace = app.buttons["pace-0.5"]
+        reveal(pace); pace.tap(); next()
+        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2050")
+        capture("05 Large text calculated target")
+        next()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,050 calories")
+    }
+    func testCancelRevisedPlanKeepsAcceptedDetails() {
+        basics(); enter("planGoalWeight", "80"); app.buttons["pace-0.5"].tap(); next(); next()
+        app.buttons["Settings"].tap(); app.buttons["caloriePlan"].tap(); next()
+        replace("planAge", with: "45")
+        app.buttons["Cancel"].tap()
+        XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,050")
+        XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
+        app.buttons["caloriePlan"].tap(); next()
+        XCTAssertEqual(app.textFields["planAge"].value as? String, "35")
     }
 }
