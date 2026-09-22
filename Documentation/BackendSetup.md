@@ -59,7 +59,7 @@ The current installation limit is five. Reinstallations may consume another devi
 | `APPLE_PRODUCT_IDS` | Your comma-separated subscription product IDs |
 | `APPLE_ENVIRONMENT` | `Production`; `Sandbox` only for staging/preview |
 | `CRON_SECRET` | A separately generated random secret of at least 32 characters |
-| `APP_STORE_URL` | Optional `https://apps.apple.com/...` download link once available |
+| `APP_STORE_URL` | Optional `https://apps.apple.com/...` override; the home page defaults to Cave Cals' verified public listing |
 | `AI_DAILY_LIMIT` | Optional, defaults to 30 attempts per user per UTC day |
 | `AI_MONTHLY_LIMIT` | Optional, defaults to 300 attempts per user per UTC calendar month |
 | `AI_GLOBAL_DAILY_LIMIT` | Optional, defaults to 1,000 attempts across the service per UTC day |

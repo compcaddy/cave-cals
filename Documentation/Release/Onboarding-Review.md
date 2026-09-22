@@ -16,7 +16,7 @@ Prepared September 22, 2026. This document accompanies source work; no new archi
 - Select a version/build only when preparing the release; keep app/widget versions aligned. Do not reuse or overwrite the dated 1.0.3 evidence as proof of this feature.
 - Apply and verify the earlier additive macro CloudKit schema changes, then test sync on physical devices. Onboarding itself adds no new CloudKit field.
 - Verify Health exports, corrections, and deletions on a physical device with both allowed and denied permissions. The onboarding tests do not establish Trainerize delivery.
-- Deploy the updated website privacy source with the release. It describes local plan/weight storage, forgetting details, and optional Health exports.
+- Deploy the updated website source with the release. Privacy describes local plan/weight storage, forgetting details, and optional Health exports. The home-page fix uses the verified App Store listing when `APP_STORE_URL` is missing or invalid; the public site still displayed “Coming to the App Store” when checked September 22.
 - Review current App Store privacy answers against actual off-device flows, including existing AI media, purchase validation, and operational records. Don't label the whole app “no data collected” merely because onboarding is local.
 - Use current released screenshots in advertisements. The ad concepts and store-copy drafts are not a published campaign.
 
