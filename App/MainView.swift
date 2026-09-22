@@ -491,7 +491,7 @@ struct MainView: View {
                 ForEach(suggestedFoods) { food in
                     let draft = store.applyingCommonDefault(to: food.draft)
                     let pinned = store.isPinned(food.id)
-                    FoodRow(name: draft.name, calories: draft.calories, macros: MacroSummary([draft]), suggestionLayout: true, pinned: pinned,
+                    FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: pinned,
                             add: {
                                 revealNextAddedEntry = false
                                 add(draft, source: "suggestion")

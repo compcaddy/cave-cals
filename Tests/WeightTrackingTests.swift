@@ -13,6 +13,20 @@ import XCTest
     private func file() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("weights.json")
     }
+    func testWeekPickerAlwaysStartsSundayAcrossYearAndDST() {
+        var mondayFirst = calendar
+        mondayFirst.firstWeekday = 2
+        let newYear = WeightWeek.days(containing: date(2026, 1, 1), calendar: mondayFirst)
+        XCTAssertEqual(newYear.first, date(2025, 12, 28, 0))
+        XCTAssertEqual(newYear.last, date(2026, 1, 3, 0))
+        let spring = WeightWeek.days(containing: date(2026, 3, 10), calendar: calendar)
+        XCTAssertEqual(spring.count, 7)
+        XCTAssertEqual(spring.first, date(2026, 3, 8, 0))
+        XCTAssertEqual(spring.last, date(2026, 3, 14, 0))
+        XCTAssertEqual(spring.map { calendar.component(.hour, from: $0) }, Array(repeating: 0, count: 7))
+        XCTAssertEqual(spring[1].timeIntervalSince(spring[0]), 23 * 60 * 60)
+    }
+
     func testUnitsValidationAndLocaleInput() {
         XCTAssertEqual(WeightUnit.pounds.kilograms(200), 90.718474, accuracy: 0.000001)
         XCTAssertEqual(WeightUnit.pounds.display(90.718474), 200, accuracy: 0.000001)

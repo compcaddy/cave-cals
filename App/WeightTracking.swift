@@ -220,3 +220,13 @@ struct WeightChartPoint: Identifiable {
     let kilograms: Double
     let count: Int
 }
+
+// Calendar arithmetic keeps the Sunday–Saturday picker aligned across DST and year boundaries.
+enum WeightWeek {
+    static func days(containing date: Date, calendar: Calendar = .current) -> [Date] {
+        let day = calendar.startOfDay(for: date)
+        let offset = calendar.component(.weekday, from: day) - 1
+        let sunday = calendar.date(byAdding: .day, value: -offset, to: day)!
+        return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
+    }
+}

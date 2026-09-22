@@ -73,6 +73,52 @@ final class WeightTrackingUITests: XCTestCase {
         app.navigationBars["You"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
     }
+    func testWeekPickerLoadsDaysWithoutMovingWeightsAndProtectsEdits() {
+        enableWeight()
+        app.buttons["todayWeight"].tap()
+        let amount = app.textFields["weightAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText("180.5")
+        app.buttons["saveWeight"].tap()
+        app.buttons["todayWeight"].tap()
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        let today = Calendar.current.startOfDay(for: Date())
+        func dayButton(_ date: Date) -> XCUIElement {
+            let c = Calendar.current.dateComponents([.era, .year, .month, .day], from: date)
+            return app.buttons[String(format: "weightDay-%02d-%04d-%02d-%02d", c.era!, c.year!, c.month!, c.day!)]
+        }
+        XCTAssertFalse(app.buttons["nextWeightWeek"].isEnabled)
+        for offset in 1...6 {
+            let future = Calendar.current.date(byAdding: .day, value: offset, to: today)!
+            if dayButton(future).exists { XCTAssertFalse(dayButton(future).isEnabled) }
+        }
+        app.buttons["previousWeightWeek"].tap()
+        XCTAssertTrue(["", "Weight"].contains(amount.value as? String ?? "unexpected value"))
+        XCTAssertFalse(app.buttons["deleteWeight"].exists)
+        XCTAssertTrue(app.buttons["nextWeightWeek"].isEnabled)
+        let prior = Calendar.current.date(byAdding: .day, value: -7, to: today)!
+        XCTAssertEqual(dayButton(prior).value as? String, "No weigh-in")
+        amount.tap(); amount.typeText("181.2")
+        app.buttons["nextWeightWeek"].tap()
+        XCTAssertTrue(app.buttons["Save and switch"].waitForExistence(timeout: 3))
+        app.buttons["Save and switch"].tap()
+        XCTAssertEqual(amount.value as? String, "180.5")
+        XCTAssertTrue(app.buttons["deleteWeight"].exists)
+        app.buttons["previousWeightWeek"].tap()
+        XCTAssertEqual(amount.value as? String, "181.2")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Weigh-in week picker"; attachment.lifetime = .keepAlways; add(attachment)
+        // A changed amount must stay on its own date when another day is selected.
+        amount.tap(); amount.typeText("3")
+        let neighboring = Calendar.current.date(byAdding: .day, value: Calendar.current.component(.weekday, from: prior) == 7 ? -1 : 1, to: prior)!
+        dayButton(neighboring).tap()
+        XCTAssertTrue(app.buttons["Discard changes"].waitForExistence(timeout: 3))
+        app.buttons["Discard changes"].tap()
+        XCTAssertTrue(["", "Weight"].contains(amount.value as? String ?? "unexpected value"))
+        dayButton(prior).tap()
+        XCTAssertEqual(amount.value as? String, "181.2")
+    }
+
     func testSavingFromProfileRefreshesGraphAndPeriodBrowsing() {
         enableWeight()
         app.buttons["todayWeight"].tap()

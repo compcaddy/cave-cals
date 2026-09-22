@@ -74,6 +74,8 @@ struct WeightEditorSheet: View {
     @State private var amount: String
     @State private var date: Date
     @State private var confirmingDelete = false
+    @State private var pendingDate: Date?
+    @State private var confirmingDayChange = false
     @FocusState private var focused: Bool
 
     init(record: WeightRecord? = nil, unit: WeightUnit) {
@@ -81,15 +83,20 @@ struct WeightEditorSheet: View {
         _date = State(initialValue: record?.date ?? Date())
         _amount = State(initialValue: record.map { unit.editingText($0.kilograms) } ?? "")
     }
+    private var selectedRecord: WeightRecord? { weights.record(on: date) }
+    private var hasChanges: Bool { amount != selectedRecord.map { unit.editingText($0.kilograms) } ?? "" }
     private var kilograms: Double? {
-        // Changing only the date must not round-trip a converted display value.
-        if let record, amount == unit.editingText(record.kilograms) { return record.kilograms }
+        // Preserve precision when the displayed weight has not been edited.
+        if let record = selectedRecord, amount == unit.editingText(record.kilograms) { return record.kilograms }
         return WeightUnit.parse(amount).map { unit.kilograms($0) }
     }
     private var valid: Bool { kilograms.map(WeightStore.valid) == true && date <= Date() }
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    WeightWeekPicker(date: date, unit: unit, select: selectDay)
+                }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
                 Section {
                     HStack(alignment: .firstTextBaseline) {
                         TextField("Weight", text: $amount)
@@ -98,31 +105,24 @@ struct WeightEditorSheet: View {
                             .accessibilityLabel("Weight in \(unit == .pounds ? "pounds" : "kilograms")")
                         Text(unit.rawValue).foregroundStyle(.secondary)
                     }.padding(.vertical, 8)
-                    DatePicker("Date", selection: $date, in: ...Date(), displayedComponents: .date)
-                        .accessibilityIdentifier("weightDate")
-                } footer: {
-                    if record == nil, let existing = weights.record(on: date) {
-                        Text("Saving updates this day’s existing weigh-in of \(unit.text(existing.kilograms)).")
-                    } else {
-                        Text("One weigh-in per day. You can correct it or add a missed day at any time.")
-                    }
+                } header: {
+                    Text(date, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                 }
                 if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
-                if record != nil {
+                if selectedRecord != nil {
                     Section {
                         Button("Delete weigh-in", role: .destructive) { confirmingDelete = true }
                             .accessibilityIdentifier("deleteWeight")
                     }
                 }
             }
-            .navigationTitle(record == nil ? "Weigh-in" : "Edit weigh-in")
+            .navigationTitle("Weigh-in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        guard let kilograms else { return }
-                        if weights.save(kilograms: kilograms, date: date, id: record?.id) { dismiss() }
+                        if saveSelectedDay() { dismiss() }
                     } label: { Label("Save", systemImage: "checkmark").foregroundStyle(.white) }
                     .buttonStyle(.borderedProminent).tint(.blue).disabled(!valid)
                     .accessibilityIdentifier("saveWeight")
@@ -131,10 +131,21 @@ struct WeightEditorSheet: View {
             }
             .confirmationDialog("Delete this weigh-in?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete weigh-in", role: .destructive) {
-                    if let record, weights.delete(record.id) { dismiss() }
+                    if let record = selectedRecord, weights.delete(record.id) { dismiss() }
                 }
             } message: {
                 Text(weights.healthSharing ? "It will also be removed from Apple Health when sharing completes." : "If previously shared, its Apple Health copy will be removed when you resume sharing.")
+            }
+            .confirmationDialog("Save changes?", isPresented: $confirmingDayChange, titleVisibility: .visible) {
+                Button("Save and switch") {
+                    if saveSelectedDay(), let pendingDate { loadDay(pendingDate) }
+                    pendingDate = nil
+                }.disabled(!valid)
+                Button("Discard changes", role: .destructive) {
+                    if let pendingDate { loadDay(pendingDate) }
+                    pendingDate = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDate = nil }
             }
             .task {
                 guard record == nil else { return }
@@ -143,6 +154,83 @@ struct WeightEditorSheet: View {
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
     }
+    private func saveSelectedDay() -> Bool {
+        guard valid, let kilograms else { return false }
+        // Week navigation edits the selected day; it never moves the original record.
+        return weights.save(kilograms: kilograms, date: selectedRecord?.date ?? date, id: selectedRecord?.id)
+    }
+    private func selectDay(_ day: Date) {
+        guard day <= Date(), !Calendar.current.isDate(day, inSameDayAs: date) else { return }
+        focused = false
+        if hasChanges {
+            pendingDate = day
+            confirmingDayChange = true
+        } else { loadDay(day) }
+    }
+    private func loadDay(_ day: Date) {
+        date = day
+        amount = weights.record(on: day).map { unit.editingText($0.kilograms) } ?? ""
+    }
+}
+
+private struct WeightWeekPicker: View {
+    @Environment(WeightStore.self) private var weights
+    let date: Date
+    let unit: WeightUnit
+    let select: (Date) -> Void
+    private var days: [Date] { WeightWeek.days(containing: date) }
+    private var today: Date { Calendar.current.startOfDay(for: Date()) }
+    private var nextWeek: Date { Calendar.current.date(byAdding: .day, value: 7, to: days[0])! }
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button { move(-1) } label: { CaveIcon(.chevronLeft, size: 18).frame(width: 44, height: 44) }
+                    .accessibilityLabel("Previous week").accessibilityIdentifier("previousWeightWeek")
+                Spacer(minLength: 0)
+                Text(days[0].formatted(.dateTime.month(.abbreviated).day()) + " – " + days[6].formatted(.dateTime.month(.abbreviated).day().year()))
+                    .font(.cave(.subheadline)).multilineTextAlignment(.center)
+                Spacer(minLength: 0)
+                Button { move(1) } label: { CaveIcon(.chevronRight, size: 18).frame(width: 44, height: 44) }
+                    .disabled(nextWeek > today)
+                    .accessibilityLabel("Next week").accessibilityIdentifier("nextWeightWeek")
+            }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+            ViewThatFits(in: .horizontal) {
+                dayButtons
+                ScrollView(.horizontal) { dayButtons }.scrollIndicators(.hidden)
+            }
+        }
+    }
+    private var dayButtons: some View {
+        HStack(spacing: 4) {
+            ForEach(days, id: \.self) { day in
+                let selected = Calendar.current.isDate(day, inSameDayAs: date)
+                let record = weights.record(on: day)
+                Button { select(day) } label: {
+                    VStack(spacing: 5) {
+                        Text(day, format: .dateTime.weekday(.abbreviated)).font(.cave(.caption))
+                        Text(day, format: .dateTime.day()).font(.cave(.body))
+                        Text(record.map { unit.display($0.kilograms).formatted(.number.grouping(.never).precision(.fractionLength(1))) } ?? "--")
+                            .font(.cave(.caption)).lineLimit(1).minimumScaleFactor(0.75)
+                    }
+                    .frame(minWidth: 44, maxWidth: .infinity).padding(.vertical, 10)
+                    .foregroundStyle(day > today ? Color.secondary.opacity(0.45) : Color.primary)
+                    .background(selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+                    .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5) }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(day > today)
+                .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
+                .accessibilityValue(record.map { unit.text($0.kilograms) } ?? "No weigh-in")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("weightDay-\(Day.key(day))")
+            }
+        }
+    }
+    private func move(_ direction: Int) {
+        let target = Calendar.current.date(byAdding: .day, value: direction * 7, to: date)!
+        select(min(target, today))
+    }
+
 }
 
 struct WeightHistoryView: View {
