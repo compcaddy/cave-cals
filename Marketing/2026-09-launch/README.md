@@ -14,6 +14,7 @@ Start with the [PDF review](../../output/pdf/cave-cals-onboarding-and-launch-rev
 | [Food simple, cavewoman](assets/food-simple-cavewoman.png) | 1122 × 1402, approximately 4:5 | Alternate character with the same message | Calories and optional macros with less fuss |
 | [Say it. Log it.](assets/say-it-log-it.png) | 1122 × 1402, approximately 4:5 | Feed concept / voice demo companion | Speak, review, log |
 | [Small steps](assets/small-steps.png) | 1122 × 1402, approximately 4:5 | Feed concept / routine | Consistency and optional weigh-ins |
+| [Same breakfast](assets/same-breakfast.png) | 1122 × 1402, approximately 4:5 | Quick Add concept / breakfast demo companion | Familiar foods with less typing |
 | [Voice Story](assets/say-it-log-it-story.png) | 941 × 1672, approximately 9:16 | Story/Reels still or end card | Voice logging, with extra space for placement controls |
 
 Preview each file with the actual placement's overlays before publishing. The generated dimensions are not exact platform export presets. Do not stretch the artwork, use the archived Apple-branded draft, or imply that an illustrated phone is a real app screenshot. Existing app icon and launch art are unchanged.
@@ -30,7 +31,7 @@ Preview each file with the actual placement's overlays before publishing. The ge
 - [Image prompts](Image-prompts.md): exact generation and revision instructions.
 - [Release walkthrough](../../Documentation/Release/Onboarding-Review.md): owner review and remaining physical-device/release checks.
 
-Store-copy field lengths: subtitle 29 characters; promotional text 149; description 2,754; What's New 295. Recheck after edits. No campaign links or attribution tokens have been fabricated.
+Store-copy field lengths: subtitle 29 characters; keywords 89 ASCII bytes; promotional text 149; description 2,754; What's New 295. Recheck after edits. No campaign links or attribution tokens have been fabricated.
 
 ## Recorded walkthrough
 

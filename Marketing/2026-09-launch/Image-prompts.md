@@ -2,6 +2,12 @@
 
 Generated with the built-in image-generation tool on September 22, 2026. Existing app artwork is untouched. Final selected files live in assets/. The first food-simple draft is kept in archive/ for provenance; use assets/food-simple.png.
 
+## Quick Add: same-breakfast.png
+
+Built-in image generation. Selected output: `exec-5ed4f70a-40df-4e84-9dd5-25f36d308a3c.png`. A more detailed illustrated direction, with exact message and unbranded phone checked visually.
+
+Use case: ads-marketing. Make a polished portrait 4:5 campaign illustration for Cave Cals, a simple iPhone calorie tracker. Warm cream paper, loose confident black hand-drawn ink, bright app-blue accents, restrained ochre details, large playful handwritten lettering. Friendly adult caveman with short scruffy hair and a modest animal-hide tunic seated at a simple breakfast table, happily tapping a plain unbranded phone; eggs and toast on a ceramic plate. Show only the phone back/edge, no fabricated app UI. One small hand-drawn repeating-arrow motif beside the breakfast communicates a familiar routine. Use generous breathing room and a clean legible poster composition. Exact headline: 'Same breakfast.' followed by 'Less typing.' Exact support line: 'Your usual foods. Ready to log.' Exact brand: 'Cave Cals'. Exact plain blue CTA: 'Make tracking simple'. Emphasize ease of logging familiar foods, not automatic logging or AI recognition. No Apple logos, App Store badges, testimonials, calorie numbers, weight-loss promises, before/after bodies, or extra copy. The illustration is a campaign concept and must not resemble a replacement app icon.
+
 ## Story adaptation (first draft)
 
 The selected 9:16 file is assets/say-it-log-it-story.png, after the additional revision below. Preview the real placement overlays before publishing.

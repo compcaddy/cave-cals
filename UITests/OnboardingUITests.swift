@@ -165,4 +165,15 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["caloriePlan"].tap(); next()
         XCTAssertEqual(app.textFields["planAge"].value as? String, "35")
     }
+    func testOversizedHeightCanBeCorrectedAfterChangingUnits() {
+        next(); app.buttons["gender-Female"].tap(); enter("planAge", "30"); next()
+        app.segmentedControls["planUnits"].buttons["kg / cm"].tap()
+        enter("planHeight", "999999999999999999999")
+        enter("planWeight", "65")
+        app.segmentedControls["planUnits"].buttons["lb / ft"].tap()
+        XCTAssertTrue(app.staticTexts["Enter your height again."].exists)
+        XCTAssertFalse(app.buttons["onboardingContinue"].isEnabled)
+        enter("planHeight", "5"); enter("planInches", "6"); next()
+        XCTAssertTrue(app.buttons["activity-Lightly active"].exists)
+    }
 }

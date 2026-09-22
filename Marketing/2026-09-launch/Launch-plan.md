@@ -14,6 +14,10 @@ Use **Cave Cals** consistently (the App Store/app brand), not “CaveCal.” Kee
 
 ## Where I would start
 
+An additional opportunity worth checking before paid acquisition: your developer page also lists [Easiest Calorie Counter](https://apps.apple.com/us/app/easiest-calorie-counter/id6736656318), a closely related app. If you still maintain it and it has active users, a quiet optional “More from this developer” link could reach people who already value simple logging. Its public listing does not establish active audience size, so check your own analytics before prioritizing this. Do not interrupt logging, move their data, imply that Cave Cals is a required upgrade, or reuse that app's reviews as Cave Cals testimonials. No other app has been changed.
+
+Possible future card copy: **“Meet Cave Cals”** / “Another simple way to log food, with optional photo and voice estimates.” / **“View on the App Store”**. Use the verified Cave Cals URL; any implementation in the other app is a separate task.
+
 | Priority | Channel | Concrete next move | Why this fits | Initial spending |
 | --- | --- | --- | --- | --- |
 | 1 | Owned short video | Record three 15–25 second demos: repeat breakfast, say a meal, restaurant search | Shows the product doing something real; can reuse in multiple placements | $0 media; founder time |
@@ -63,6 +67,7 @@ Apple also supports product-page optimization and custom pages. Start with a sin
 1. **Food simple. Tracking simple.** Brand introduction. Use the caveman as a memorable guide, paired with a real product demo or listing screenshot.
 2. **Say it. Log it.** Voice logging. The copy explicitly calls the output an estimate and asks users to review it.
 3. **Small steps. Still count.** Consistent logging and weigh-ins, without a transformation promise.
+4. **Same breakfast. Less typing.** Quick Add and familiar foods; pair with the real repeat-breakfast demonstration.
 
 Draft images are concepts, not evidence of performance or approved platform ads. Use the original app artwork untouched. Any depicted phone is illustrative; detailed product UI should come from a real released build. The selected files in assets/ use plain text CTAs and unbranded phones. An earlier draft with hand-drawn Apple branding is in archive/ for provenance; do not publish it or treat it as an official badge.
 

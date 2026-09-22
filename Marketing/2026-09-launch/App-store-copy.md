@@ -6,6 +6,12 @@ Draft for owner review, September 22, 2026. Nothing in this file has been submit
 
 Simple food & calorie tracker
 
+## Keywords
+
+counter,diary,meal,macros,weight,protein,carbs,fat,nutrition,barcode,voice,photo,goal,log
+
+This is a relevance-based draft for the upcoming build, not a claim of measured search volume. It avoids repeating the current app name and proposed subtitle. All terms describe shipped or release-bound features; no competitor names or outcome claims are included. Recheck against the final name/subtitle before entry. Apple's search guide calls for comma-separated terms without spaces after commas; the App Store Connect reference caps the field at 100 bytes. This ASCII draft satisfies both character and byte limits. [Search guidance](https://developer.apple.com/app-store/search/), [field reference](https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information)
+
 ## Promotional text
 
 Start with a calorie target that fits your routine. Log familiar foods fast, review photo or voice estimates, and keep macros and weigh-ins optional.

@@ -192,7 +192,7 @@ struct OnboardingView: View {
                 DisclosureGroup("How we worked it out") {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Estimated maintenance: \(estimate.maintenance.calorieText) calories. We use your age, height, weight, activity, and the Mifflin–St Jeor equation, then allow a modest deficit for weight loss. Your goal weight sets the direction, not a deadline.")
-                        Text("Automatic targets stay above \(Int(gender?.minimumCalories ?? 1500)) calories and limit the deficit to 25% or 750 calories, whichever is smaller. These limits don’t guarantee a suitable diet for everyone.")
+                        Text("Automatic targets use at least \(Int(gender?.minimumCalories ?? 1500)) calories and limit the deficit to 25% or 750 calories, whichever is smaller. These limits don’t guarantee a suitable diet for everyone.")
                         Link("Calorie equation research", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/2305711/")!)
                         Link("NIH weight-planning guidance", destination: URL(string: "https://www.niddk.nih.gov/bwp")!)
                         Link("CDC: gradual weight loss", destination: URL(string: "https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html")!)
@@ -299,8 +299,10 @@ struct OnboardingView: View {
     private func setHeight(_ cm: Double, unit: WeightUnit) {
         if unit == .kilograms { height = cm.formatted(.number.grouping(.never).precision(.fractionLength(0...1))); inches = "" }
         else {
-            let total = (cm / 2.54).rounded()
-            height = String(Int(total) / 12); inches = String(Int(total) % 12)
+            guard let total = Int(exactly: (cm / 2.54).rounded()), total >= 0 else {
+                height = ""; inches = ""; error = "Enter your height again."; return
+            }
+            height = String(total / 12); inches = String(total % 12)
         }
     }
     private func convertUnits(from old: WeightUnit, to new: WeightUnit) {

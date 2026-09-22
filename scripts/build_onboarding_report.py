@@ -52,7 +52,7 @@ y=625
 for title,body in [
  ('Built','A short optional onboarding flow estimates an editable daily calorie target. Existing users can build or update a plan from You.'),
  ('Kept simple','Five setup steps plus welcome. Manual and no-goal routes stay visible. No signup, paywall, or permission requests during setup.'),
- ('Prepared','A 30-day launch proposal, four video scripts, App Store and community drafts, three ad concepts with two variants, a recorded walkthrough, and a volunteer feedback guide.'),
+ ('Prepared','A 30-day launch proposal, four video scripts, App Store and community drafts, four ad concepts with two variants, a recorded walkthrough, and a volunteer feedback guide.'),
  ('Pushed','Branch: codex/onboarding-and-launch. Baseline 35b5286 was pushed first. Core onboarding: 70cfa47. Draft PR #1 isolates the new work from earlier macro changes.')]:
     y=heading(title,y);y=text(body,48,y)-28
 c.setFillColor(HexColor('#E5F2FF'));c.roundRect(48,128,516,116,16,fill=1,stroke=0)
@@ -87,7 +87,7 @@ base(4,'What was checked','Focused checks plus the existing native unit suite.')
 y=635
 for h,b in [
  ('94 native unit tests passed','Includes nine calorie-plan tests: equation, floors/caps, unsupported inputs, maintenance, pace limiting, persistence, opt-out, legacy loading and forgetting details.'),
- ('Nine onboarding UI scenarios passed','Calculated target and weigh-in; manual/skip; minor/manual; units and unsafe goal; edited maintenance target and forgetting; back navigation; canceling revisions; both largest-text routes. Passed across focused runs.'),
+ ('Ten onboarding UI scenarios passed','Calculated target and weigh-in; manual/skip; minor/manual; units and unsafe goal; edited maintenance target and forgetting; back navigation; canceling revisions; both largest-text routes; oversized-height recovery. Passed across focused runs.'),
  ('Small screens and older iOS passed','iPhone SE: calculated plan and largest text on iOS 26; calculated plan and minor/manual route on iOS 17.2. Visual review found and fixed large footer controls obscuring questions.'),
  ('iPad and existing behavior passed','Calculated and minor/manual flows pass in iPad compatibility mode. Existing manual-goal editing/cancel, skip-goal, and pending voice shortcut checks also pass.'),
  ('Visual and website checks','Screenshots and walkthrough reviewed; metric pace labels corrected. Website build and TypeScript pass. The missing download-button fallback is fixed and checked locally. Website/privacy changes remain undeployed.'),
@@ -112,12 +112,13 @@ for num,file,title,note in [
  (7,'say-it-log-it.png','Say it. Log it.','Voice-logging angle. The copy calls the output an estimate and invites review. Do not imply unlimited free AI.'),
  (8,'small-steps.png','Small steps. Still count.','Routine and weigh-in angle. No promised transformation, target weight, deadline, or before/after imagery.'),
  (9,'say-it-log-it-story.png','A vertical voice concept','Story/Reels variant with extra space for placement controls. Preview actual overlays before publishing; 941 x 1672 is not an exact platform export preset.'),
- (10,'food-simple-cavewoman.png','Same message. Another character.','An alternate character edition of Food simple. Tracking simple. Keep message and placement consistent if comparing responses; performance has not been tested.')]:
+ (10,'food-simple-cavewoman.png','Same message. Another character.','An alternate character edition of Food simple. Tracking simple. Keep message and placement consistent if comparing responses; performance has not been tested.'),
+ (11,'same-breakfast.png','Same breakfast. Less typing.','Quick Add concept with a more detailed illustration. Pair it with the actual repeat-breakfast demo; familiar-food suggestions depend on logging history.')]:
     base(num,title,'AI-generated campaign concept; existing app artwork was not replaced.')
     image(ASSETS/'assets'/file,112,130,388,505)
     text(note,48,109,sty=small);c.showPage()
 
-base(11,'Review map and sources','Detailed notes, prompts and scripts accompany the app source.')
+base(12,'Review map and sources','Detailed notes, prompts and scripts accompany the app source.')
 y=632
 for name,desc in [
  ('Documentation/Onboarding.md','Flow, algorithm choices, scope, persistence and primary sources.'),
