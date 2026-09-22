@@ -126,9 +126,36 @@ import WidgetKit
         let storedValue = sorted.first(where: { $0.day <= key })?.calorieGoal ?? sorted.last?.calorieGoal ?? profile?.currentDailyGoal ?? 0
         return storedValue > 0 ? storedValue : nil
     }
+    var tracksMacros: Bool { profile?.tracksMacros ?? true }
+    var macroGoals: MacroNutrients { MacroNutrients.decode(profile?.macroGoalsData) ?? MacroNutrients() }
+    func macroGoals(_ date: Date) -> MacroNutrients {
+        let key = Day.key(date)
+        let sorted = goals.sorted { $0.day == $1.day ? $0.updatedAt > $1.updatedAt : $0.day > $1.day }
+        // An older record without macros intentionally has no macro goals.
+        if let record = sorted.first(where: { $0.day <= key }) ?? sorted.last {
+            return MacroNutrients.decode(record.macroGoalsData) ?? MacroNutrients()
+        }
+        return macroGoals
+    }
+    @discardableResult func setTracksMacros(_ enabled: Bool) -> Bool {
+        guard let profile else { return false }
+        profile.tracksMacros = enabled; profile.updatedAt = Date()
+        return commit()
+    }
+    @discardableResult func saveMacroGoals(_ values: MacroNutrients) -> Bool {
+        guard values.isValidGoal, let profile else { return false }
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) { retainGoal(yesterday) }
+        retainGoal(Date())
+        profile.macroGoalsData = values.encoded; profile.updatedAt = Date()
+        if let record = goals.filter({ $0.day == Day.key(Date()) }).max(by: { $0.updatedAt < $1.updatedAt }) {
+            record.macroGoalsData = values.encoded; record.updatedAt = Date()
+        }
+        return commit()
+    }
     func retainGoal(_ date: Date) {
         guard !goals.contains(where: { $0.day == Day.key(date) }) else { return }
         let record = DailyGoal(day: Day.key(date), goal: goal(date) ?? 0)
+        record.macroGoalsData = macroGoals(date).encoded
         context.insert(record); goals.append(record)
     }
     @discardableResult func saveGoal(_ value: Double?) -> Bool {
@@ -141,7 +168,11 @@ import WidgetKit
         let today = Day.key(Date())
         if let record = goals.filter({ $0.day == today }).max(by: { $0.updatedAt < $1.updatedAt }) {
             record.calorieGoal = storedValue; record.updatedAt = Date()
-        } else { context.insert(DailyGoal(day: today, goal: storedValue)) }
+        } else {
+            let record = DailyGoal(day: today, goal: storedValue)
+            record.macroGoalsData = macroGoals.encoded
+            context.insert(record)
+        }
         return commit()
     }
     func cacheBarcode(_ draft: EntryDraft) {

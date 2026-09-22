@@ -25,6 +25,7 @@ struct AIFoodEstimate: Codable, Identifiable {
     var servingSize: String?
     var servings: Double?
     var confidence: String
+    var macros: MacroNutrients?
 }
 struct AIResult: Codable {
     var items: [AIFoodEstimate]
@@ -46,6 +47,7 @@ struct AIResult: Codable {
             draft.servingDescription = structuredCount == nil ? item.portion : size!
             draft.servings = count
             draft.perServing = (item.calories / count).rounded()
+            draft.macrosPerServing = item.macros?.markedEstimated().scaled(1 / count)
             return draft
         }
     }
@@ -154,6 +156,14 @@ actor AIBackend {
             await onUpload(uploadId)
         }
         return try await signed("food/analyze",fields:["uploadId":uploadId,"regularLogCount":regularLogCount])
+    }
+    func estimateMacros(for draft: EntryDraft) async throws -> MacroNutrients {
+        let result: MacroNutrients = try await signed("food/macros", fields: [
+            "name": draft.name, "calories": draft.calories,
+            "servingSize": draft.servingDescription, "servings": draft.servings
+        ])
+        guard result.isValid else { throw AIServiceError(code: "invalid_estimate", message: "Couldn’t estimate macros. Try a clearer food name.") }
+        return result.markedEstimated()
     }
     func importMeal(from url: URL) async throws -> AIMealImportResult {
         try await signed("meal/import", fields: ["url": url.absoluteString])

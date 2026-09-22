@@ -4,6 +4,8 @@ import SwiftData
 @Model final class UserProfile {
     var id: UUID = UUID()
     var name: String = "" // Retained for compatibility with existing stores; no longer collected.
+    var tracksMacros: Bool = true
+    var macroGoalsData: Data?
     // Zero represents no goal, preserving the existing local/CloudKit schema.
     var currentDailyGoal: Double = 2100
     var createdAt: Date = Date()
@@ -15,6 +17,7 @@ import SwiftData
 @Model final class DailyGoal {
     var id: UUID = UUID()
     var day: String = ""
+    var macroGoalsData: Data?
     var calorieGoal: Double = 2100 // Zero preserves a historical day without a goal.
     var updatedAt: Date = Date()
     init(day: String, goal: Double) { self.day = day; calorieGoal = goal }
@@ -26,6 +29,7 @@ import SwiftData
     var totalCalories: Double = 0
     var timestamp: Date = Date()
     var servings: Double = 1
+    var macrosPerServingData: Data?
     var caloriesPerServing: Double = 0
     var servingDescription: String = ""
     var sourceType: String = "manual"
@@ -39,6 +43,7 @@ import SwiftData
     func apply(_ draft: EntryDraft) {
         name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         totalCalories = draft.calories.rounded(); timestamp = draft.timestamp
+        macrosPerServingData = draft.macrosPerServing?.encoded
         servings = draft.servings; caloriesPerServing = draft.perServing.rounded()
         servingDescription = draft.servingDescription; externalID = draft.externalID
         barcode = draft.barcode; sourceType = draft.source
@@ -79,6 +84,8 @@ struct EntryDraft: Identifiable, Codable, Equatable {
     var calories: Double = 0
     var timestamp = Date()
     var servings: Double = 1
+    var macrosPerServing: MacroNutrients?
+    var totalMacros: MacroNutrients? { macrosPerServing?.scaled(servings) }
     var perServing: Double = 0
     var servingDescription = ""
     var externalID: String?
@@ -96,11 +103,13 @@ struct EntryDraft: Identifiable, Codable, Equatable {
         entryID = entry.id; name = entry.name; calories = entry.totalCalories.rounded()
         timestamp = entry.timestamp; servings = entry.servings; perServing = entry.caloriesPerServing.rounded()
         servingDescription = entry.servingDescription; externalID = entry.externalID; barcode = entry.barcode
+        macrosPerServing = MacroNutrients.decode(entry.macrosPerServingData)
         source = entry.sourceType; mealID = entry.mealTemplateID; order = entry.componentOrder
     }
     var isValid: Bool {
         calories.isFinite && calories >= 0 && calories <= 100_000 && servings.isFinite && servings > 0
         && perServing.isFinite && perServing >= 0 && timestamp <= Date()
+        && (macrosPerServing?.isValid ?? true) && (totalMacros?.isValid ?? true)
     }
     mutating func changeCalories(_ value: Double) {
         calories = value.rounded()

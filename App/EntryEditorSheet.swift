@@ -106,6 +106,7 @@ struct EntryEditorSheet: View {
                         }
                     }.editorRowInsets()
                 }
+                if store.tracksMacros { MacroEditorSection(draft: $draft) }
                 if pinFoodID != nil, onSaveComponent == nil {
                     Section {
                         Toggle("Pin on Quick Add", isOn: $pinOnQuickAdd)

@@ -9,6 +9,7 @@ export const foodSearchInput = z.object({
 }).strict();
 export interface FoodResult {
   id: string; name: string; brand?: string; calories: number; servingDescription: string;
+  macros?: { protein?: number; netCarbs?: number; fat?: number };
 }
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' && !Array.isArray(value) ? value as ObjectValue : {};
@@ -30,6 +31,12 @@ export function normalizeFoods(payload: unknown, premier: boolean): FoodResult[]
     const food = object(value), id = numericID(food.food_id), name = string(food.food_name);
     if (!id || !name || seen.has(id)) continue;
     let calories: number, servingDescription: string;
+    let macros: FoodResult['macros'];
+    const nutrient = (value: unknown): number | undefined => {
+      if (typeof value !== 'string' || !value.trim()) return undefined;
+      const number = Number(value);
+      return validCalories(number) ? number : undefined;
+    };
     if (premier) {
       const servings = list(object(food.servings).serving).map(object).filter(s =>
         string(s.serving_description) && typeof s.calories === 'string' && s.calories.trim() !== '' && validCalories(Number(s.calories)));
@@ -37,15 +44,22 @@ export function normalizeFoods(payload: unknown, premier: boolean): FoodResult[]
       const serving = servings.find(s => s.is_default === '1') ?? servings.find(s => s.serving_id !== '0') ?? servings[0];
       if (!serving) continue;
       calories = Number(serving.calories); servingDescription = string(serving.serving_description);
+      const carbs = nutrient(serving.carbohydrate), fiber = nutrient(serving.fiber);
+      macros = { protein: nutrient(serving.protein), fat: nutrient(serving.fat),
+        // Unknown fiber must not silently become zero. US total carbs include fiber.
+        netCarbs: carbs !== undefined && fiber !== undefined ? (fiber <= carbs ? carbs - fiber : undefined) : carbs === 0 ? 0 : undefined };
     } else {
       // Basic returns nutrition for exactly the portion named in this description. Never assume a whole package.
       const match = /^Per\s+(.+?)\s+-\s+Calories:\s*([\d,]+(?:\.\d+)?)\s*kcal(?:\s*\||\s*$)/i.exec(string(food.food_description));
       if (!match) continue;
       servingDescription = match[1].trim(); calories = Number(match[2].replaceAll(',', ''));
+      const description = string(food.food_description);
+      const amount = (label: string) => nutrient(new RegExp(`(?:^|\\|)\\s*${label}:\\s*([0-9]+(?:\\.[0-9]+)?)g(?:\\s*\\||$)`, 'i').exec(description)?.[1]);
+      macros = { protein: amount('Protein'), fat: amount('Fat'), netCarbs: amount('Carbs') === 0 ? 0 : undefined };
     }
     if (!servingDescription || !validCalories(calories)) continue;
     seen.add(id);
-    foods.push({ id: `fatsecret:${id}`, name, brand: string(food.brand_name) || undefined, calories, servingDescription });
+    foods.push({ id: `fatsecret:${id}`, name, brand: string(food.brand_name) || undefined, calories, servingDescription, macros });
   }
   // A malformed provider response must not masquerade as a valid empty search.
   if (Number(container.total_results) > 0 && foods.length === 0) throw unavailable();

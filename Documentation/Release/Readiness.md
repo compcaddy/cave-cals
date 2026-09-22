@@ -1,3 +1,14 @@
+# Macros implementation — September 22, 2026
+
+- Previous work was clean and synchronized with `origin/main` at `dfb7839` before creating `codex/macros-tracking`. This feature is a separate changeset.
+- Optional macro tracking defaults on. Protein, net carbs, and fat flow through daily totals, food editors, logged/search/Quick Add rows, barcode results, photo/voice review, website imports, saved meals and serving multipliers. Optional daily gram goals live in You. Unknown values stay unknown; partial totals and AI estimates are marked. Old history is not backfilled.
+- Added authenticated free `food/macros` estimates with a 10/day account cap and existing AI budgets. They preserve populated fields and do not spend the shared photo/voice allowance. Updated privacy text and provider mappings. See [Macros.md](../Macros.md).
+- Verification: 84 native unit tests pass, including real on-disk upgrade from the pre-macro SwiftData schema; macro add/edit/goals/disable/re-enable UI passes on iPhone and iPad compatibility mode. Search title-edit/plus-add/Undo and unified search restoration also pass. Backend production build passes, with 28 unit and 13 isolated development-database integration tests passing. The integration route test verifies free macro access, rate limits, and unchanged scan counters. A pre-existing LoggingActionRouter actor-isolation warning remains.
+- Live FatSecret Premier access through Fixie was verified: Urbane Cafe returned 25 results; Crunchy Peanut Salad returned 560 calories, 37 g protein, 38 g net carbs and 25 g fat for one salad. Production `FATSECRET_API_TIER=premier` is configured for the next deployment.
+- This is not an App Store/TestFlight upload. App/widget versions remain 1.0.3 (3). Before releasing the native feature, deploy the additive CloudKit fields described in Macros.md and verify physical-device sync. Physical camera/microphone, App Attest and purchase behavior are not proven by simulator tests.
+
+---
+
 # Attribution update — September 21, 2026
 
 - Owner received FatSecret Premier Free access. Added the required `Powered by fatsecret nutrition API (www.fatsecret.com)` to App Store 1.0.3’s description and verified it by reading the saved localization. Preserved the owner’s other listing edits. The live website already contains the exact approved attribution link.

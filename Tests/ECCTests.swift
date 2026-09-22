@@ -633,3 +633,236 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
 }
+
+@MainActor final class MacroTests: XCTestCase {
+    private func food() -> EntryDraft {
+        var draft = EntryDraft(name: "Egg", calories: 70)
+        draft.macrosPerServing = MacroNutrients(protein: 6.25, netCarbs: 0, fat: 5)
+        return draft
+    }
+    func testUpgradeFromCalorieOnlyStorePreservesHistoryAndDefaults() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("Upgrade.store")
+        let oldSchema = Schema([BeforeMacros.UserProfile.self, BeforeMacros.DailyGoal.self, BeforeMacros.CalorieEntry.self, BeforeMacros.SavedMeal.self, BeforeMacros.BarcodeFood.self])
+        try autoreleasepool {
+            let config = ModelConfiguration("Upgrade", schema: oldSchema, url: url, cloudKitDatabase: .none)
+            let container = try ModelContainer(for: oldSchema, configurations: [config])
+            let context = ModelContext(container)
+            let draft = EntryDraft(name: "Before macros", calories: 325)
+            context.insert(BeforeMacros.UserProfile(goal: 1800))
+            context.insert(BeforeMacros.CalorieEntry(draft: draft))
+            context.insert(BeforeMacros.SavedMeal(name: "Existing meal", items: [draft]))
+            context.insert(BeforeMacros.BarcodeFood(barcode: "123", draft: draft))
+            context.insert(BeforeMacros.DailyGoal(day: Day.key(Date()), goal: 1800))
+            try context.save()
+        }
+        let config = ModelConfiguration("Upgrade", schema: Persistence.schema, url: url, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: Persistence.schema, configurations: [config])
+        let store = AppStore(container: container)
+        XCTAssertEqual(store.entries.count, 1)
+        XCTAssertEqual(store.total(Date()), 325)
+        XCTAssertEqual(store.goal(Date()), 1800)
+        XCTAssertTrue(store.tracksMacros)
+        XCTAssertNil(EntryDraft(try XCTUnwrap(store.entries.first)).totalMacros)
+        XCTAssertEqual(store.meals.first?.items.first?.name, "Before macros")
+        XCTAssertEqual(store.barcodes.first?.draft?.calories, 325)
+        var edited = EntryDraft(try XCTUnwrap(store.entries.first))
+        edited.macrosPerServing = MacroNutrients(protein: 20)
+        XCTAssertTrue(store.update(edited))
+        XCTAssertEqual(store.total(Date()), 325)
+        XCTAssertEqual(EntryDraft(try XCTUnwrap(store.entries.first)).totalMacros?.protein, 20)
+    }
+    func testServingCalorieAndMealScalingKeepsNutritionTogether() {
+        var draft = food()
+        draft.changeServings(2.5)
+        XCTAssertEqual(draft.totalMacros?.protein, 15.625)
+        XCTAssertEqual(draft.totalMacros?.netCarbs, 0)
+        draft.changeCalories(140)
+        XCTAssertEqual(draft.totalMacros?.protein, 12.5)
+        draft.changePerServing(80)
+        XCTAssertEqual(draft.totalMacros?.protein, 12.5, "Editing calories per serving is not a new food portion")
+        let scaled = draft.scaled(3, at: Date(), meal: UUID(), order: 0)
+        XCTAssertEqual(scaled.totalMacros?.protein, 37.5)
+        XCTAssertEqual(scaled.macrosPerServing, draft.macrosPerServing)
+    }
+    func testLegacyDraftsMealsAndDefaultsDecodeWithoutInventingMacros() throws {
+        let encoded = try JSONEncoder().encode(food())
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        json.removeValue(forKey: "macrosPerServing")
+        let legacy = try JSONSerialization.data(withJSONObject: json)
+        let draft = try JSONDecoder().decode(EntryDraft.self, from: legacy)
+        XCTAssertNil(draft.totalMacros)
+        let meal = SavedMeal(name: "Old", items: [draft])
+        XCTAssertNil(meal.items.first?.totalMacros)
+        let entry = CalorieEntry(draft: draft)
+        XCTAssertNil(EntryDraft(entry).totalMacros)
+        let oldDefault = Data(#"{"calories":70,"perServing":70,"servings":1,"servingDescription":"1 egg"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(CommonFoodDefault.self, from: oldDefault).macrosPerServing)
+    }
+    func testKnownZeroUnknownAndPartialTotalsAreDistinct() {
+        let known = food(), unknown = EntryDraft(calories: 50)
+        XCTAssertEqual(MacroSummary([]).total(.protein).grams, 0)
+        XCTAssertNil(MacroSummary([unknown]).total(.protein).grams)
+        let summary = MacroSummary([known, unknown])
+        XCTAssertEqual(summary.total(.protein).grams, 6.25)
+        XCTAssertTrue(summary.total(.protein).incomplete)
+        XCTAssertTrue(summary.total(.protein).text.hasSuffix("+"))
+        XCTAssertEqual(summary.total(.netCarbs).grams, 0)
+        XCTAssertTrue(summary.incomplete)
+    }
+    func testEstimatesFillOnlyMissingFieldsAndPreserveProvenance() {
+        let existing = MacroNutrients(protein: 0, fat: 3)
+        let filled = existing.fillingMissing(from: MacroNutrients(protein: 8, netCarbs: 6, fat: 5).markedEstimated())
+        XCTAssertEqual(filled.protein, 0); XCTAssertEqual(filled.fat, 3); XCTAssertEqual(filled.netCarbs, 6)
+        XCTAssertNotEqual(filled.estimatedProtein, true); XCTAssertEqual(filled.estimatedNetCarbs, true)
+        var draft = food(); draft.macrosPerServing = filled
+        XCTAssertTrue(MacroSummary([draft]).total(.netCarbs).estimated)
+        XCTAssertFalse(MacroSummary([draft]).total(.protein).estimated)
+    }
+    func testInvalidMacroInputCannotBeSaved() {
+        for invalid in [Double.nan, .infinity, -1, 100001] {
+            var draft = food(); draft.macrosPerServing?.protein = invalid
+            XCTAssertFalse(draft.isValid)
+        }
+        var draft = food(); draft.macrosPerServing?.protein = 60000; draft.changeServings(2)
+        XCTAssertFalse(draft.isValid, "Totals also have a bound")
+    }
+    func testPersistenceEditUndoSavedMealBarcodeAndCommonDefault() throws {
+        let store = try Persistence.make(inMemory: true)
+        store.saveGoal(2100)
+        var draft = food(); draft.barcode = "1234"; draft.macrosPerServing?.estimatedFat = true
+        XCTAssertTrue(store.add([draft]))
+        var entry = try XCTUnwrap(store.entries.first)
+        XCTAssertEqual(EntryDraft(entry).totalMacros, draft.totalMacros)
+        var edited = EntryDraft(entry); edited.macrosPerServing?.protein = 8
+        XCTAssertTrue(store.update(edited))
+        XCTAssertEqual(store.barcodes.first?.draft?.totalMacros?.protein, 8)
+        store.delete(entry); store.undo()
+        entry = try XCTUnwrap(store.entries.first)
+        XCTAssertEqual(EntryDraft(entry).totalMacros?.protein, 8)
+        XCTAssertEqual(CommonFoodDefault(edited).applying(to: EntryDraft()).totalMacros, edited.totalMacros)
+        XCTAssertTrue(store.saveMeal(nil, name: "Egg meal", items: [edited]))
+        let meal = try XCTUnwrap(store.meals.first)
+        XCTAssertEqual(meal.items.first?.totalMacros, edited.totalMacros)
+        XCTAssertTrue(store.addMeal(meal, factor: 2, date: Date()))
+        XCTAssertEqual(store.entries.filter { $0.mealTemplateID == meal.id }.map(EntryDraft.init).first?.totalMacros?.protein, 16)
+    }
+    func testMacroPreferencesStartEnabledAndGoalsPreserveHistory() throws {
+        let store = try Persistence.make(inMemory: true)
+        store.saveGoal(2100)
+        XCTAssertTrue(store.tracksMacros)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        store.add([EntryDraft(calories: 100, timestamp: yesterday)])
+        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 140, netCarbs: 100)))
+        XCTAssertEqual(store.macroGoals(Date()).protein, 140)
+        XCTAssertNil(store.macroGoals(yesterday).protein)
+        XCTAssertTrue(store.setTracksMacros(false))
+        XCTAssertFalse(store.tracksMacros)
+        XCTAssertEqual(store.macroGoals.protein, 140)
+        XCTAssertTrue(store.setTracksMacros(true))
+        XCTAssertFalse(store.saveMacroGoals(MacroNutrients(protein: 0)))
+        XCTAssertTrue(store.saveMacroGoals(MacroNutrients()))
+        XCTAssertNil(store.macroGoals(Date()).protein)
+        XCTAssertEqual(store.goal(Date()), 2100)
+    }
+    func testAIMacrosMatchEntirePortionIncludingLegacyFallback() {
+        let macros = MacroNutrients(protein: 6, netCarbs: 42, fat: 1)
+        let item = AIFoodEstimate(name: "Bananas", calories: 210, portion: "2 bananas", servingSize: "1 banana", servings: 2, confidence: "high", macros: macros)
+        var draft = AIResult(items: [item], notes: "").drafts(at: Date(), source: "aiAudio")[0]
+        XCTAssertEqual(draft.macrosPerServing?.protein, 3)
+        XCTAssertEqual(draft.totalMacros?.netCarbs, 42)
+        XCTAssertTrue(draft.totalMacros?.hasEstimates == true)
+        draft.changeServings(1)
+        XCTAssertEqual(draft.totalMacros?.netCarbs, 21)
+        var legacy = item; legacy.servingSize = nil; legacy.servings = nil; legacy.macros = nil
+        XCTAssertNil(AIResult(items: [legacy], notes: "").drafts(at: Date(), source: "aiAudio")[0].totalMacros)
+    }
+    func testBarcodeNutritionUsesSamePortionAndDoesNotSubtractFiberTwice() throws {
+        let json = #"{"code":"123","product_name":"Cereal","serving_size":"30 g","serving_quantity":30,"nutriments":{"energy-kcal_100g":400,"proteins_100g":10,"carbohydrates_100g":60,"fiber_100g":12,"fat_100g":5}}"#
+        let product = try JSONDecoder().decode(OpenFoodFacts.Product.self, from: Data(json.utf8))
+        let result = try XCTUnwrap(product.result)
+        XCTAssertEqual(result.calories, 120)
+        XCTAssertEqual(result.macros?.protein, 3)
+        XCTAssertEqual(result.macros?.netCarbs, 18)
+        XCTAssertEqual(result.macros?.fat, 1.5)
+        XCTAssertEqual(result.draft.macrosPerServing, result.macros)
+    }
+}
+
+// Frozen pre-macro schema: exercises SwiftData’s actual on-disk additive migration.
+private enum BeforeMacros {
+@Model final class UserProfile {
+    var id: UUID = UUID()
+    var name: String = "" // Retained for compatibility with existing stores; no longer collected.
+    // Zero represents no goal, preserving the existing local/CloudKit schema.
+    var currentDailyGoal: Double = 2100
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(name: String = "", goal: Double) { self.name = name; currentDailyGoal = goal }
+    var dailyGoal: Double? { currentDailyGoal > 0 ? currentDailyGoal : nil }
+}
+
+@Model final class DailyGoal {
+    var id: UUID = UUID()
+    var day: String = ""
+    var calorieGoal: Double = 2100 // Zero preserves a historical day without a goal.
+    var updatedAt: Date = Date()
+    init(day: String, goal: Double) { self.day = day; calorieGoal = goal }
+}
+
+@Model final class CalorieEntry {
+    var id: UUID = UUID()
+    var name: String = ""
+    var totalCalories: Double = 0
+    var timestamp: Date = Date()
+    var servings: Double = 1
+    var caloriesPerServing: Double = 0
+    var servingDescription: String = ""
+    var sourceType: String = "manual"
+    var externalID: String?
+    var barcode: String?
+    var mealTemplateID: UUID?
+    var componentOrder: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(draft: EntryDraft) { apply(draft) }
+    func apply(_ draft: EntryDraft) {
+        name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        totalCalories = draft.calories.rounded(); timestamp = draft.timestamp
+        servings = draft.servings; caloriesPerServing = draft.perServing.rounded()
+        servingDescription = draft.servingDescription; externalID = draft.externalID
+        barcode = draft.barcode; sourceType = draft.source
+        mealTemplateID = draft.mealID; componentOrder = draft.order; updatedAt = Date()
+    }
+}
+
+// Meal components are one atomic value, avoiding partially synchronized templates.
+@Model final class SavedMeal {
+    var id: UUID = UUID()
+    var name: String = ""
+    var componentsData: Data = Data()
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    init(name: String, items: [EntryDraft]) {
+        self.name = name
+        componentsData = (try? JSONEncoder().encode(items)) ?? Data()
+    }
+    var items: [EntryDraft] { (try? JSONDecoder().decode([EntryDraft].self, from: componentsData)) ?? [] }
+    var calories: Double { items.reduce(0) { $0 + $1.calories.rounded() } }
+}
+
+@Model final class BarcodeFood {
+    var id: UUID = UUID()
+    var barcode: String = ""
+    var payload: Data = Data()
+    var updatedAt: Date = Date()
+    init(barcode: String, draft: EntryDraft) {
+        self.barcode = barcode; payload = (try? JSONEncoder().encode(draft)) ?? Data()
+    }
+    var draft: EntryDraft? { try? JSONDecoder().decode(EntryDraft.self, from: payload) }
+}
+
+
+}

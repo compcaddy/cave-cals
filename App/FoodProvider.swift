@@ -8,11 +8,13 @@ struct FoodResult: Identifiable, Codable, Equatable, Sendable {
     var calories: Double
     var servingDescription: String
     var barcode: String?
+    var macros: MacroNutrients?
     var draft: EntryDraft {
         let displayName = brand.flatMap { brand in
             !brand.isEmpty && name.range(of: brand, options: .caseInsensitive) == nil ? "\(brand) — \(name)" : nil
         } ?? name
         var value = EntryDraft(name: displayName, calories: calories)
+        value.macrosPerServing = macros
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"
         return value
     }
@@ -52,7 +54,7 @@ actor FatSecretSearch: FoodSearchService {
         guard (200...299).contains(http.statusCode) else { throw FoodServiceError.unavailable }
         let page = try JSONDecoder().decode(FoodSearchPage.self, from: data)
         guard page.cacheLifetime.isFinite, page.cacheLifetime >= 0,
-              page.results.allSatisfy({ $0.id.hasPrefix("fatsecret:") && !$0.name.isEmpty && !$0.servingDescription.isEmpty && $0.calories.isFinite && $0.calories >= 0 && $0.calories <= 100_000 }) else {
+              page.results.allSatisfy({ $0.id.hasPrefix("fatsecret:") && !$0.name.isEmpty && !$0.servingDescription.isEmpty && $0.calories.isFinite && $0.calories >= 0 && $0.calories <= 100_000 && ($0.macros?.isValid ?? true) }) else {
             throw FoodServiceError.unavailable
         }
         return page
@@ -143,12 +145,25 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
             let kcalServing = n["energy-kcal_serving"]?.value ?? n["energy_serving"]?.value.map { $0 / 4.184 }
             let kcal100 = n["energy-kcal_100g"]?.value ?? n["energy_100g"]?.value.map { $0 / 4.184 }
             var calories: Double?
+            var useServing = false
+            var scale = 1.0
             var description = serving_size ?? ""
-            if !description.isEmpty, let kcalServing { calories = kcalServing }
-            else if !description.isEmpty, let quantity = serving_quantity?.value, quantity > 0, let kcal100 { calories = kcal100 * quantity / 100 }
+            if !description.isEmpty, let kcalServing { calories = kcalServing; useServing = true }
+            else if !description.isEmpty, let quantity = serving_quantity?.value, quantity > 0, let kcal100 { calories = kcal100 * quantity / 100; scale = quantity / 100 }
             else if let kcal100 { calories = kcal100; description = "100 g / 100 ml" }
             guard let calories, calories.isFinite, calories >= 0, calories <= 100_000 else { return nil }
-            return FoodResult(id: "openfoodfacts:\(code)", name: name, brand: brands, calories: calories, servingDescription: description, barcode: code)
+            func nutrient(_ key: String) -> Double? {
+                let amount: Double?
+                if useServing {
+                    amount = n["\(key)_serving"]?.value ?? serving_quantity?.value.flatMap { quantity in
+                        quantity > 0 ? n["\(key)_100g"]?.value.map { $0 * quantity / 100 } : nil
+                    }
+                } else { amount = n["\(key)_100g"]?.value.map { $0 * scale } }
+                return amount.flatMap { $0.isFinite && $0 >= 0 && $0 <= 100_000 ? $0 : nil }
+            }
+            // OFF normalizes carbohydrates as available carbs (already excludes fiber).
+            let macros = MacroNutrients(protein: nutrient("proteins"), netCarbs: nutrient("carbohydrates"), fat: nutrient("fat"))
+            return FoodResult(id: "openfoodfacts:\(code)", name: name, brand: brands, calories: calories, servingDescription: description, barcode: code, macros: macros)
         }
     }
 }
@@ -167,7 +182,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     init(provider: any FoodSearchService = FatSecretSearch.shared, persistCache: Bool = true,
          cacheURL: URL? = nil, now: @escaping () -> Date = Date.init, debounce: Duration = .milliseconds(450)) {
         self.provider = provider; self.now = now; self.debounce = debounce
-        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v2.json")) : nil
+        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v3.json")) : nil
         if let url = self.cacheURL, let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: Cached].self, from: data) {
             cache = values.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() && $0.value.expiresAt <= now().addingTimeInterval(3600) }
             persist()

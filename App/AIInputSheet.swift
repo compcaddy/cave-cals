@@ -210,6 +210,7 @@ struct AIInputSheet: View {
                         name: draft.name,
                         calories: draft.calories,
                         detail: draft.servingDescription,
+                        macros: MacroSummary([draft]),
                         suggestionLayout: true,
                         added: addedDraftIDs.contains(draft.id),
                         keepsAddedState: true,

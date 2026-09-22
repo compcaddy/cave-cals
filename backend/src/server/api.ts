@@ -6,6 +6,7 @@ import { products, entitlement, requirePaid, verifyPurchase, verifyNotification 
 import { signUpload, uploadInput } from './storage';
 import { analyze, reserveAIUsage } from './analysis';
 import { importMealFromWebsite } from './ai';
+import { estimateMacros, macroInput } from './macros';
 import { consume, tomorrow, limitPublic } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
@@ -79,6 +80,15 @@ export async function api(request: Request, path: string): Promise<Response> {
       // Persist the high-water mark even if access is denied inside the analysis transaction.
       await scanAccess(identity, false, regularLogCount);
       return ok(await analyze(identity, uploadId, undefined, regularLogCount));
+    }
+    if (path === 'food/macros') {
+      const input = macroInput.parse(body);
+      // Free, explicit text estimates: authenticated and budgeted, no scan allowance consumed.
+      await database().transaction(async tx => {
+        await consume(`macro-estimate:${identity.accountId}:${new Date().toISOString().slice(0,10)}`, positiveInt('MACRO_ESTIMATE_DAILY_LIMIT', 10), tomorrow(), tx);
+        await reserveAIUsage(identity, tx);
+      });
+      return ok(await estimateMacros(input));
     }
     if (path === 'meal/import') {
       const { url } = z.object({ url: z.string().url().max(2048) }).parse(body);

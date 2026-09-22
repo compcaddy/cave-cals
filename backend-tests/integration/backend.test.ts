@@ -68,7 +68,7 @@ test('upload ownership and idempotency prevent cross-account access and double O
   const identity=await account(),other=await account();const id=randomUUID();uploadIds.push(id);
   const bytes=Buffer.from('fixture');const row={id,accountId:identity.accountId,pathname:`temporary/${id}`,kind:'image',mime:'image/jpeg',byteLength:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),storage:'local',expiresAt:tomorrow()};
   await database().insert(uploads).values(row);await mkdir(path.dirname(localPath(id)),{recursive:true});await writeFile(localPath(id),bytes);
-  let calls=0;const fixture={items:[{name:'Egg',calories:80,portion:'one egg',servingSize:'one egg',servings:1,confidence:'medium' as const}],notes:'Test fixture'};
+  let calls=0;const fixture={items:[{name:'Egg',calories:80,portion:'one egg',servingSize:'one egg',servings:1,confidence:'medium' as const,macros:null}],notes:'Test fixture'};
   const model=async()=>{calls++;await new Promise(r=>setTimeout(r,100));return fixture;};
   await assert.rejects(analyze(other,id,model));assert.equal(calls,0);
   const results=await Promise.allSettled([analyze(identity,id,model),analyze(identity,id,model)]);
@@ -136,7 +136,7 @@ async function scanFixture(identity: Awaited<ReturnType<typeof account>>, kind =
   await mkdir(path.dirname(localPath(id)), { recursive: true }); await writeFile(localPath(id), bytes);
   return id;
 }
-const scanResult = { items: [{ name: 'Egg', calories: 80, portion: '1 egg', servingSize: '1 egg', servings: 1, confidence: 'medium' as const }], notes: 'Fixture' };
+const scanResult = { items: [{ name: 'Egg', calories: 80, portion: '1 egg', servingSize: '1 egg', servings: 1, confidence: 'medium' as const, macros: null }], notes: 'Fixture' };
 const codeIs = (code: string) => (e: unknown) => (e as { code: string }).code === code;
 
 test('ten combined photo/audio scans are free; eleventh is gated and tenth replay is free', async () => {
@@ -187,4 +187,44 @@ test('abandoned reservations expire without consuming a free scan', async () => 
   await database().update(uploads).set({ state: 'processing', scanReservedUntil: new Date(Date.now() - 1000) }).where(eq(uploads.id, stale));
   await assert.rejects(analyze(identity, stale, async () => scanResult), codeIs('failed'));
   assert.deepEqual(await analyze(identity, await scanFixture(identity), async () => scanResult), scanResult);
+});
+
+test('manual macro estimates are free, share server budgets, and do not spend the scan allowance', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalHash = env.AI_TEST_ACCESS_KEY_SHA256;
+  const originalLimit = env.MACRO_ESTIMATE_DAILY_LIMIT;
+  const testKey = randomUUID() + randomUUID();
+  env.AI_TEST_ACCESS_KEY_SHA256 = createHash('sha256').update(testKey).digest('hex');
+  env.MACRO_ESTIMATE_DAILY_LIMIT = '1';
+  // Use the authenticated owner test path to exercise the real route without contacting Apple/OpenAI.
+  const ownerID = '00000000-0000-4000-8000-000000000002';
+  const bucket = `macro-estimate:${ownerID}:${new Date().toISOString().slice(0,10)}`;
+  await database().delete(limits).where(eq(limits.bucket, bucket));
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls++;
+    return Response.json({ id: 'resp_macro', object: 'response', status: 'completed', created_at: 1, model: 'test', output: [{ id: 'msg_macro', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ protein: 12, netCarbs: 1, fat: 10 }), annotations: [] }] }] });
+  };
+  function request(fields: Record<string, unknown> = {}) {
+    return new Request('http://localhost/api/v1/food/macros', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cave-owner-test': '1' },
+      body: JSON.stringify({ nonce: randomUUID(), testAccess: { key: testKey, active: false }, name: 'Eggs', calories: 140, servingSize: '1 egg', servings: 2, ...fields }) });
+  }
+  try {
+    await database().insert(accounts).values({ id: ownerID }).onConflictDoNothing();
+    const [before] = await database().select().from(accounts).where(eq(accounts.id, ownerID));
+    assert.equal((await api(request({ name: '' }), 'food/macros')).status, 400);
+    const result = await api(request(), 'food/macros');
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), { protein: 12, netCarbs: 1, fat: 10 });
+    assert.equal((await api(request(), 'food/macros')).status, 429);
+    assert.equal(providerCalls, 1);
+    const [after] = await database().select().from(accounts).where(eq(accounts.id, ownerID));
+    assert.equal(after.scansUsed, before.scansUsed);
+    assert.equal(after.regularLogCount, before.regularLogCount);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHash === undefined) delete env.AI_TEST_ACCESS_KEY_SHA256; else env.AI_TEST_ACCESS_KEY_SHA256 = originalHash;
+    if (originalLimit === undefined) delete env.MACRO_ESTIMATE_DAILY_LIMIT; else env.MACRO_ESTIMATE_DAILY_LIMIT = originalLimit;
+    await database().delete(limits).where(eq(limits.bucket, bucket));
+  }
 });

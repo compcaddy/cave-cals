@@ -129,9 +129,11 @@ struct MainView: View {
                                 Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
                                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                                         Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
-                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                            .lineLimit(1).truncationMode(.tail)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                                                .lineLimit(1).truncationMode(.tail)
+                                            if store.tracksMacros { MacroLine(summary: MacroSummary([EntryDraft(entry)])) }
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
                                         Text(entry.totalCalories.calorieText)
                                             .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
                                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
@@ -144,6 +146,7 @@ struct MainView: View {
                                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                                 .listRowSeparator(.hidden)
                                 .accessibilityIdentifier("entry-\(entry.id)")
+                                .accessibilityValue(store.tracksMacros ? MacroSummary([EntryDraft(entry)]).accessibilityText : "")
                                 .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
                                 .contextMenu {
                                     Button {
@@ -400,7 +403,10 @@ struct MainView: View {
                 .accessibilityLabel("Goal progress")
                 .accessibilityValue("\((max(total / goal, 0) * 100).calorieText) percent")
             }
-        }.frame(maxWidth: .infinity).padding(.top, 8).padding(.bottom, 20)
+            if store.tracksMacros {
+                DailyMacrosView(summary: MacroSummary(store.dayEntries(selected).map(EntryDraft.init)), goals: store.macroGoals(selected))
+            }
+        }.frame(maxWidth: .infinity).padding(.top, 8).padding(.bottom, 12)
     }
 
     private var searchSection: some View {
@@ -420,12 +426,12 @@ struct MainView: View {
             let local = localSearchFoods
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription,
+                FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]),
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(store.meals.filter { normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery)) }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { meal in
-                FoodRow(name: meal.name, calories: meal.calories, add: {
+                FoodRow(name: meal.name, calories: meal.calories, macros: MacroSummary(meal.items), add: {
                     revealNextAddedEntry = true
                     if store.addMeal(meal, date: loggingDate) {
                         showLogged()
@@ -442,11 +448,11 @@ struct MainView: View {
                 !local.contains { normalizedFoodName($0.draft.name) == normalizedFoodName(food.name) }
             }) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
+                FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]),
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(search.results.filter { result in !local.contains { $0.draft.externalID == result.id } }) { result in
-                FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription,
+                FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription, macros: MacroSummary([result.draft]),
                         add: { addFromSearch(result.draft) },
                         edit: { edit(result.draft, revealAfterSave: true) })
             }
@@ -473,7 +479,7 @@ struct MainView: View {
                 ForEach(suggestedFoods) { food in
                     let draft = store.applyingCommonDefault(to: food.draft)
                     let pinned = store.isPinned(food.id)
-                    FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: pinned,
+                    FoodRow(name: draft.name, calories: draft.calories, macros: MacroSummary([draft]), suggestionLayout: true, pinned: pinned,
                             add: {
                                 revealNextAddedEntry = false
                                 add(draft, source: "suggestion")
@@ -531,7 +537,7 @@ struct MainView: View {
             } else {
                 ForEach(orderedMeals) { meal in
                     let pinned = store.isMealPinned(meal.id)
-                    FoodRow(name: meal.name, calories: meal.calories, suggestionLayout: true, pinned: pinned, add: {
+                    FoodRow(name: meal.name, calories: meal.calories, macros: MacroSummary(meal.items), suggestionLayout: true, pinned: pinned, add: {
                         revealNextAddedEntry = true
                         sheet = .meal(meal.id, loggingDate)
                     }, edit: {
@@ -810,6 +816,7 @@ struct FoodRow: View {
     let name: String
     var calories: Double?
     var detail: String? = nil
+    var macros: MacroSummary? = nil
     var suggestionLayout = false
     var pinned = false
     var added = false
@@ -837,6 +844,7 @@ struct FoodRow: View {
                             Text(name).font(.cave(.subheadline).weight(confirming ? .bold : .regular)).foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(2)
                         }
                         if !subtitle.isEmpty { Text(subtitle).font(.cave(.caption)).foregroundStyle(.secondary).lineLimit(2) }
+                        if store.tracksMacros, let macros { MacroLine(summary: macros) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     if suggestionLayout, let calories {
                         Text(calories.calorieText).font(.cave(.body).weight(.semibold)).monospacedDigit()
@@ -847,7 +855,7 @@ struct FoodRow: View {
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "\(suggestionLayout ? "Add" : "Edit") \(actionName)")
                 .accessibilityIdentifier("foodDetails-\(actionName)")
-                .accessibilityValue(pinned ? "Pinned" : "")
+                .accessibilityValue([pinned ? "Pinned" : "", store.tracksMacros ? macros?.accessibilityText ?? "" : ""].filter { !$0.isEmpty }.joined(separator: "; "))
                 .disabled(added)
             Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 52 : 48) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")

@@ -177,6 +177,54 @@ final class ECCUITests: XCTestCase {
         app.buttons["Done"].tap()
         assertSummary("0 of 2,100 calories")
     }
+    func testMacroEntryGoalsAndOptionalDisplay() {
+        let search = app.textFields["foodSearch"]
+        search.tap(); search.typeText("Banana")
+        let details = app.buttons["foodDetails-Banana"].firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 5)); details.tap()
+        let protein = app.textFields["macro-protein"]
+        for _ in 0..<3 where !protein.isHittable { app.swipeUp() }
+        XCTAssertTrue(protein.waitForExistence(timeout: 3))
+        protein.tap(); protein.typeText("1.5")
+        app.buttons["Done"].firstMatch.tap()
+        let carbs = app.textFields["macro-netCarbs"]
+        for _ in 0..<3 where !carbs.isHittable { app.swipeUp() }
+        carbs.tap(); carbs.typeText("24")
+        app.buttons["Done"].firstMatch.tap()
+        let fat = app.textFields["macro-fat"]
+        for _ in 0..<3 where !fat.isHittable { app.swipeUp() }
+        fat.tap(); fat.typeText("0")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["saveEntry"].isEnabled)
+        let editorShot = XCTAttachment(screenshot: app.screenshot()); editorShot.name = "Macros editor"; editorShot.lifetime = .keepAlways; add(editorShot)
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
+        let proteinTotal = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
+        XCTAssertTrue(proteinTotal.waitForExistence(timeout: 5))
+        XCTAssertTrue(proteinTotal.label.contains("1.5"))
+        app.buttons["Settings"].tap()
+        let tracking = app.switches["trackMacros"]
+        XCTAssertTrue(tracking.waitForExistence(timeout: 5))
+        XCTAssertEqual(tracking.value as? String, "1")
+        app.buttons["macroGoals"].tap()
+        let goal = app.textFields["goal-protein"]
+        XCTAssertTrue(goal.waitForExistence(timeout: 5)); goal.tap(); goal.typeText("120")
+        app.buttons["saveMacroGoals"].tap()
+        XCTAssertTrue(tracking.waitForExistence(timeout: 5))
+        (tracking.switches.firstMatch.exists ? tracking.switches.firstMatch : tracking).tap(); app.buttons["Done"].firstMatch.tap()
+        XCTAssertFalse(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.exists)
+        app.buttons["Settings"].tap()
+        (tracking.switches.firstMatch.exists ? tracking.switches.firstMatch : tracking).tap(); app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(proteinTotal.waitForExistence(timeout: 5))
+        XCTAssertTrue(proteinTotal.label.contains("120"))
+        let homeShot = XCTAttachment(screenshot: app.screenshot()); homeShot.name = "Macros home"; homeShot.lifetime = .keepAlways; add(homeShot)
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).firstMatch
+        entry.tap()
+        for _ in 0..<3 where !protein.isHittable { app.swipeUp() }
+        XCTAssertEqual(protein.value as? String, "1.5")
+        XCTAssertEqual(fat.value as? String, "0")
+    }
+
     private func assertSummary(_ label: String) {
         let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: app.otherElements["calorieSummary"])
         let result = XCTWaiter.wait(for: [match], timeout: 5)

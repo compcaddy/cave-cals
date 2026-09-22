@@ -16,12 +16,14 @@ struct CommonFood: Decodable, Identifiable {
 }
 
 struct CommonFoodDefault: Codable, Equatable {
+    var macrosPerServing: MacroNutrients?
     var calories: Double
     var perServing: Double
     var servings: Double
     var servingDescription: String
 
     init(_ draft: EntryDraft) {
+        macrosPerServing = draft.macrosPerServing
         calories = draft.calories
         perServing = draft.perServing
         servings = draft.servings
@@ -30,6 +32,7 @@ struct CommonFoodDefault: Codable, Equatable {
 
     func applying(to input: EntryDraft) -> EntryDraft {
         var draft = input
+        draft.macrosPerServing = macrosPerServing
         draft.calories = calories
         draft.perServing = perServing
         draft.servings = servings

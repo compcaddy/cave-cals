@@ -30,6 +30,7 @@ struct SettingsView: View {
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
                 }
+                MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
                 if AIConfiguration.developerSettingsAvailable {
@@ -45,7 +46,7 @@ struct SettingsView: View {
                     Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
                     Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 legalLinks
             }
@@ -182,13 +183,19 @@ struct MealEditorSheet: View {
                     Section("Foods") {
                         ForEach(items) { item in
                             Button { component = item } label: {
-                                HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\(item.calories.calorieText) cal").foregroundStyle(.secondary) }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\(item.calories.calorieText) cal").foregroundStyle(.secondary) }
+                                    if store.tracksMacros { MacroLine(summary: MacroSummary([item])) }
+                                }
                             }.foregroundStyle(.primary)
                         }.onDelete { items.remove(atOffsets: $0) }
                         Button { showFoodPicker = true } label: { Label { Text("Add food") } icon: { CaveIcon(.plus, size: 18) } }
                     }
                 }
-                Section { HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal").fontWeight(.semibold) } }
+                Section {
+                    HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal").fontWeight(.semibold) }
+                    if store.tracksMacros { DailyMacrosView(summary: MacroSummary(chosenItems), goals: MacroNutrients()) }
+                }
                 if (route.fromToday ? store.dayEntries(Date()).map(EntryDraft.init) : items)
                     .contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
                     Section { FatSecretAttribution() }
@@ -364,7 +371,7 @@ struct MealFoodPicker: View {
         }
     }
     private func row(_ draft: EntryDraft) -> some View {
-        FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, add: { var copy = draft; copy.id = UUID(); copy.entryID = nil; selected(copy); dismiss() }, edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
+        FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]), add: { var copy = draft; copy.id = UUID(); copy.entryID = nil; selected(copy); dismiss() }, edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
     }
 }
 
@@ -382,10 +389,18 @@ struct MealAddSheet: View {
                     Section { ServingControl(value: $factor) }
                     Section("Foods") {
                         ForEach(meal.items) { item in
-                            HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\((item.calories * factor).calorieText) cal") }
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\((item.calories * factor).calorieText) cal") }
+                                if store.tracksMacros { MacroLine(summary: MacroSummary([item.scaled(factor, at: date, meal: meal.id, order: item.order)])) }
+                            }
                         }
                     }
-                    Section { HStack { Text("Total"); Spacer(); Text("\(meal.items.reduce(0) { $0 + ($1.calories * factor).rounded() }.calorieText) cal").bold() } }
+                    Section {
+                        HStack { Text("Total"); Spacer(); Text("\(meal.items.reduce(0) { $0 + ($1.calories * factor).rounded() }.calorieText) cal").bold() }
+                        if store.tracksMacros {
+                            DailyMacrosView(summary: MacroSummary(meal.items.map { $0.scaled(factor, at: date, meal: meal.id, order: $0.order) }), goals: MacroNutrients())
+                        }
+                    }
                     if meal.items.contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
                         Section { FatSecretAttribution() }
                     }

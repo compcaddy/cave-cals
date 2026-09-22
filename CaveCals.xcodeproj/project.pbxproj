@@ -15,6 +15,7 @@
 		164A18ABC135A9A4AFBEB67D /* MealsAndSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F82709D277285BC739A30C91 /* MealsAndSettings.swift */; };
 		186180071911FF89526CB293 /* CalorieWidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A597C28BE22CBD637AE7A98C /* CalorieWidgetSnapshot.swift */; };
 		1C79D5D216220C420906E540 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1C6E37BAB5D9CCB6184E9D19 /* PrivacyInfo.xcprivacy */; };
+		1CD586872400B2ADA867D3C6 /* Macros.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D7A35899A8761DB580D5EA /* Macros.swift */; };
 		1D7A4AB47066E3C6597ADB5C /* AIIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 222BD8601E865F5C212C215F /* AIIntegrationTests.swift */; };
 		1DFE396694AAE57A04E130BA /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = AACC11000000000000000002 /* Fonts */; };
 		1E12A0B3B95F16831D1619B1 /* AIBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39E7847333FE9D2822D18768 /* AIBackend.swift */; };
@@ -31,6 +32,7 @@
 		4D20A17E184A713A9C9FED1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3309369A483B862BEEDEA084 /* Assets.xcassets */; };
 		4E7B1B71B0ED7650AA0C64FF /* LoggingActionRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */; };
 		522662E0D3EFC4510F1CD187 /* CaveCalsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E23E99F767CFFDE893A6C5C /* CaveCalsApp.swift */; };
+		5375DD35EE413C5EB0AFE9FB /* MacroViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6090BE1E903328BCEA1F74C8 /* MacroViews.swift */; };
 		5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */; };
 		59D0E4462EF36DD9CD7C5883 /* AIInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17492053FBE305D6482D24C /* AIInputSheet.swift */; };
 		5CEB3936BCDEB6AA9E4B548C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60F75519FD798D28842B739B /* Foundation.framework */; };
@@ -118,6 +120,7 @@
 		541DCC8CF6D2160AB5060220 /* BarcodeScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScanner.swift; sourceTree = "<group>"; };
 		581ECFEB8543B8F07F457C75 /* ECCUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ECCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B627F5DE7B765F759D4C456 /* CaveIcon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaveIcon.swift; sourceTree = "<group>"; };
+		6090BE1E903328BCEA1F74C8 /* MacroViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacroViews.swift; sourceTree = "<group>"; };
 		60F75519FD798D28842B739B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		67750F0D12D6A67FAD6885ED /* CaveCals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CaveCals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		69432E70389C532222506CFE /* WeightTrackingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeightTrackingTests.swift; sourceTree = "<group>"; };
@@ -126,6 +129,7 @@
 		6F22CF4487F14C6E5AA3226F /* QuickLogWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLogWidget.swift; sourceTree = "<group>"; };
 		7FEF45405281FC3ED419F35D /* QuickLogWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = QuickLogWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		98D7A35899A8761DB580D5EA /* Macros.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Macros.swift; sourceTree = "<group>"; };
 		9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoggingActionRouter.swift; sourceTree = "<group>"; };
 		9C3F508E7A7C05D60934A294 /* FoodProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoodProvider.swift; sourceTree = "<group>"; };
 		9E67F8CD524B7AD2039451D1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -287,6 +291,8 @@
 				14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */,
 				0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */,
 				294EBEE8DA9D387437E6085E /* WeightViews.swift */,
+				98D7A35899A8761DB580D5EA /* Macros.swift */,
+				6090BE1E903328BCEA1F74C8 /* MacroViews.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -492,6 +498,8 @@
 				5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */,
 				F630A3BB15EECFC6C9AB4D58 /* WeightHealthExporter.swift in Sources */,
 				945E0C534E7C334D3A32514E /* WeightViews.swift in Sources */,
+				1CD586872400B2ADA867D3C6 /* Macros.swift in Sources */,
+				5375DD35EE413C5EB0AFE9FB /* MacroViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
