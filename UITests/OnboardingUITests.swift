@@ -7,7 +7,13 @@ final class OnboardingUITests: XCTestCase {
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
     }
-    private func next() { app.buttons["onboardingContinue"].tap() }
+    private func reveal(_ element: XCUIElement) {
+        for _ in 0..<8 {
+            if element.isHittable { return }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+    }
+    private func next() { let button = app.buttons["onboardingContinue"]; reveal(button); button.tap() }
     private func enter(_ id: String, _ text: String) {
         let field = app.textFields[id]
         for _ in 0..<5 {
@@ -124,6 +130,7 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["gender-Male"].tap()
         enter("planAge", "16"); next()
         capture("04 Large text manual route")
+        reveal(app.buttons["skipGoal"])
         XCTAssertTrue(app.buttons["skipGoal"].isHittable)
         app.buttons["skipGoal"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))

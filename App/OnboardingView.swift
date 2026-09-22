@@ -5,6 +5,7 @@ struct OnboardingView: View {
     @Environment(WeightStore.self) private var weights
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var step = 0
     @State private var resultBackStep = 4
     @State private var gender: PlanGender?
@@ -72,19 +73,25 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if step == 0 { welcome }
-                    else {
-                        ProgressView(value: Double(step), total: 5).accessibilityLabel("Step \(step) of 5")
-                        Text(title).font(.cave(.largeTitle)).accessibilityAddTraits(.isHeader)
-                        stepContent
-                    }
-                    if let error { Text(error).foregroundStyle(.red).font(.cave(.footnote)) }
-                }.padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity)
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 22) {
+                        if step == 0 { welcome }
+                        else {
+                            ProgressView(value: Double(step), total: 5).accessibilityLabel("Step \(step) of 5")
+                            Text(title).font(.cave(.largeTitle)).accessibilityAddTraits(.isHeader)
+                            stepContent
+                        }
+                        if let error { Text(error).foregroundStyle(.red).font(.cave(.footnote)) }
+                    }.padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity)
+                    // Large accessibility text needs the full viewport for each question.
+                    if dynamicTypeSize.isAccessibilitySize { footer }
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .id(step)
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !dynamicTypeSize.isAccessibilitySize { footer }
+            }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
