@@ -382,11 +382,15 @@ struct MainView: View {
     }
     private var summary: some View {
         let total = store.total(selected), goal = store.goal(selected)
+        let countFont = UIFont(name: "Schoolbell-Regular", size: summarySize * 1.5) ?? .systemFont(ofSize: summarySize * 1.5)
+        // Schoolbell reserves more space below its digits than above them.
+        // Balance the visible number, rather than its asymmetric font line box.
+        let bottomInset = 4 + countFont.ascender - countFont.capHeight + countFont.descender
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(total.calorieText)
-                        .font(.custom("CaveCount-Regular", fixedSize: summarySize * 1.5))
+                        .font(Font(countFont))
                     if let goal {
                         Text("/ \(goal.calorieText)")
                             .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
@@ -406,8 +410,9 @@ struct MainView: View {
             }
             .lineLimit(1).minimumScaleFactor(0.6)
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 80)
+            .padding(.top, 4)
+            .padding(.bottom, bottomInset)
+            .frame(maxWidth: .infinity)
             .background { CalorieProgressBackground(total: total, goal: goal) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
