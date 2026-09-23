@@ -47,7 +47,7 @@ Do not treat weight-loss support groups as ad inventory. No mass posting, unsoli
 >
 > Compared with the long setup I encountered in Cal AI, I've aimed for a shorter optional setup, an editable calorie target, and a direct route to manual logging. That is a design choice, not a claim about accuracy or outcomes. Macros and weigh-ins are optional, and voice/photo estimates are reviewed before they become entries.
 >
-> Core manual logging is free; optional AI access includes in-app purchases. The US listing currently shows $9.99 monthly or $59.99 yearly; local pricing and any offers appear before purchase. This app was developed with AI coding assistance, and AI meal analysis is an optional feature.
+> Core manual logging is free; optional AI access includes in-app purchases. Beginning September 25, the US listing shows $5.99 monthly or $29.99 yearly; local pricing and any offers appear before purchase. This app was developed with AI coding assistance, and AI meal analysis is an optional feature.
 >
 > [Cave Cals on the App Store](https://apps.apple.com/us/app/cave-cals-ai-calorie-tracker/id6809208501)
 >

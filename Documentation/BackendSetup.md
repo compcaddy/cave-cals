@@ -136,9 +136,9 @@ Group: **Cave Cals AI**, Apple ID `22363962`. Both products have level 1 and the
 
 | Plan | Product ID | Apple subscription ID | US price | Introductory offer |
 | --- | --- | --- | --- | --- |
-| Monthly | `com.philstarkovich.cavecals.ai.monthly` | `6809209344` | $9.99/month | 3-day free trial for eligible subscribers |
-| Yearly | `com.philstarkovich.cavecals.ai.yearly` | `6809209211` | $59.99/year | None |
+| Monthly | `com.philstarkovich.cavecals.ai.monthly` | `6809209344` | $5.99/month beginning September 25, 2026 | 3-day free trial for eligible subscribers |
+| Yearly | `com.philstarkovich.cavecals.ai.yearly` | `6809209211` | $29.99/year beginning September 25, 2026 | None |
 
-Apple equalized prices are configured for 175 storefronts. The client reads localized prices and trial eligibility from StoreKit. Product IDs are configured in `APPLE_PRODUCT_IDS`. Subscription review screenshots, final review metadata, sandbox purchase testing, and Apple approval remain release requirements.
+Apple equalized prices are configured for 175 storefronts. The September 25 price decreases are scheduled in App Store Connect without preserving the former prices. The client reads localized prices and trial eligibility from StoreKit. Product IDs are configured in `APPLE_PRODUCT_IDS`. Subscription review screenshots, final review metadata, sandbox purchase testing, and Apple approval remain release requirements.
 
 RevenueCat project: **Cave Cals**, project ID `783afc8e`. App `app7a4868ae0e`, entitlement `ai`, and default offering are configured with both Apple products. The published paywall is “Cave Cals AI — Less typing”. The app integrates RevenueCat/RevenueCatUI 5.88.0 using app-managed StoreKit 2 purchases. The backend independently verifies Apple purchases before granting AI access; RevenueCat client state never grants server access. Both production and sandbox Apple server notifications point to RevenueCat. Custom remote Schoolbell font upload is pending Chrome extension file-upload permission. See `Documentation/Release/Readiness.md` for remaining release checks.
