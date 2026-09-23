@@ -121,18 +121,7 @@ struct OnboardingView: View {
             Image("SetupAppIcon").resizable().scaledToFit().frame(width: 100, height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 24)).accessibilityHidden(true)
             Text("You Eat.\nApp Track.\nWeight Drop.").font(.cave(.largeTitle)).multilineTextAlignment(.center)
-            Text("A simple target. A little progress, every day.").foregroundStyle(.secondary).multilineTextAlignment(.center)
-            HStack(spacing: 24) {
-                feature("Log food", icon: .plus)
-                feature("See progress", icon: .check)
-                feature("Keep going", icon: .arrowRight)
-            }.padding(.vertical, 12)
-            Text("About a minute. No account needed.").font(.cave(.footnote)).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity)
-    }
-    private func feature(_ text: String, icon: CaveGlyph) -> some View {
-        VStack(spacing: 8) { CaveIcon(icon, size: 26).foregroundStyle(.blue); Text(text).font(.cave(.caption)).multilineTextAlignment(.center) }
-            .frame(maxWidth: .infinity)
     }
     @ViewBuilder private var stepContent: some View {
         switch step {
