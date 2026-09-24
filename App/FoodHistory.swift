@@ -6,11 +6,13 @@ struct CommonFood: Decodable, Identifiable {
     let aliases: [String]
     let calories: Double
     let serving: String
+    var macrosPerServing: MacroNutrients?
     var draft: EntryDraft {
         var draft = EntryDraft(name: name, calories: calories)
         draft.servingDescription = serving
         draft.externalID = "common:\(id)"
         draft.source = "common"
+        draft.macrosPerServing = macrosPerServing
         return draft
     }
 }

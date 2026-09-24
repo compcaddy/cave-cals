@@ -1,3 +1,15 @@
+# Bundled nutrition and total carbohydrates — September 23, 2026
+
+- September 23, 2026 (local, not yet in a TestFlight build): the bundled catalog expanded to 5,904 foods — the unchanged original 1,000, 4,000 generic USDA FNDDS 2021-2023 / SR Legacy 2018 additions, and 904 brand-name and restaurant-chain foods. Generation, `--check`, the independent validator and ECCTests pass; see `Documentation/FoodCatalog/validation-report.json`.
+- All 1,000 bundled foods now include protein, total carbohydrates, fiber, and fat per existing serving. The generator uses the checksum-verified USDA FNDDS archive for 990 entries and the FDA fruit poster for ten retained fruits. Every original ID, name, alias, serving, category, and calorie value is unchanged; generation and `--check` pass. Nutrient densities remain in component provenance.
+- The native app stores `totalCarbs` and `fiber` separately. Daily summaries/goals use Protein / Carbs / Fat; food editors expose carbohydrates and fiber plus read-only net carbs (carbohydrates minus fiber). Unknown values stay unknown, and fiber exceeding total carbs is rejected. Search and Quick Add rows hide macros while preserving them on add. Populated nutrition fields select their values for replacement like the serving fields.
+- FatSecret Basic/Premier, barcode lookup, and the shared AI schema use the new fields. Barcode normalization prefers explicit total carbohydrates or reconstructs them from available carbohydrates plus known fiber. Photo, voice, website imports, and text estimates share the four-field contract. No historical macro backfill is performed.
+- Verification: 97 native unit tests passed on iPhone; the final 97-test suite also passed on iPad Air 11-inch (M3), iOS 26.0.1. The two focused nutrition UI tests passed on both iPhone 17 Pro and iPad iPhone compatibility mode. They verify hidden search/Quick Add macros, logged totals, populated pencil editing, persistence, goals, and optional display. The existing serving-field replacement UI test passed after narrowing its ambiguous row/pencil selector. Editor/home screenshots were visually reviewed. All 28 backend unit tests, TypeScript validation, and the backend production build passed.
+- Final native result: `test_sim_2026-09-23T23-35-07-888Z_pid78903_9d79dec9.xcresult`; iPad UI result: `test_sim_2026-09-23T23-33-08-531Z_pid78903_48c82880.xcresult` under the local XcodeBuildMCP CaveCals workspace.
+- Local source work only: backend changes have not been deployed, and no TestFlight/App Store build was uploaded. Deploy the backend with the next native release so online results and AI estimates supply total carbs and fiber. These changes use existing encoded SwiftData attributes; physical-device CloudKit, camera, App Attest, and purchase verification remain separate release checks.
+
+---
+
 # Short onboarding — September 22, 2026
 
 - Fresh branch `codex/onboarding-and-launch` starts from fully pushed `35b5286`; no earlier changes were left uncommitted.

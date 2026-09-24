@@ -161,8 +161,13 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
                 } else { amount = n["\(key)_100g"]?.value.map { $0 * scale } }
                 return amount.flatMap { $0.isFinite && $0 >= 0 && $0 <= 100_000 ? $0 : nil }
             }
-            // OFF normalizes carbohydrates as available carbs (already excludes fiber).
-            let macros = MacroNutrients(protein: nutrient("proteins"), netCarbs: nutrient("carbohydrates"), fat: nutrient("fat"))
+            // OFF's carbohydrates exclude fiber; prefer its explicit US/Canada total.
+            let fiber = nutrient("fiber")
+            let totalCarbs = nutrient("carbohydrates-total") ?? nutrient("carbohydrates").flatMap { carbs in
+                fiber.flatMap { carbs + $0 <= 100_000 ? carbs + $0 : nil }
+            }
+            let validFiber = fiber.flatMap { amount in totalCarbs.map { amount <= $0 } == false ? nil : amount }
+            let macros = MacroNutrients(protein: nutrient("proteins"), totalCarbs: totalCarbs, fiber: validFiber, fat: nutrient("fat"))
             return FoodResult(id: "openfoodfacts:\(code)", name: name, brand: brands, calories: calories, servingDescription: description, barcode: code, macros: macros)
         }
     }
@@ -182,7 +187,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     init(provider: any FoodSearchService = FatSecretSearch.shared, persistCache: Bool = true,
          cacheURL: URL? = nil, now: @escaping () -> Date = Date.init, debounce: Duration = .milliseconds(450)) {
         self.provider = provider; self.now = now; self.debounce = debounce
-        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v3.json")) : nil
+        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v4.json")) : nil
         if let url = self.cacheURL, let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: Cached].self, from: data) {
             cache = values.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() && $0.value.expiresAt <= now().addingTimeInterval(3600) }
             persist()

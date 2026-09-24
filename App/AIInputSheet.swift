@@ -77,10 +77,7 @@ struct AIInputSheet: View {
             }
             .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Speak Food") : "Review Scan")
             .navigationBarTitleDisplayMode(.inline)
-            .task {
-                guard !started else { return }
-                started = true
-            }
+            .task { autoStartRecordingIfReady() }
             .task(id: photo) {
                 guard let photo else { return }
                 preparingPhoto = true
@@ -108,6 +105,7 @@ struct AIInputSheet: View {
             .onChange(of: scenePhase) { _, phase in
                 // Preserve interrupted recordings locally, without uploading in the background.
                 if phase != .active && recorder.recording { finishRecording(analyzeAfter: false) }
+                if phase == .active { autoStartRecordingIfReady() }
             }
             .onChange(of: recorder.finished) { _, done in
                 if done { finishRecording(analyzeAfter: false) }
@@ -349,6 +347,13 @@ struct AIInputSheet: View {
     private func selectPhoto(_ data: Data) throws {
         let prepared = try Self.preparePhoto(data)
         image = UIImage(data: prepared); media = prepared; uploadId = nil; error = nil
+    }
+    // Widget cold launches can present the sheet before the scene is active; recording then would be stopped immediately.
+    private func autoStartRecordingIfReady() {
+        guard mode == .voice, !started, scenePhase == .active,
+              !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+        started = true
+        startRecording()
     }
     private func startRecording() {
         guard !startingRecording && !working else { return }

@@ -203,7 +203,7 @@ test('manual macro estimates are free, share server budgets, and do not spend th
   let providerCalls = 0;
   globalThis.fetch = async () => {
     providerCalls++;
-    return Response.json({ id: 'resp_macro', object: 'response', status: 'completed', created_at: 1, model: 'test', output: [{ id: 'msg_macro', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ protein: 12, netCarbs: 1, fat: 10 }), annotations: [] }] }] });
+    return Response.json({ id: 'resp_macro', object: 'response', status: 'completed', created_at: 1, model: 'test', output: [{ id: 'msg_macro', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ protein: 12, totalCarbs: 1, fiber: 0, fat: 10 }), annotations: [] }] }] });
   };
   function request(fields: Record<string, unknown> = {}) {
     return new Request('http://localhost/api/v1/food/macros', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cave-owner-test': '1' },
@@ -215,7 +215,7 @@ test('manual macro estimates are free, share server budgets, and do not spend th
     assert.equal((await api(request({ name: '' }), 'food/macros')).status, 400);
     const result = await api(request(), 'food/macros');
     assert.equal(result.status, 200);
-    assert.deepEqual(await result.json(), { protein: 12, netCarbs: 1, fat: 10 });
+    assert.deepEqual(await result.json(), { protein: 12, totalCarbs: 1, fiber: 0, fat: 10 });
     assert.equal((await api(request(), 'food/macros')).status, 429);
     assert.equal(providerCalls, 1);
     const [after] = await database().select().from(accounts).where(eq(accounts.id, ownerID));

@@ -85,7 +85,7 @@ private struct QuickLogView: View {
                     Text(abs(goal - total).formatted(.number.precision(.fractionLength(0))))
                         .foregroundStyle(.primary)
                     Text(total > goal ? "over" : "left")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(total > goal ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
                 }
                 .font(.cave(style))
                 .accessibilityElement(children: .combine)

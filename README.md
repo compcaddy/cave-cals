@@ -71,7 +71,7 @@ Source files are grouped by feature under `App/`. Tests are under `Tests/` and `
 
 Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, editable history, Week/Month/Year graphs, a dismissible daily reminder, and opt-in Apple Health export. Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 
-Optional protein, net-carb, and fat tracking is on by default; goals and estimates are available. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
+Optional protein, total-carbohydrate, and fat tracking is on by default; goals and estimates are available. Food editors also store fiber and display calculated net carbs. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
 
 ## Widget calorie total
 

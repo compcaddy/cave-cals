@@ -637,8 +637,70 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
 @MainActor final class MacroTests: XCTestCase {
     private func food() -> EntryDraft {
         var draft = EntryDraft(name: "Egg", calories: 70)
-        draft.macrosPerServing = MacroNutrients(protein: 6.25, netCarbs: 0, fat: 5)
+        draft.macrosPerServing = MacroNutrients(protein: 6.25, totalCarbs: 0, fiber: 0, fat: 5)
         return draft
+    }
+    func testCatalogNutritionSurvivesSearchLoggingQuickAddMealsAndPortions() throws {
+        XCTAssertEqual(CommonFoods.foods.count, 5904)
+        XCTAssertTrue(CommonFoods.foods.allSatisfy { $0.draft.isValid && $0.macrosPerServing?.isComplete == true })
+        let banana = try XCTUnwrap(CommonFoods.search("banana").first { $0.id == "banana" })
+        XCTAssertEqual(banana.draft.totalMacros, MacroNutrients(protein: 1, totalCarbs: 30, fiber: 3, fat: 0))
+        let store = try Persistence.make(inMemory: true)
+        var draft = banana.draft
+        draft.timestamp = Date().addingTimeInterval(-60)
+        XCTAssertTrue(store.add([draft]))
+        let suggestion = try XCTUnwrap(FoodHistory.suggestions(entries: store.entries, date: Date()).first)
+        XCTAssertEqual(suggestion.draft.totalMacros, draft.totalMacros)
+        var repeated = suggestion.draft
+        repeated.changeServings(2)
+        XCTAssertTrue(store.add([repeated]))
+        let summary = MacroSummary(store.entries.map(EntryDraft.init))
+        XCTAssertEqual(summary.total(.totalCarbs).grams, 90)
+        XCTAssertEqual(summary.total(.fiber).grams, 9)
+        XCTAssertTrue(store.saveMeal(nil, name: "Fruit", items: [repeated]))
+        XCTAssertEqual(store.meals.first?.items.first?.totalMacros?.netCarbs, 54)
+    }
+    func testNetCarbsAreDerivedAndFiberScalesWithoutInventingUnknowns() throws {
+        let macros = MacroNutrients(protein: 1, totalCarbs: 30, fiber: 3, fat: 0)
+        XCTAssertEqual(macros.netCarbs, 27)
+        XCTAssertEqual(macros.scaled(2.5).fiber, 7.5)
+        XCTAssertEqual(macros.scaled(2.5).netCarbs, 67.5)
+        XCTAssertNil(MacroNutrients(totalCarbs: 30).netCarbs)
+        XCTAssertNil(MacroNutrients(fiber: 3).netCarbs)
+        XCTAssertEqual(MacroNutrients(totalCarbs: 0, fiber: 0).netCarbs, 0)
+        XCTAssertFalse(MacroNutrients(totalCarbs: 2, fiber: 3).isValid)
+        let filled = MacroNutrients(totalCarbs: 30).fillingMissing(from: macros.markedEstimated())
+        XCTAssertEqual(filled.totalCarbs, 30)
+        XCTAssertEqual(filled.fiber, 3)
+        XCTAssertTrue(filled.estimatedNetCarbs)
+        let encoded = try JSONEncoder().encode(macros)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(json["netCarbs"], "Derived values must not become a second source of truth")
+        XCTAssertEqual(try JSONDecoder().decode(MacroNutrients.self, from: encoded), macros)
+    }
+    func testBarcodeTotalCarbsPreferExplicitValuesAndPreserveUnknownFiber() throws {
+        func decode(_ nutrients: String) throws -> MacroNutrients {
+            let json = "{\"code\":\"123\",\"product_name\":\"Food\",\"nutriments\":{\"energy-kcal_100g\":100," + nutrients + "}}"
+            return try XCTUnwrap(JSONDecoder().decode(OpenFoodFacts.Product.self, from: Data(json.utf8)).result?.macros)
+        }
+        let explicit = try decode(#""carbohydrates-total_100g":30,"carbohydrates_100g":25,"fiber_100g":5"#)
+        XCTAssertEqual(explicit.totalCarbs, 30)
+        XCTAssertEqual(explicit.netCarbs, 25)
+        let unknown = try decode(#""carbohydrates_100g":25"#)
+        XCTAssertNil(unknown.totalCarbs)
+        XCTAssertNil(unknown.fiber)
+        let totalOnly = try decode(#""carbohydrates-total_100g":30"#)
+        XCTAssertEqual(totalOnly.totalCarbs, 30)
+        XCTAssertNil(totalOnly.netCarbs)
+        let invalid = try decode(#""carbohydrates-total_100g":3,"fiber_100g":5"#)
+        XCTAssertEqual(invalid.totalCarbs, 3)
+        XCTAssertNil(invalid.fiber)
+        let excessive = try decode(#""carbohydrates_100g":100000,"fiber_100g":1"#)
+        XCTAssertNil(excessive.totalCarbs)
+        XCTAssertTrue(excessive.isValid)
+        let zero = try decode(#""carbohydrates_100g":0,"fiber_100g":0"#)
+        XCTAssertEqual(zero.totalCarbs, 0)
+        XCTAssertEqual(zero.netCarbs, 0)
     }
     func testUpgradeFromCalorieOnlyStorePreservesHistoryAndDefaults() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -678,7 +740,7 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         var draft = food()
         draft.changeServings(2.5)
         XCTAssertEqual(draft.totalMacros?.protein, 15.625)
-        XCTAssertEqual(draft.totalMacros?.netCarbs, 0)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 0)
         draft.changeCalories(140)
         XCTAssertEqual(draft.totalMacros?.protein, 12.5)
         draft.changePerServing(80)
@@ -709,16 +771,16 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertEqual(summary.total(.protein).grams, 6.25)
         XCTAssertTrue(summary.total(.protein).incomplete)
         XCTAssertTrue(summary.total(.protein).text.hasSuffix("+"))
-        XCTAssertEqual(summary.total(.netCarbs).grams, 0)
+        XCTAssertEqual(summary.total(.totalCarbs).grams, 0)
         XCTAssertTrue(summary.incomplete)
     }
     func testEstimatesFillOnlyMissingFieldsAndPreserveProvenance() {
         let existing = MacroNutrients(protein: 0, fat: 3)
-        let filled = existing.fillingMissing(from: MacroNutrients(protein: 8, netCarbs: 6, fat: 5).markedEstimated())
-        XCTAssertEqual(filled.protein, 0); XCTAssertEqual(filled.fat, 3); XCTAssertEqual(filled.netCarbs, 6)
-        XCTAssertNotEqual(filled.estimatedProtein, true); XCTAssertEqual(filled.estimatedNetCarbs, true)
+        let filled = existing.fillingMissing(from: MacroNutrients(protein: 8, totalCarbs: 6, fiber: 2, fat: 5).markedEstimated())
+        XCTAssertEqual(filled.protein, 0); XCTAssertEqual(filled.fat, 3); XCTAssertEqual(filled.totalCarbs, 6)
+        XCTAssertNotEqual(filled.estimatedProtein, true); XCTAssertEqual(filled.estimatedTotalCarbs, true)
         var draft = food(); draft.macrosPerServing = filled
-        XCTAssertTrue(MacroSummary([draft]).total(.netCarbs).estimated)
+        XCTAssertTrue(MacroSummary([draft]).total(.totalCarbs).estimated)
         XCTAssertFalse(MacroSummary([draft]).total(.protein).estimated)
     }
     func testInvalidMacroInputCannotBeSaved() {
@@ -755,7 +817,7 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertTrue(store.tracksMacros)
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
         store.add([EntryDraft(calories: 100, timestamp: yesterday)])
-        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 140, netCarbs: 100)))
+        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 140, totalCarbs: 100)))
         XCTAssertEqual(store.macroGoals(Date()).protein, 140)
         XCTAssertNil(store.macroGoals(yesterday).protein)
         XCTAssertTrue(store.setTracksMacros(false))
@@ -768,13 +830,17 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertEqual(store.goal(Date()), 2100)
     }
     func testAIMacrosMatchEntirePortionIncludingLegacyFallback() {
-        let macros = MacroNutrients(protein: 6, netCarbs: 42, fat: 1)
+        let macros = MacroNutrients(protein: 6, totalCarbs: 48, fiber: 6, fat: 1)
         let item = AIFoodEstimate(name: "Bananas", calories: 210, portion: "2 bananas", servingSize: "1 banana", servings: 2, confidence: "high", macros: macros)
         var draft = AIResult(items: [item], notes: "").drafts(at: Date(), source: "aiAudio")[0]
         XCTAssertEqual(draft.macrosPerServing?.protein, 3)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 48)
+        XCTAssertEqual(draft.totalMacros?.fiber, 6)
         XCTAssertEqual(draft.totalMacros?.netCarbs, 42)
         XCTAssertTrue(draft.totalMacros?.hasEstimates == true)
         draft.changeServings(1)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 24)
+        XCTAssertEqual(draft.totalMacros?.fiber, 3)
         XCTAssertEqual(draft.totalMacros?.netCarbs, 21)
         var legacy = item; legacy.servingSize = nil; legacy.servings = nil; legacy.macros = nil
         XCTAssertNil(AIResult(items: [legacy], notes: "").drafts(at: Date(), source: "aiAudio")[0].totalMacros)
@@ -785,7 +851,9 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         let result = try XCTUnwrap(product.result)
         XCTAssertEqual(result.calories, 120)
         XCTAssertEqual(result.macros?.protein, 3)
-        XCTAssertEqual(result.macros?.netCarbs, 18)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.totalCarbs), 21.6, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.fiber), 3.6, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.netCarbs), 18, accuracy: 0.0001)
         XCTAssertEqual(result.macros?.fat, 1.5)
         XCTAssertEqual(result.draft.macrosPerServing, result.macros)
     }

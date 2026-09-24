@@ -204,7 +204,7 @@ struct EntryEditorSheet: View {
     }
 }
 
-private extension View {
+extension View {
     func selectValueOnFocus(identifier: String) -> some View {
         onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { notification in
             guard let field = notification.object as? UITextField,

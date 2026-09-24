@@ -180,22 +180,58 @@ final class ECCUITests: XCTestCase {
         app.buttons["Done"].tap()
         assertSummary("0 of 2,100 calories")
     }
+    func testBundledNutritionFlowsThroughSearchAndQuickAddWithoutRowMacros() {
+        let search = app.textFields["foodSearch"]
+        search.tap(); search.typeText("Banana")
+        let details = app.buttons["foodDetails-Banana"].firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertFalse(details.label.contains("Protein"))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'P 1 · C 30'")).firstMatch.exists)
+        app.buttons["Add Banana"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
+        let carbs = app.descendants(matching: .any)["dailyMacro-totalCarbs"].firstMatch
+        XCTAssertTrue(carbs.waitForExistence(timeout: 5))
+        XCTAssertTrue(carbs.label.contains("30 g"))
+        app.buttons["Quick Add"].tap()
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertFalse(details.label.contains("Protein"))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'P 1 · C 30'")).firstMatch.exists)
+        app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add Banana", "foodDetails-Banana")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Quick Add"].isSelected)
+        let total = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '60 g'"), object: carbs)
+        XCTAssertEqual(XCTWaiter.wait(for: [total], timeout: 5), .completed)
+        app.buttons["Edit Banana"].firstMatch.tap()
+        let fiber = app.textFields["macro-fiber"]
+        for _ in 0..<4 where !fiber.isHittable { app.swipeUp() }
+        XCTAssertTrue(fiber.waitForExistence(timeout: 3))
+        XCTAssertEqual(fiber.value as? String, "3")
+        XCTAssertEqual(app.textFields["macro-totalCarbs"].value as? String, "30")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Bundled nutrition editor"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     func testMacroEntryGoalsAndOptionalDisplay() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("Banana")
         let details = app.buttons["foodDetails-Banana"].firstMatch
-        XCTAssertTrue(details.waitForExistence(timeout: 5)); details.tap()
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'P 1 · C 30'")).firstMatch.exists)
+        app.buttons["Edit Banana"].firstMatch.tap()
         let protein = app.textFields["macro-protein"]
         for _ in 0..<3 where !protein.isHittable { app.swipeUp() }
         XCTAssertTrue(protein.waitForExistence(timeout: 3))
+        XCTAssertEqual(protein.value as? String, "1")
+        XCTAssertEqual(app.textFields["macro-totalCarbs"].value as? String, "30")
+        XCTAssertEqual(app.textFields["macro-fiber"].value as? String, "3")
         protein.tap(); protein.typeText("1.5")
         app.buttons["Done"].firstMatch.tap()
-        let carbs = app.textFields["macro-netCarbs"]
-        for _ in 0..<3 where !carbs.isHittable { app.swipeUp() }
+        let carbs = app.textFields["macro-totalCarbs"]
+        for _ in 0..<6 where !carbs.isHittable { app.swipeUp() }
         carbs.tap(); carbs.typeText("24")
         app.buttons["Done"].firstMatch.tap()
+        XCTAssertEqual(carbs.value as? String, "24")
         let fat = app.textFields["macro-fat"]
-        for _ in 0..<3 where !fat.isHittable { app.swipeUp() }
+        for _ in 0..<6 where !fat.isHittable { app.swipeUp() }
         fat.tap(); fat.typeText("0")
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(app.buttons["saveEntry"].isEnabled)
@@ -225,6 +261,7 @@ final class ECCUITests: XCTestCase {
         entry.tap()
         for _ in 0..<3 where !protein.isHittable { app.swipeUp() }
         XCTAssertEqual(protein.value as? String, "1.5")
+        for _ in 0..<6 where !fat.isHittable { app.swipeUp() }
         XCTAssertEqual(fat.value as? String, "0")
     }
 
@@ -305,7 +342,7 @@ final class ECCUITests: XCTestCase {
     func testEntryRowsSelectTheirValuesForReplacement() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("140")
-        app.buttons["Edit 140 calories"].tap()
+        app.buttons["foodDetails-140 calories"].tap()
         let size = app.textFields["servingSize"]
         XCTAssertTrue(size.waitForExistence(timeout: 5))
         app.staticTexts["serving size"].tap()
@@ -328,7 +365,7 @@ final class ECCUITests: XCTestCase {
     func testNamedEntryServingEditorAndSavedMeal() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("140")
-        app.buttons["Edit 140 calories"].tap()
+        app.buttons["foodDetails-140 calories"].tap()
         let name = app.textFields["entryName"]
         XCTAssertTrue(name.waitForExistence(timeout: 3)); name.tap(); name.typeText("Cheerios")
         // Serving controls are shown directly in the editor.

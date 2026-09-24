@@ -4,17 +4,17 @@ import { z } from 'zod';
 import { APIError, required } from './config';
 
 // Required nullable fields satisfy structured output while preserving unknown values.
-export const macroResult = z.object({ protein: z.number().nullable(), netCarbs: z.number().nullable(), fat: z.number().nullable() });
+export const macroResult = z.object({ protein: z.number().nullable(), totalCarbs: z.number().nullable(), fiber: z.number().nullable(), fat: z.number().nullable() });
 export const macroInput = z.object({
   name: z.string().trim().min(2).max(160), calories: z.number().min(0).max(100_000),
   servingSize: z.string().trim().max(300), servings: z.number().positive().max(1000),
 });
-export const macroInstructions = 'Include macros (protein, netCarbs, fat) in grams for the ENTIRE portion, matching calories, before dividing by servings. Net carbs means total carbohydrates minus fiber; do not subtract sugar alcohols. Use readable label values when available, otherwise estimate from the identified food and portion. Use null if a nutrient cannot reasonably be estimated; never substitute zero for missing data. Do not derive net carbs from calories. Do not force calories to equal a 4/4/9 macro formula.';
+export const macroInstructions = 'Include macros (protein, totalCarbs, fiber, fat) in grams for the ENTIRE portion, matching calories, before dividing by servings. totalCarbs means total carbohydrates INCLUDING dietary fiber (US/Canada definition). Return dietary fiber separately; fiber must not exceed totalCarbs. For labels listing carbohydrates excluding fiber (such as EU/Australia), add the separately listed fiber to obtain totalCarbs. If that fiber is unknown, totalCarbs must be null rather than treating available carbohydrates as total carbohydrates. Do not subtract sugar alcohols. Use readable label values when available, otherwise estimate from the identified food and portion. Use null if a nutrient cannot reasonably be estimated; never substitute zero for missing data. Do not derive carbohydrates from calories. Do not force calories to equal a 4/4/9 macro formula.';
 export function validateMacros(value: unknown) {
   const parsed = macroResult.safeParse(value);
   if (!parsed.success) throw new APIError(502, 'invalid_estimate', 'Couldn’t estimate macros. Try a clearer food name.');
   const result = parsed.data;
-  if (Object.values(result).some(n => n !== null && (!Number.isFinite(n) || n < 0 || n > 100_000))) {
+  if (Object.values(result).some(n => n !== null && (!Number.isFinite(n) || n < 0 || n > 100_000)) || (result.totalCarbs !== null && result.fiber !== null && result.fiber > result.totalCarbs)) {
     throw new APIError(502, 'invalid_estimate', 'Couldn’t estimate macros. Try a clearer food name.');
   }
   return result;

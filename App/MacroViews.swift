@@ -15,16 +15,21 @@ struct DailyMacrosView: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack(alignment: .top, spacing: 8) {
-                ForEach(MacroKind.allCases) { kind in
-                    VStack(spacing: 2) {
-                        Text(kind.title).font(.cave(.caption)).foregroundStyle(.secondary)
-                        Text(summary.total(kind).text + " g").font(.cave(.body))
-                        if let goal = goals[keyPath: kind.keyPath] {
-                            Text("/ \(goal.macroText) g").font(.cave(.caption2)).foregroundStyle(.secondary)
-                        }
-                    }.frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
+                ForEach(MacroKind.primary) { kind in
+                    let title = Text(kind.title + ":").font(.cave(.caption)).foregroundStyle(.secondary)
+                    let amount = Text(summary.total(kind).text).font(.cave(.body))
+                        + Text(goals[keyPath: kind.keyPath].map { "/\($0.macroText)" } ?? "")
+                            .font(.cave(.caption)).foregroundStyle(.secondary)
+                        + Text("g").font(.cave(.body))
+                    // Large Dynamic Type sizes fall back to the stacked layout instead of truncating.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) { title; amount }
+                            .lineLimit(1)
+                        VStack(spacing: 2) { title; amount }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
                 }
             }
             if summary.incomplete {
@@ -54,6 +59,7 @@ struct MacroAmountField: View {
                 .frame(maxWidth: 110, minHeight: 44).focused($focused)
                 .foregroundStyle(value.map { !$0.isFinite || $0 < 0 } == true ? Color.red : Color.primary)
                 .accessibilityLabel(title).accessibilityIdentifier(identifier)
+                .selectValueOnFocus(identifier: identifier)
                 .onChange(of: text) { _, text in
                     guard focused else { return }
                     let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,6 +75,7 @@ struct MacroAmountField: View {
                 .onAppear { updateText() }
             Text("g").foregroundStyle(.secondary)
         }
+        .selectValueOnTap(focus: $focused)
     }
     private func updateText() { text = value.flatMap { $0.isFinite ? $0.macroText : nil } ?? (value == nil ? "" : text) }
 }
@@ -80,7 +87,17 @@ struct MacroEditorSection: View {
     var body: some View {
         Section {
             ForEach(MacroKind.allCases) { kind in
-                MacroAmountField(title: kind.title, value: binding(kind), estimated: draft.macrosPerServing?[keyPath: kind.estimateKeyPath] == true, identifier: "macro-\(kind.rawValue)")
+                MacroAmountField(title: kind.editorTitle, value: binding(kind), estimated: draft.macrosPerServing?[keyPath: kind.estimateKeyPath] == true, identifier: "macro-\(kind.rawValue)")
+            }
+            HStack {
+                Text("Net carbs").foregroundStyle(.secondary)
+                Spacer()
+                Text(draft.totalMacros?.netCarbs.map { "\(draft.totalMacros?.estimatedNetCarbs == true ? "≈" : "")\($0.macroText) g" } ?? "—")
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityIdentifier("calculatedNetCarbs")
+            if let macros = draft.totalMacros, let carbs = macros.totalCarbs, let fiber = macros.fiber, fiber > carbs {
+                Text("Fiber cannot exceed total carbohydrates.").font(.cave(.caption)).foregroundStyle(.red)
             }
             if !(draft.totalMacros?.isComplete ?? false) {
                 Button {
@@ -99,8 +116,8 @@ struct MacroEditorSection: View {
             Text("Macros · total")
         } footer: {
             Text(draft.totalMacros?.hasEstimates == true
-                 ? "≈ Estimated. Net carbs exclude fiber."
-                 : "Optional. Net carbs exclude fiber. Estimates use AI.")
+                 ? "≈ Estimated. Carbohydrates include fiber. Net carbs = carbohydrates − fiber."
+                 : "Optional. Carbohydrates include fiber. Net carbs = carbohydrates − fiber. Estimates use AI.")
         }
         .task(id: estimating) {
             guard estimating else { return }
@@ -115,6 +132,9 @@ struct MacroEditorSection: View {
                     message = "Food changed. Tap Estimate missing again."; return
                 }
                 let totals = (draft.totalMacros ?? MacroNutrients()).fillingMissing(from: estimate)
+                guard totals.isValid else {
+                    message = "Estimate conflicts with your carbohydrates or fiber. Check those values and try again."; return
+                }
                 draft.macrosPerServing = totals.scaled(1 / draft.servings)
                 if !estimate.hasValues { message = "Try a more specific food name." }
             } catch is CancellationError { }
@@ -152,7 +172,7 @@ struct MacroGoalsView: View {
     var body: some View {
         Form {
             Section {
-                ForEach(MacroKind.allCases) { kind in
+                ForEach(MacroKind.primary) { kind in
                     MacroAmountField(title: kind.title, value: Binding(get: { goals[keyPath: kind.keyPath] }, set: { goals[keyPath: kind.keyPath] = $0 }), placeholder: "None", identifier: "goal-\(kind.rawValue)")
                 }
             } footer: { Text("Daily goals. Leave blank for none.") }

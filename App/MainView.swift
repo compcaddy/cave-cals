@@ -145,8 +145,13 @@ struct MainView: View {
                         mealRows
                     } else {
                         if store.dayEntries(selected).isEmpty {
-                            Text("No food logged for this day.")
+                            Text(Calendar.current.isDateInToday(selected)
+                                 ? "You haven't logged anything yet today."
+                                 : "No food logged for this day.")
                                 .font(.cave(.body)).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 16)
                                 .listRowSeparator(.hidden)
                         }
                         Section {
@@ -394,8 +399,8 @@ struct MainView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Spacer(minLength: 0)
                 if let goal {
+                    Spacer(minLength: 0)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(abs(goal - total).calorieText)
                             .font(.custom("Schoolbell-Regular", size: 28, relativeTo: .title2))
@@ -438,12 +443,12 @@ struct MainView: View {
             let local = localSearchFoods
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]),
+                FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(store.meals.filter { normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery)) }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { meal in
-                FoodRow(name: meal.name, calories: meal.calories, macros: MacroSummary(meal.items), add: {
+                FoodRow(name: meal.name, calories: meal.calories, add: {
                     revealNextAddedEntry = true
                     if store.addMeal(meal, date: loggingDate) {
                         showLogged()
@@ -460,11 +465,11 @@ struct MainView: View {
                 !local.contains { normalizedFoodName($0.draft.name) == normalizedFoodName(food.name) }
             }) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]),
+                FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(search.results.filter { result in !local.contains { $0.draft.externalID == result.id } }) { result in
-                FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription, macros: MacroSummary([result.draft]),
+                FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription,
                         add: { addFromSearch(result.draft) },
                         edit: { edit(result.draft, revealAfterSave: true) })
             }
@@ -482,9 +487,11 @@ struct MainView: View {
     private var suggestionRows: some View {
         Group {
             if suggestedFoods.isEmpty {
-                Text("\nYou eat.\n\nApp remember.\n\nSoon, app help you log food fast.")
+                Text("\nYou eat.\n\nApp remember.\n\nQuick Add show smart suggestions.")
                     .font(.custom("Schoolbell-Regular", size: 19, relativeTo: .body))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 16).padding(.vertical, 12)
                     .listRowSeparator(.hidden)
             } else {
