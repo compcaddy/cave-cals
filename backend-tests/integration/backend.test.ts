@@ -108,7 +108,7 @@ test('food search is free, returns normalized restaurant results, and uses share
     upstreamCalls++;
     return String(url).includes('/connect/token')
       ? Response.json({ access_token: 'fixture-token', expires_in: 86400 })
-      : Response.json({ foods: { total_results: '1', food: { food_id: '123', food_name: 'Sandwich', brand_name: 'Urbane Cafe', food_description: 'Per 1 sandwich - Calories: 800kcal | Fat: 36g' } } });
+      : Response.json({ foods: { total_results: '1', food: { food_id: '123', food_name: 'Sandwich', brand_name: 'Urbane Cafe', food_description: 'Per 1 sandwich - Calories: 800kcal | Fat: 36g | Carbs: 45g' } } });
   };
   try {
     const response = await api(new Request('http://localhost:3000/api/v1/foods/search', {
@@ -118,6 +118,8 @@ test('food search is free, returns normalized restaurant results, and uses share
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const body = await response.json();
     assert.equal(body.results[0].brand, 'Urbane Cafe'); assert.equal(body.results[0].calories, 800);
+    // Basic search has no fiber: newer apps get total carbs, older apps get no guessed net carbs.
+    assert.equal(body.results[0].macros.totalCarbs, 45); assert.equal(body.results[0].macros.netCarbs, null);
     assert.equal(body.cacheLifetime, 0); assert.equal(upstreamCalls, 2);
   } finally {
     globalThis.fetch = beforeFetch;
@@ -215,7 +217,7 @@ test('manual macro estimates are free, share server budgets, and do not spend th
     assert.equal((await api(request({ name: '' }), 'food/macros')).status, 400);
     const result = await api(request(), 'food/macros');
     assert.equal(result.status, 200);
-    assert.deepEqual(await result.json(), { protein: 12, totalCarbs: 1, fiber: 0, fat: 10 });
+    assert.deepEqual(await result.json(), { protein: 12, totalCarbs: 1, fiber: 0, fat: 10, netCarbs: 1 });
     assert.equal((await api(request(), 'food/macros')).status, 429);
     assert.equal(providerCalls, 1);
     const [after] = await database().select().from(accounts).where(eq(accounts.id, ownerID));

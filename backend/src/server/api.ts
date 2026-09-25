@@ -6,7 +6,7 @@ import { products, entitlement, requirePaid, verifyPurchase, verifyNotification 
 import { signUpload, uploadInput } from './storage';
 import { analyze, reserveAIUsage } from './analysis';
 import { importMealFromWebsite } from './ai';
-import { estimateMacros, macroInput } from './macros';
+import { estimateMacros, macroInput, withLegacyItems, withLegacyNetCarbs } from './macros';
 import { consume, tomorrow, limitPublic } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
@@ -26,7 +26,8 @@ export async function api(request: Request, path: string): Promise<Response> {
       const input = foodSearchInput.parse(body);
       const provider = foodSearchClient();
       await limitFoodSearch(request);
-      return ok(await provider.search(input.query));
+      const page = await provider.search(input.query);
+      return ok({ ...page, results: page.results.map(food => food.macros ? { ...food, macros: withLegacyNetCarbs(food.macros) } : food) });
     }
     if (path === 'device/challenge') {
       const input = z.object({ keyId: keySchema, purpose: z.enum(['register','request']) }).parse(body);
@@ -79,7 +80,7 @@ export async function api(request: Request, path: string): Promise<Response> {
       const { regularLogCount } = scanUsageInput.parse(body);
       // Persist the high-water mark even if access is denied inside the analysis transaction.
       await scanAccess(identity, false, regularLogCount);
-      return ok(await analyze(identity, uploadId, undefined, regularLogCount));
+      return ok(withLegacyItems(await analyze(identity, uploadId, undefined, regularLogCount)));
     }
     if (path === 'food/macros') {
       const input = macroInput.parse(body);
@@ -88,13 +89,13 @@ export async function api(request: Request, path: string): Promise<Response> {
         await consume(`macro-estimate:${identity.accountId}:${new Date().toISOString().slice(0,10)}`, positiveInt('MACRO_ESTIMATE_DAILY_LIMIT', 10), tomorrow(), tx);
         await reserveAIUsage(identity, tx);
       });
-      return ok(await estimateMacros(input));
+      return ok(withLegacyNetCarbs(await estimateMacros(input)));
     }
     if (path === 'meal/import') {
       const { url } = z.object({ url: z.string().url().max(2048) }).parse(body);
       await requirePaid(identity);
       await reserveAIUsage(identity);
-      return ok(await importMealFromWebsite(url));
+      return ok(withLegacyItems(await importMealFromWebsite(url)));
     }
     throw new APIError(404, 'not_found', 'Not found.');
   } catch (error) {

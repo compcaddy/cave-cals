@@ -19,6 +19,19 @@ export function validateMacros(value: unknown) {
   }
   return result;
 }
+type MacroFields = { protein?: number | null; totalCarbs?: number | null; fiber?: number | null; fat?: number | null; netCarbs?: number | null };
+// App versions through 1.0.3 read one `netCarbs` value; newer versions read `totalCarbs` and `fiber` and ignore
+// `netCarbs`. Responses carry both so each version keeps its carbohydrates. Unknown fiber never becomes zero.
+export function withLegacyNetCarbs<T extends MacroFields>(macros: T): T & { netCarbs?: number | null } {
+  if ('netCarbs' in macros || !('totalCarbs' in macros)) return macros;
+  const { totalCarbs, fiber } = macros;
+  const netCarbs = totalCarbs == null ? null : totalCarbs === 0 ? 0
+    : fiber == null || fiber > totalCarbs ? null : Math.round((totalCarbs - fiber) * 100) / 100;
+  return { ...macros, netCarbs };
+}
+export function withLegacyItems<T extends { items: { macros: MacroFields | null }[] }>(result: T): T {
+  return { ...result, items: result.items.map(item => item.macros ? { ...item, macros: withLegacyNetCarbs(item.macros) } : item) };
+}
 export async function estimateMacros(input: z.infer<typeof macroInput>, client = new OpenAI({ apiKey: required('OPENAI_API_KEY'), timeout: 45000, maxRetries: 0 })) {
   const response = await client.responses.parse({
     model: process.env.OPENAI_IDENTIFICATION_MODEL || 'gpt-6-astra', reasoning: { effort: 'low' },

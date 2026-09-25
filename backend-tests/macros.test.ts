@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import OpenAI from 'openai';
-import { estimateMacros, macroInput, validateMacros } from '../backend/src/server/macros';
+import { estimateMacros, macroInput, validateMacros, withLegacyItems, withLegacyNetCarbs } from '../backend/src/server/macros';
 import { validateResult } from '../backend/src/server/ai';
 import { api } from '../backend/src/server/api';
 
@@ -16,6 +16,20 @@ test('macro contract distinguishes unknown and known zero; rejects non-finite, n
   const macros = { protein: 6, totalCarbs: 0.5, fiber: 0, fat: 5 };
   assert.deepEqual(validateResult({ items: [{ ...item, macros }], notes: '' }).items[0].macros, macros);
   assert.throws(() => validateResult({ items: [{ ...item, macros: { ...macros, fat: -1 } }], notes: '' }));
+});
+
+test('responses add net carbs for older apps without guessing unknown fiber', () => {
+  assert.deepEqual(withLegacyNetCarbs({ protein: 0.36, totalCarbs: 19.06, fiber: 3.3, fat: 0.24 }), { protein: 0.36, totalCarbs: 19.06, fiber: 3.3, fat: 0.24, netCarbs: 15.76 });
+  assert.equal(withLegacyNetCarbs({ protein: 1, totalCarbs: 45, fiber: undefined, fat: 2 }).netCarbs, null);
+  assert.equal(withLegacyNetCarbs({ protein: null, totalCarbs: null, fiber: null, fat: null }).netCarbs, null);
+  assert.equal(withLegacyNetCarbs({ protein: 0, totalCarbs: 0, fiber: null, fat: 0 }).netCarbs, 0);
+  assert.equal(withLegacyNetCarbs({ protein: 1, totalCarbs: 5, fiber: 6, fat: 1 }).netCarbs, null);
+  // Results stored by the previous backend already use the older shape.
+  const stored = { protein: 12, netCarbs: 1, fat: 10 };
+  assert.deepEqual(withLegacyNetCarbs(stored), stored);
+  const result = withLegacyItems({ notes: '', items: [{ name: 'Egg', macros: { protein: 6, totalCarbs: 1, fiber: 0, fat: 5 } }, { name: 'Tea', macros: null }] });
+  assert.deepEqual(result.items[0].macros, { protein: 6, totalCarbs: 1, fiber: 0, fat: 5, netCarbs: 1 });
+  assert.equal(result.items[1].macros, null);
 });
 
 test('text estimate sends only the one food, requests total-portion grams, and validates the reply', async () => {
