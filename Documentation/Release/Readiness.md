@@ -1,3 +1,11 @@
+# Backward-compatible carbohydrate API — September 25, 2026
+
+- Production backend now serves both macro shapes. Food search, photo/voice analysis, recipe import, and text macro estimates return `totalCarbs` and `fiber` for the upcoming app plus a derived `netCarbs` for released apps through 1.0.3. Unknown fiber still yields no net carbs (a known zero-carb food stays zero); results stored by the previous backend pass through unchanged. The OpenAI schema and stored data are unchanged.
+- Source `d63cb63` deployed to Vercel production (`cavecals-agmsqa8eq-phils-projects-e15f8e11.vercel.app`, aliased to https://cavecals.vercel.app); an identical deploy a minute earlier was superseded. The deploy also carries the previously undeployed `dad3bc0` website copy (home-page App Store link fallback, privacy section on plans/weigh-ins).
+- Verification: 29 backend unit tests, 13 integration tests on Neon `backend-dev`, TypeScript, and the production build passed. Live "Fuji apple" search returned e.g. 19.06 g total carbs, 3.3 g fiber, 15.76 g net carbs; `/` and `/privacy` 200, `/test` 404, unsigned account request rejected. The current simulator build showed carbohydrates and fiber on an online result. The app caches search results for up to an hour, so earlier queries can show stale blanks until then. No TestFlight/App Store build was uploaded.
+
+---
+
 # Bundled nutrition and total carbohydrates — September 23, 2026
 
 - September 23, 2026 (local, not yet in a TestFlight build): the bundled catalog expanded to 5,904 foods — the unchanged original 1,000, 4,000 generic USDA FNDDS 2021-2023 / SR Legacy 2018 additions, and 904 brand-name and restaurant-chain foods. Generation, `--check`, the independent validator and ECCTests pass; see `Documentation/FoodCatalog/validation-report.json`.
