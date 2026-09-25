@@ -102,22 +102,6 @@ import SwiftData
         XCTAssertEqual(store.goal(Date()), 9999)
     }
 
-    func testCalorieProgressUsesWarningAndOverageBands() {
-        func assertSegments(_ total: Double, blue: Double, orange: Double, red: Double, line: UInt = #line) {
-            let segments = CalorieProgressSegments(total: total, goal: 1_000)
-            XCTAssertEqual(segments.blue, blue, accuracy: 0.0001, line: line)
-            XCTAssertEqual(segments.orange, orange, accuracy: 0.0001, line: line)
-            XCTAssertEqual(segments.red, red, accuracy: 0.0001, line: line)
-        }
-
-        assertSegments(500, blue: 0.5, orange: 0, red: 0)
-        assertSegments(900, blue: 0.8, orange: 0.1, red: 0)
-        assertSegments(1_000, blue: 0.8, orange: 0.2, red: 0)
-        assertSegments(1_200, blue: 0.6, orange: 0.2, red: 0.2)
-        assertSegments(1_400, blue: 0.4, orange: 0.2, red: 0.4)
-        assertSegments(1_900, blue: 0, orange: 0.2, red: 0.8)
-    }
-
     func testNoGoalPreferencePersistsAcrossReopen() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -525,7 +509,18 @@ import SwiftData
         do { _ = try await provider.search(query: "busy"); XCTFail("Must surface rate limit") }
         catch { XCTAssertEqual(error.localizedDescription, FoodServiceError.rateLimited.localizedDescription) }
     }
-    func testFoodSearchNeverCachesEmptyResultsAndRetainsRestaurantName() async throws {
+    func testBrandedResultsLeadWithProductNameAndKeepBrandForOneWordNames() {
+        let diet = FoodResult(id: "fatsecret:1", name: "Diet Coke", brand: "Coca-Cola", calories: 0, servingDescription: "1 can")
+        XCTAssertEqual(diet.draft.name, "Diet Coke")
+        XCTAssertEqual(diet.searchDetail, "Coca-Cola · 1 can")
+        let latte = FoodResult(id: "fatsecret:2", name: "Latte", brand: "Starbucks", calories: 190, servingDescription: "1 grande")
+        XCTAssertEqual(latte.draft.name, "Starbucks Latte")
+        XCTAssertEqual(latte.searchDetail, "1 grande")
+        let named = FoodResult(id: "fatsecret:3", name: "Coca-Cola Classic", brand: "Coca-Cola", calories: 140, servingDescription: "1 can")
+        XCTAssertEqual(named.draft.name, "Coca-Cola Classic")
+        XCTAssertEqual(named.searchDetail, "1 can")
+    }
+    func testFoodSearchNeverCachesEmptyResultsAndShowsBrandBesideServing() async throws {
         let provider = SearchFixture(pages: [FoodSearchPage(results: [], cacheLifetime: 3600), SearchFixture.page])
         let search = FoodSearchState(provider: provider, persistCache: false, debounce: .zero)
         await search.search("Urbane Cafe")
@@ -533,7 +528,8 @@ import SwiftData
         XCTAssertNotNil(search.message)
         await search.search("Urbane Cafe")
         XCTAssertEqual(search.results.count, 1)
-        XCTAssertEqual(search.results.first?.draft.name, "Urbane Cafe — So-Cal Sandwich")
+        XCTAssertEqual(search.results.first?.draft.name, "So-Cal Sandwich")
+        XCTAssertEqual(search.results.first?.searchDetail, "Urbane Cafe · 1 sandwich")
         XCTAssertEqual(search.results.first?.draft.calories, 800)
         let calls = await provider.calls
         XCTAssertEqual(calls, 2)

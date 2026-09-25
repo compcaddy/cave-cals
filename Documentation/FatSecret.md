@@ -102,3 +102,7 @@ Checked https://platform.fatsecret.com/attribution after the owner received Prem
 Added `Powered by fatsecret nutrition API (www.fatsecret.com)` to the existing App Store 1.0.3 description via App Store Connect, preserving the owner's other listing edits. The native approved link remains in You/About and now also appears on each food-content screen when FatSecret data is displayed: online/local search, Logged, Quick Add, Meals, food editing, meal editing/from-today selection, and meal portion/add. Saved records retain their `fatsecret:` identifiers, so the credit remains after logging or editing.
 
 These additional native credits are uploaded in 1.0.3 (3), processed VALID, and explicitly added to Internal Testers. The previously uploaded build 2 is already WAITING_FOR_REVIEW, as observed during this change; no review submission was withdrawn or replaced. The Premier API tier setting is separate from these attribution changes.
+
+## Attribution placement — September 24, 2026
+
+At the owner's request the home Logged, Quick Add, and Meals lists no longer show the credit. The `Powered by fatsecret Platform API` link now appears at the bottom of search results whenever FatSecret results are shown (home search and the meal Add food picker), and permanently in You → About with the FatSecret Terms link. Detail sheets (food editor, meal editor, meal add) still show it when they display FatSecret data. Re-check https://platform.fatsecret.com/attribution before release if the account's terms require a credit on every screen that shows FatSecret-sourced values.

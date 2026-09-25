@@ -17,7 +17,7 @@ struct WeightProfileSections: View {
                         HStack(spacing: 12) {
                             Text("Today’s weight").foregroundStyle(.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(.blue)
+                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
                             Text(weights.record(on: Date()).map { weights.unit.text($0.kilograms) } ?? "Not logged yet")
                                 .font(.cave(.title3)).foregroundStyle(.primary)
                                 .fixedSize(horizontal: true, vertical: false)
@@ -115,7 +115,7 @@ struct WeightEditorSheet: View {
                             .accessibilityIdentifier("deleteWeight")
                     }
                 }
-            }
+            }.caveScreenBackground()
             .navigationTitle("Weigh-in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -124,7 +124,7 @@ struct WeightEditorSheet: View {
                     Button {
                         if saveSelectedDay() { dismiss() }
                     } label: { Label("Save", systemImage: "checkmark").foregroundStyle(.white) }
-                    .buttonStyle(.borderedProminent).tint(.blue).disabled(!valid)
+                    .buttonStyle(.borderedProminent).tint(.caveOrange).disabled(!valid)
                     .accessibilityIdentifier("saveWeight")
                 }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focused = false } }
@@ -249,7 +249,7 @@ struct WeightHistoryView: View {
                     }.foregroundStyle(.primary).frame(minHeight: 44)
                 }.accessibilityIdentifier("weight-\(record.id)")
             }
-        }
+        }.caveScreenBackground()
         .navigationTitle("Weigh-ins")
         .toolbar { ToolbarItem(placement: .primaryAction) {
             Button("Add weigh-in") { editor = WeightEditorRoute() }.accessibilityIdentifier("addHistoricalWeight")

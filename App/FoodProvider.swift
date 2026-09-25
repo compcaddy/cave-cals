@@ -9,10 +9,22 @@ struct FoodResult: Identifiable, Codable, Equatable, Sendable {
     var servingDescription: String
     var barcode: String?
     var macros: MacroNutrients?
+    /// Products read by their own name ("Diet Coke", not "Coca-Cola — Diet Coke"). A one-word name
+    /// ("Latte", "Original") means little alone, so it keeps its brand in front.
+    var displayName: String {
+        guard let brand = brand?.trimmingCharacters(in: .whitespaces), !brand.isEmpty,
+              name.range(of: brand, options: .caseInsensitive) == nil,
+              name.split(whereSeparator: \.isWhitespace).count <= 1 else { return name }
+        return "\(brand) \(name)"
+    }
+    /// Search rows show the brand quietly beside the serving so similar products stay distinguishable.
+    var searchDetail: String {
+        let shownBrand = brand.flatMap { brand in
+            !brand.isEmpty && displayName.range(of: brand, options: .caseInsensitive) == nil ? brand : nil
+        }
+        return [shownBrand, servingDescription].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
     var draft: EntryDraft {
-        let displayName = brand.flatMap { brand in
-            !brand.isEmpty && name.range(of: brand, options: .caseInsensitive) == nil ? "\(brand) — \(name)" : nil
-        } ?? name
         var value = EntryDraft(name: displayName, calories: calories)
         value.macrosPerServing = macros
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"

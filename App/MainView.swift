@@ -40,54 +40,15 @@ enum MainSheet: Identifiable {
     }
 }
 
-struct CalorieProgressSegments: Equatable {
-    let blue: Double
-    let orange: Double
-    let red: Double
-
-    init(total: Double, goal: Double) {
-        guard total.isFinite, goal.isFinite, goal > 0 else {
-            blue = 0; orange = 0; red = 0
-            return
-        }
-        let progress = max(0, total / goal)
-        if progress <= 1 {
-            blue = min(progress, 0.8)
-            orange = min(max(progress - 0.8, 0), 0.2)
-            red = 0
-        } else {
-            // Keep the final 20% as the warning band. Each percentage over goal
-            // replaces the same amount of blue with red from the right edge.
-            red = min(progress - 1, 0.8)
-            orange = 0.2
-            blue = max(0, 0.8 - red)
-        }
-    }
-}
-
-private struct CalorieProgressBackground: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let total: Double
-    let goal: Double?
-
-    var body: some View {
-        let segments = CalorieProgressSegments(total: total, goal: goal ?? 0)
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Color.primary.opacity(0.04)
-                HStack(spacing: 0) {
-                    Color.accentColor.opacity(0.18).frame(width: geometry.size.width * segments.blue)
-                    Color.orange.opacity(0.20).frame(width: geometry.size.width * segments.orange)
-                    Color.red.opacity(0.16).frame(width: geometry.size.width * segments.red)
-                    Spacer(minLength: 0)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: segments)
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-    }
+/// "Sept. 22nd" — shared by the date header and the Logged list pill.
+func monthDayLabel(_ date: Date) -> String {
+    let months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."]
+    let month = months[Calendar.current.component(.month, from: date) - 1]
+    let day = Calendar.current.component(.day, from: date)
+    let ordinal = NumberFormatter()
+    ordinal.locale = Locale(identifier: "en_US")
+    ordinal.numberStyle = .ordinal
+    return "\(month) \(ordinal.string(from: NSNumber(value: day)) ?? String(day))"
 }
 
 struct MainView: View {
@@ -111,7 +72,6 @@ struct MainView: View {
     @State private var backgroundedAt: Date?
     @FocusState private var searching: Bool
     @FocusState private var quickNameFocused: Bool
-    @ScaledMetric(relativeTo: .largeTitle) private var summarySize = 32.0
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsFatSecretAttribution: Bool {
@@ -123,11 +83,8 @@ struct MainView: View {
                         && $0.items.contains { $0.externalID?.hasPrefix("fatsecret:") == true }
                 }
         }
-        switch listMode {
-        case .logged: return store.dayEntries(selected).contains { $0.externalID?.hasPrefix("fatsecret:") == true }
-        case .quickAdd: return suggestedFoods.contains { $0.draft.externalID?.hasPrefix("fatsecret:") == true }
-        case .meals: return store.meals.contains { $0.items.contains { $0.externalID?.hasPrefix("fatsecret:") == true } }
-        }
+        // Home lists stay clean; the credit lives under search results and in You → About.
+        return false
     }
     var body: some View {
         NavigationStack {
@@ -137,6 +94,7 @@ struct MainView: View {
                 }
             ScrollViewReader { proxy in
                 List {
+                    Group {
                     if !cleanQuery.isEmpty {
                         searchSection
                     } else if listMode == .quickAdd {
@@ -165,14 +123,14 @@ struct MainView: View {
                                         Text(entry.totalCalories.calorieText)
                                             .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
                                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
+                                        CaveIcon(.pencil, size: 22).foregroundStyle(.secondary).padding(.leading, 6)
+                                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
+                                            .accessibilityHidden(true)
                                     }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain).id(entry.id)
-                                .overlay(alignment: .bottom) {
-                                    Rectangle().fill(Color(.separator)).frame(height: 0.5).allowsHitTesting(false)
-                                }
-                                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
+                                .caveCardRow()
                                 .accessibilityIdentifier("entry-\(entry.id)")
                                 .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
                                 .contextMenu {
@@ -198,7 +156,8 @@ struct MainView: View {
                     if showsFatSecretAttribution {
                         FatSecretAttribution().listRowSeparator(.hidden)
                     }
-                }
+                    }.listRowBackground(Color.clear)
+                }.caveScreenBackground()
                 .listStyle(.plain).scrollDismissesKeyboard(.interactively)
                 .onChange(of: store.lastAddedID) { _, value in
                     guard let value else { return }
@@ -216,6 +175,7 @@ struct MainView: View {
                 }
             }
             }
+            .background(Color.caveBackground)
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
             .sheet(isPresented: drawerPresented) {
@@ -278,15 +238,28 @@ struct MainView: View {
         }
         .frame(height: 44)
         .padding(.horizontal, 20).padding(.top, 8)
-        summary.padding(.horizontal, 20)
+        DailySummaryCard(calories: store.total(selected), calorieGoal: store.goal(selected),
+                         macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
+                         macroGoals: store.macroGoals(selected))
+            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
         foodListPicker
             .padding(.horizontal, 20).padding(.bottom, 12)
-        Divider().padding(.horizontal, 20)
+        // Card rows need no rule under the pills; keep it only above an empty list.
+        Divider().padding(.horizontal, 20).opacity(listHasRows ? 0 : 1)
+    }
+
+    private var listHasRows: Bool {
+        switch listMode {
+        case .logged: !store.dayEntries(selected).isEmpty
+        case .quickAdd: !suggestedFoods.isEmpty
+        case .meals: !store.meals.isEmpty
+        }
     }
 
     private var foodListPicker: some View {
         HStack(spacing: 0) {
-            foodListButton("Logged", glyph: .check, mode: .logged)
+            foodListButton(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected),
+                           glyph: .check, mode: .logged)
             foodListButton("Quick Add", glyph: .lightning, mode: .quickAdd)
             foodListButton("Meals", glyph: .meals, mode: .meals)
         }
@@ -307,19 +280,20 @@ struct MainView: View {
             }
             .font(.system(.subheadline, design: .rounded, weight: .medium))
             .lineLimit(1).minimumScaleFactor(0.75)
-            .foregroundStyle(selected ? Color.primary : Color.secondary)
+            .foregroundStyle(selected ? Color.white : Color.secondary)
             .frame(maxWidth: .infinity, minHeight: 32)
             .background {
                 if selected {
                     Capsule()
-                        .fill(Color(.systemBackground))
+                        .fill(Color.caveOrange)
                         .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
                 }
             }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(mode == .logged ? "Logged, \(title)" : title)
+        .accessibilityIdentifier(mode == .logged ? "Logged" : title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
     @discardableResult private func openPendingAction() -> Bool {
@@ -382,57 +356,8 @@ struct MainView: View {
         case nil: EmptyView()
         }
     }
-    private var summary: some View {
-        let total = store.total(selected), goal = store.goal(selected)
-        let countFont = UIFont(name: "Schoolbell-Regular", size: summarySize * 1.5) ?? .systemFont(ofSize: summarySize * 1.5)
-        // Schoolbell reserves more space below its digits than above them.
-        // Balance the visible number, rather than its asymmetric font line box.
-        let bottomInset = 4 + countFont.ascender - countFont.capHeight + countFont.descender
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(total.calorieText)
-                        .font(Font(countFont))
-                    if let goal {
-                        Text("/ \(goal.calorieText)")
-                            .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if let goal {
-                    Spacer(minLength: 0)
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(abs(goal - total).calorieText)
-                            .font(.custom("Schoolbell-Regular", size: 28, relativeTo: .title2))
-                        Text(total > goal ? "over" : "left")
-                            .font(.custom("Schoolbell-Regular", size: 20, relativeTo: .body))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .lineLimit(1).minimumScaleFactor(0.6)
-            .padding(.horizontal, 14)
-            .padding(.top, 4)
-            .padding(.bottom, bottomInset)
-            .frame(maxWidth: .infinity)
-            .background { CalorieProgressBackground(total: total, goal: goal) }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(goal.map { "\(total.calorieText) of \($0.calorieText) calories" } ?? "\(total.calorieText) calories")
-            .accessibilityValue(goal.map { "\((max(total / $0, 0) * 100).calorieText) percent of goal" } ?? "")
-            .accessibilityIdentifier("calorieSummary")
-            if store.tracksMacros {
-                DailyMacrosView(summary: MacroSummary(store.dayEntries(selected).map(EntryDraft.init)), goals: store.macroGoals(selected))
-            }
-        }.frame(maxWidth: .infinity).padding(.top, 8).padding(.bottom, 12)
-    }
-
     private var searchSection: some View {
         Group {
-        if let amount = Double(cleanQuery), amount >= 0, amount <= 100_000 {
-            FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
-                    add: { addFromSearch(EntryDraft(calories: amount)) },
-                    edit: { edit(EntryDraft(calories: amount), focusName: true, revealAfterSave: true) })
-        }
         Group {
             if Double(cleanQuery) == nil {
             Text("Results").font(.cave(.caption2)).foregroundStyle(.secondary)
@@ -469,7 +394,7 @@ struct MainView: View {
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
             ForEach(search.results.filter { result in !local.contains { $0.draft.externalID == result.id } }) { result in
-                FoodRow(name: result.draft.name, calories: result.calories, detail: result.servingDescription,
+                FoodRow(name: result.displayName, calories: result.calories, detail: result.searchDetail,
                         add: { addFromSearch(result.draft) },
                         edit: { edit(result.draft, revealAfterSave: true) })
             }
@@ -504,7 +429,8 @@ struct MainView: View {
                                 add(draft, source: "suggestion")
                             },
                             edit: { edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: false) })
-                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
+                        .caveCardRow()
                         .contextMenu {
                             Button {
                                 edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: false)
@@ -542,7 +468,7 @@ struct MainView: View {
                 .frame(minHeight: 38)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.blue)
+            .tint(.caveOrange)
             .frame(maxWidth: .infinity)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             .listRowBackground(Color.clear)
@@ -552,6 +478,7 @@ struct MainView: View {
             if store.meals.isEmpty {
                 Text("Save foods you often eat together.")
                     .font(.cave(.body)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 8)
                     .listRowSeparator(.hidden)
             } else {
                 ForEach(orderedMeals) { meal in
@@ -628,10 +555,24 @@ struct MainView: View {
                             .accessibilityLabel("Hide weigh-in reminder for today").accessibilityIdentifier("dismissWeighIn")
                     }.padding(.leading, 20).padding(.trailing, 8)
                 }
-                HStack(spacing: 8) {
+                // The typed-entry action sits directly above the search field, aligned with its magnifier.
+                if !cleanQuery.isEmpty {
+                    Group {
+                        if let amount = Double(cleanQuery), amount >= 0, amount <= 100_000 {
+                            FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
+                                    add: { addFromSearch(EntryDraft(calories: amount)) },
+                                    edit: { edit(EntryDraft(calories: amount), focusName: true, revealAfterSave: true) })
+                        } else if Double(cleanQuery) == nil {
+                            manualSearchEntryButton
+                        }
+                    }
+                    .padding(.leading, 31).padding(.trailing, 18).padding(.top, 8)
+                }
+                // Search shares the row with the capture shortcuts; focusing it (or typing) takes the full width.
+                HStack(spacing: 4) {
                     HStack(spacing: 8) {
                         CaveIcon(.search, size: 20).foregroundStyle(.secondary)
-                        TextField("search food or enter cals", text: $query)
+                        TextField(searchExpanded ? "search food or enter cals" : "search / add", text: $query)
                             .focused($searching).submitLabel(.search).autocorrectionDisabled()
                             .accessibilityIdentifier("foodSearch")
                         if searching || !query.isEmpty {
@@ -645,54 +586,41 @@ struct MainView: View {
                                     .foregroundStyle(.red).frame(width: 44, height: 44)
                             }.buttonStyle(.plain).accessibilityLabel("Clear search")
                         }
-                    }.padding(12).background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 2)
-                if !cleanQuery.isEmpty {
-                    if Double(cleanQuery) == nil {
-                        manualSearchEntryButton
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                    }.padding(.horizontal, 12).frame(minHeight: 48)
+                    .background(Color.caveBackground, in: RoundedRectangle(cornerRadius: 14))
+                    if !searchExpanded {
+                        entryShortcuts.transition(.move(edge: .trailing).combined(with: .opacity))
                     }
-                } else {
-                    entryShortcutBar
                 }
-            }.background(.bar)
+                .padding(.horizontal, 16).padding(.top, cleanQuery.isEmpty ? 12 : 4).padding(.bottom, 12)
+                .animation(.easeInOut(duration: 0.22), value: searchExpanded)
+            }.background(Color.caveSurface)
     }
-    private var entryShortcutBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                searching = false
-                withAnimation(.easeInOut(duration: 0.2)) { showingQuickCalories.toggle() }
-            } label: {
-                QuickCaloriesIcon().frame(width: 28, height: 28).frame(width: 60, height: 48)
-            }.accessibilityIdentifier("searchQuickCalories").accessibilityLabel("Select Calories").accessibilityValue(showingQuickCalories ? "Expanded" : "Collapsed")
-            Spacer()
+    private var searchExpanded: Bool { searching || !query.isEmpty }
+    private var entryShortcuts: some View {
+        HStack(spacing: 0) {
             Button {
                 searching = false
                 revealNextAddedEntry = true
                 sheet = .voice
             } label: {
-                CaveIcon(.voice, size: 28).frame(width: 60, height: 48)
+                CaveIcon(.voice, size: 36).frame(width: 63, height: 48)
             }.accessibilityLabel("Voice entry")
-            Spacer()
             Button {
                 searching = false
                 revealNextAddedEntry = true
                 sheet = .barcode(loggingDate)
             } label: {
-                CaveIcon(.barcode, size: 28).frame(width: 60, height: 48)
+                CaveIcon(.barcode, size: 36).frame(width: 63, height: 48)
             }.accessibilityLabel("Scan barcode")
-            Spacer()
             Button {
                 searching = false
                 revealNextAddedEntry = true
                 sheet = .photo
             } label: {
-                CaveIcon(.meal, size: 28).frame(width: 60, height: 48)
+                CaveIcon(.meal, size: 36).frame(width: 63, height: 48)
             }.accessibilityLabel("Photo entry")
-            Spacer()
-        }.padding(.vertical, 8)
+        }
     }
     private var manualSearchEntryButton: some View {
         Button {
@@ -742,7 +670,7 @@ struct MainView: View {
                     .focused($quickNameFocused)
                     .font(.cave(.subheadline))
                     .padding(12)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                    .background(Color.caveBackground, in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityIdentifier("quickCalorieName")
                     .submitLabel(.done)
                     .onSubmit { addQuickCalories() }
@@ -793,7 +721,7 @@ struct MainView: View {
     }
     private func openMealStart(_ start: NewMealStart) {
         switch start {
-        case .today: sheet = .mealEditor(MealRoute(fromToday: true))
+        case .today: sheet = .mealEditor(MealRoute(fromDay: Date()))
         case .photo: sheet = .mealCapture(.photo)
         case .voice: sheet = .mealCapture(.voice)
         case .link: sheet = .mealImport
@@ -996,13 +924,7 @@ struct DaySelector: View {
     private var dateLabel: String {
         let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thur", "Fri", "Sat"]
         let weekday = weekdays[Calendar.current.component(.weekday, from: selected) - 1]
-        let months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."]
-        let month = months[Calendar.current.component(.month, from: selected) - 1]
-        let day = Calendar.current.component(.day, from: selected)
-        let ordinal = NumberFormatter()
-        ordinal.locale = Locale(identifier: "en_US")
-        ordinal.numberStyle = .ordinal
-        return "\(weekday), \(month) \(ordinal.string(from: NSNumber(value: day)) ?? String(day))"
+        return "\(weekday), \(monthDayLabel(selected))"
     }
     private func move(_ delta: Int) {
         guard let next = Calendar.current.date(byAdding: .day, value: delta, to: selected),
@@ -1044,7 +966,7 @@ private struct CalorieCalendarSheet: View {
                             monthView(month, totals: totals).id(month)
                         }
                     }.padding(.horizontal, 16).padding(.vertical, 16)
-                }
+                }.caveScreenBackground()
                 .task { proxy.scrollTo(monthStart(selected), anchor: .top) }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -1086,7 +1008,7 @@ private struct CalorieCalendarSheet: View {
                                 .lineLimit(1).minimumScaleFactor(0.6)
                         }.frame(maxWidth: .infinity, minHeight: 64)
                             .foregroundStyle(isSelected ? Color.white : Color.primary)
-                            .background(isSelected ? Color.accentColor : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                            .background(isSelected ? Color.accentColor : Color.caveSurface, in: RoundedRectangle(cornerRadius: 12))
                             .overlay {
                                 if isToday { RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: 1.5) }
                             }

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     var body: some View {
         NavigationStack {
@@ -19,7 +20,7 @@ struct SettingsView: View {
                         HStack(spacing: 12) {
                             Text("Daily calorie goal").foregroundStyle(.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(.blue)
+                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
                             Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
                                 .font(.cave(.title3))
                                 .foregroundStyle(.primary)
@@ -46,6 +47,13 @@ struct SettingsView: View {
                 if AIConfiguration.developerSettingsAvailable {
                     Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
                 }
+                Section("Appearance") {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("appearancePicker")
+                }
                 Section("iCloud") {
                     Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
                     Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device, with optional sharing to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
@@ -59,7 +67,7 @@ struct SettingsView: View {
                     Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 legalLinks
-            }
+            }.caveScreenBackground()
             .navigationTitle("You").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .fullScreenCover(isPresented: $adjustingGoal) {
@@ -110,15 +118,32 @@ struct SettingsView: View {
 struct MealRoute: Identifiable {
     let id = UUID()
     var meal: SavedMeal?
-    var fromToday = false
+    /// Build the meal by ticking foods already logged on this day (plus any extra foods).
+    var fromDay: Date?
+    var selectAllFromDay = false
     var initialName = ""
     var initialItems: [EntryDraft] = []
 
-    init(meal: SavedMeal? = nil, fromToday: Bool = false, name: String = "", items: [EntryDraft] = []) {
+    init(meal: SavedMeal? = nil, fromDay: Date? = nil, selectAll: Bool = false, name: String = "", items: [EntryDraft] = []) {
         self.meal = meal
-        self.fromToday = fromToday
+        self.fromDay = fromDay
+        selectAllFromDay = selectAll
         initialName = name
         initialItems = items
+    }
+
+    /// A time-of-day name ("Lunch", "Lunch 2") so a new meal can be saved without typing.
+    static func suggestedName(existing: [String], at date: Date = Date()) -> String {
+        let base: String
+        switch Calendar.current.component(.hour, from: date) {
+        case 4..<11: base = "Breakfast"
+        case 11..<16: base = "Lunch"
+        case 16..<21: base = "Dinner"
+        default: base = "Snack"
+        }
+        let taken = Set(existing.map { normalizedFoodName($0) })
+        guard taken.contains(normalizedFoodName(base)) else { return base }
+        return (2...).lazy.map { "\(base) \($0)" }.first { !taken.contains(normalizedFoodName($0)) }!
     }
 }
 
@@ -132,38 +157,56 @@ struct NewMealStartSheet: View {
     let select: (NewMealStart) -> Void
 
     var body: some View {
+        let hasToday = !store.dayEntries(Date()).isEmpty
         NavigationStack {
-            List {
-                startButton("Create from Today's Entries", start: .today)
-                    .disabled(store.dayEntries(Date()).isEmpty)
-                startButton("Create from Meal Scan", start: .photo)
-                startButton("Create from Voice Log", start: .voice)
-                startButton("Import from Link/Website", start: .link)
-                startButton("Manually Add Meal Items", start: .manual)
+            ScrollView {
+                VStack(spacing: 10) {
+                    option("From today’s log", hasToday ? "Tick foods you already logged today" : "Log some foods first, then save them together",
+                           glyph: .check, start: .today, id: "newMealToday", enabled: hasToday)
+                    option("Snap your meal", "Scan your plate; each food becomes an item", glyph: .meal, start: .photo, id: "newMealPhoto")
+                    option("Say what’s in it", "Describe the meal out loud", glyph: .voice, start: .voice, id: "newMealVoice")
+                    option("Import a recipe", "Paste a recipe or menu link", glyph: .cloud, start: .link, id: "newMealLink")
+                    option("Build it yourself", "Search foods or add your own", glyph: .pencil, start: .manual, id: "newMealManual")
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
             }
+            .background(Color.caveBackground)
             .navigationTitle("New Meal")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CaptureCancelButton { dismiss() }
             }
         }
-        .presentationDetents([.fraction(0.68)])
+        .presentationDetents([.fraction(0.8), .large])
         .presentationDragIndicator(.visible)
     }
 
-    private func startButton(_ title: String, start: NewMealStart) -> some View {
+    private func option(_ title: String, _ detail: String, glyph: CaveGlyph, start: NewMealStart, id: String, enabled: Bool = true) -> some View {
         Button {
             select(start)
         } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                CaveIcon(.chevronRight, size: 16).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                CaveIcon(glyph, size: 32)
+                    .foregroundStyle(enabled ? Color.caveOrange : Color.secondary)
+                    .frame(width: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.cave(.headline)).foregroundStyle(.primary)
+                    Text(detail).font(.cave(.footnote)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                CaveIcon(.chevronRight, size: 14).foregroundStyle(.tertiary)
             }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+            .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
+        .accessibilityIdentifier(id)
     }
 }
 
@@ -180,56 +223,88 @@ struct MealEditorSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Meal name") { TextField("My Breakfast", text: $name).accessibilityIdentifier("mealName") }
-                if route.fromToday {
-                    Section("Choose today’s entries") {
-                        ForEach(store.dayEntries(Date())) { entry in
+                Section("Meal name") {
+                    TextField(suggestedName, text: $name).accessibilityIdentifier("mealName")
+                }
+                if let day = route.fromDay {
+                    let entries = store.dayEntries(day)
+                    Section {
+                        ForEach(entries) { entry in
                             Button {
                                 if selection.contains(entry.id) { selection.remove(entry.id) } else { selection.insert(entry.id) }
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
                                     CaveIcon(selection.contains(entry.id) ? .check : .circle, size: 24)
+                                        .foregroundStyle(selection.contains(entry.id) ? Color.caveOrange : Color.secondary)
                                     Text(entry.name.isEmpty ? "\(entry.totalCalories.calorieText) calories" : entry.name).foregroundStyle(.primary)
                                     Spacer(); Text(entry.totalCalories.calorieText).foregroundStyle(.secondary)
-                                }.padding(.vertical, 5)
-                            }.accessibilityLabel("Select \(entry.name.isEmpty ? entry.totalCalories.calorieText + " calories" : entry.name)")
-                                .accessibilityAddTraits(selection.contains(entry.id) ? .isSelected : [])
+                                }.padding(.vertical, 5).contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                            .accessibilityLabel("Select \(entry.name.isEmpty ? entry.totalCalories.calorieText + " calories" : entry.name)")
+                            .accessibilityAddTraits(selection.contains(entry.id) ? .isSelected : [])
+                        }
+                    } header: {
+                        HStack {
+                            Text(Calendar.current.isDateInToday(day) ? "From today’s log" : "From \(monthDayLabel(day))")
+                            Spacer()
+                            if !entries.isEmpty {
+                                let all = entries.allSatisfy { selection.contains($0.id) }
+                                Button(all ? "Clear" : "Select All") {
+                                    selection = all ? [] : Set(entries.map(\.id))
+                                }
+                                .font(.cave(.caption).bold()).foregroundStyle(Color.caveOrange).textCase(nil)
+                                .accessibilityIdentifier("mealSelectAll")
+                            }
                         }
                     }
-                } else {
-                    Section("Foods") {
-                        ForEach(items) { item in
-                            Button { component = item } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\(item.calories.calorieText) cal").foregroundStyle(.secondary) }
-                                    if store.tracksMacros { MacroLine(summary: MacroSummary([item])) }
-                                }
-                            }.foregroundStyle(.primary)
-                        }.onDelete { items.remove(atOffsets: $0) }
-                        Button { showFoodPicker = true } label: { Label { Text("Add food") } icon: { CaveIcon(.plus, size: 18) } }
+                }
+                Section(route.fromDay == nil ? "Foods" : "Other foods") {
+                    ForEach(items) { item in
+                        Button { component = item } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack { Text(item.name.isEmpty ? "Unnamed food" : item.name); Spacer(); Text("\(item.calories.calorieText) cal").foregroundStyle(.secondary) }
+                                if store.tracksMacros { MacroLine(summary: MacroSummary([item])) }
+                            }
+                        }.foregroundStyle(.primary)
+                    }.onDelete { items.remove(atOffsets: $0) }
+                    Button { showFoodPicker = true } label: {
+                        Label { Text("Add food") } icon: { CaveIcon(.plus, size: 18) }
+                            .foregroundStyle(Color.caveOrange)
                     }
+                    .accessibilityIdentifier("addMealFood")
                 }
                 Section {
                     HStack { Text("Total"); Spacer(); Text("\(chosenItems.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal").fontWeight(.semibold) }
                     if store.tracksMacros { DailyMacrosView(summary: MacroSummary(chosenItems), goals: MacroNutrients()) }
+                } footer: {
+                    if chosenItems.isEmpty {
+                        Text(route.fromDay == nil ? "Add at least one food to save this meal." : "Tick or add at least one food to save this meal.")
+                    }
                 }
-                if (route.fromToday ? store.dayEntries(Date()).map(EntryDraft.init) : items)
-                    .contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
+                if chosenItems.contains(where: { $0.externalID?.hasPrefix("fatsecret:") == true }) {
                     Section { FatSecretAttribution() }
                 }
-            }
+            }.caveScreenBackground()
             .navigationTitle(route.meal == nil ? "New Meal" : "Edit Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save Meal") { if store.saveMeal(route.meal, name: name, items: chosenItems) { dismiss() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || chosenItems.isEmpty)
+                    Button {
+                        if store.saveMeal(route.meal, name: savedName, items: chosenItems) { dismiss() }
+                    } label: {
+                        Label("Save Meal", systemImage: "checkmark")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.caveOrange)
+                    .disabled(chosenItems.isEmpty)
                 }
             }
             .onAppear {
                 if !initialized {
                     name = route.meal?.name ?? route.initialName
                     items = route.meal?.items ?? route.initialItems
+                    if let day = route.fromDay, route.selectAllFromDay { selection = Set(store.dayEntries(day).map(\.id)) }
                     initialized = true
                 }
             }
@@ -242,8 +317,16 @@ struct MealEditorSheet: View {
             .sheet(isPresented: $showFoodPicker) { MealFoodPicker { items.append($0) } }
         }
     }
+    private var suggestedName: String {
+        MealRoute.suggestedName(existing: store.meals.filter { $0.id != route.meal?.id }.map(\.name))
+    }
+    private var savedName: String {
+        let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? suggestedName : typed
+    }
     private var chosenItems: [EntryDraft] {
-        route.fromToday ? store.dayEntries(Date()).filter { selection.contains($0.id) }.map { EntryDraft($0) } : items
+        let fromDay = route.fromDay.map { day in store.dayEntries(day).filter { selection.contains($0.id) }.map { EntryDraft($0) } } ?? []
+        return fromDay + items
     }
 }
 
@@ -261,15 +344,26 @@ struct MealLinkImportSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://example.com/recipe", text: $link)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("mealImportLink")
+                    HStack(spacing: 10) {
+                        TextField("example.com/recipe", text: $link)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .onSubmit(importLink)
+                            .accessibilityIdentifier("mealImportLink")
+                        // PasteButton reads the clipboard only when tapped, so no paste-permission prompt.
+                        PasteButton(payloadType: String.self) { values in
+                            if let value = values.first { link = value.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonBorderShape(.capsule)
+                        .tint(.caveOrange)
+                    }
                 } header: {
                     Text("Recipe or meal link")
                 } footer: {
-                    Text("Paste a public recipe, restaurant, or food page. You can review every imported item before saving the meal.")
+                    Text("Works with public recipe sites and restaurant menu pages. Every item is shown for review before the meal is saved.")
                 }
                 Section {
                     Button {
@@ -290,7 +384,7 @@ struct MealLinkImportSheet: View {
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }
                 }
-            }
+            }.caveScreenBackground()
             .navigationTitle("Import Meal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -306,9 +400,13 @@ struct MealLinkImportSheet: View {
         .presentationDragIndicator(.visible)
     }
 
+    /// Accepts "example.com/recipe" or http links and upgrades them to https.
     private var validURL: URL? {
-        let value = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: value), url.scheme?.lowercased() == "https", url.host?.isEmpty == false else { return nil }
+        var value = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.lowercased().hasPrefix("http://") { value = "https://" + value.dropFirst(7) }
+        if !value.lowercased().hasPrefix("https://") { value = "https://" + value }
+        guard let url = URL(string: value), url.scheme?.lowercased() == "https",
+              let host = url.host, host.contains(".") else { return nil }
         return url
     }
 
@@ -363,15 +461,20 @@ struct MealFoodPicker: View {
     @State private var query = ""
     @State private var search = FoodSearchState()
     @State private var editor: EntryDraft?
+    @State private var addedKeys = Set<String>()
+    @State private var addedCount = 0
     var body: some View {
         NavigationStack {
             List {
-                Button("Create manual item") { editor = EntryDraft(name: Double(query) == nil ? query : "", calories: Double(query) ?? 0) }
+                Button { editor = EntryDraft(name: Double(query) == nil ? query : "", calories: Double(query) ?? 0) } label: {
+                    Label { Text("Create manual item") } icon: { CaveIcon(.pencil, size: 18) }
+                        .foregroundStyle(Color.caveOrange)
+                }
                 Section("Your foods") {
                     ForEach(FoodHistory.search(query, entries: store.entries)) { food in row(food.draft) }
                 }
                 Section("Food search") {
-                    ForEach(search.results) { food in row(food.draft) }
+                    ForEach(search.results) { food in row(food.draft, detail: food.searchDetail) }
                     if search.loading { ProgressView("Searching foods…") }
                     if let message = search.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
                 }
@@ -379,16 +482,32 @@ struct MealFoodPicker: View {
                     .contains(where: { $0.draft.externalID?.hasPrefix("fatsecret:") == true }) {
                     FatSecretAttribution()
                 }
-            }
+            }.caveScreenBackground()
             .searchable(text: $query, prompt: "Search food or enter calories")
-            .navigationTitle("Add food").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .navigationTitle(addedCount == 0 ? "Add foods" : "\(addedCount) added").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // The picker stays open so a whole meal can be added in one visit.
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.fontWeight(.semibold).accessibilityIdentifier("mealPickerDone")
+                }
+            }
             .task(id: query) { await search.search(query) }
-            .sheet(item: $editor) { draft in EntryEditorSheet(draft: draft) { selected($0); dismiss() } }
+            .sheet(item: $editor) { draft in
+                EntryEditorSheet(draft: draft) { selected($0); addedCount += 1 }
+            }
         }
     }
-    private func row(_ draft: EntryDraft) -> some View {
-        FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription, macros: MacroSummary([draft]), add: { var copy = draft; copy.id = UUID(); copy.entryID = nil; selected(copy); dismiss() }, edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
+    private func key(_ draft: EntryDraft) -> String {
+        draft.externalID ?? "name:\(normalizedFoodName(draft.name))"
+    }
+    private func row(_ draft: EntryDraft, detail: String? = nil) -> some View {
+        FoodRow(name: draft.name, calories: draft.calories, detail: detail ?? draft.servingDescription, macros: MacroSummary([draft]),
+                added: addedKeys.contains(key(draft)), keepsAddedState: true,
+                add: {
+                    var copy = draft; copy.id = UUID(); copy.entryID = nil
+                    selected(copy); addedKeys.insert(key(draft)); addedCount += 1
+                },
+                edit: { var copy = draft; copy.id = UUID(); copy.entryID = nil; editor = copy })
     }
 }
 
@@ -422,7 +541,7 @@ struct MealAddSheet: View {
                         Section { FatSecretAttribution() }
                     }
                 }
-            }
+            }.caveScreenBackground()
             .navigationTitle(meal?.name ?? "Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -434,7 +553,7 @@ struct MealAddSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.blue)
+                    .buttonStyle(.borderedProminent).tint(.caveOrange)
                     .disabled(factor <= 0 || !factor.isFinite || meal == nil)
                 }
             }

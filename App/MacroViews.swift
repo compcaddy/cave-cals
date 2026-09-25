@@ -1,5 +1,22 @@
 import SwiftUI
 
+extension View {
+    /// Cream screen background in place of the default system list/grouped background.
+    func caveScreenBackground() -> some View {
+        scrollContentBackground(.hidden).background(Color.caveBackground)
+    }
+
+    /// A lighter rounded card behind a list row instead of separator lines.
+    func caveCardRow() -> some View {
+        listRowSeparator(.hidden)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.caveSurface)
+                    .padding(.horizontal, 16).padding(.vertical, 3)
+            )
+    }
+}
+
 struct MacroLine: View {
     let summary: MacroSummary
     var body: some View {
@@ -176,7 +193,7 @@ struct MacroGoalsView: View {
                     MacroAmountField(title: kind.title, value: Binding(get: { goals[keyPath: kind.keyPath] }, set: { goals[keyPath: kind.keyPath] = $0 }), placeholder: "None", identifier: "goal-\(kind.rawValue)")
                 }
             } footer: { Text("Daily goals. Leave blank for none.") }
-        }
+        }.caveScreenBackground()
         .navigationTitle("Macro goals").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -187,6 +204,133 @@ struct MacroGoalsView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer(); Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             }
+        }
+    }
+}
+
+/// Schoolbell has no bold weight; restating the glyphs at tiny offsets thickens the strokes like a heavier pen.
+private struct InkBoldText: View {
+    let text: String
+    let font: Font
+    var weight: CGFloat = 1.1
+    init(_ text: String, font: Font, weight: CGFloat = 1.1) { self.text = text; self.font = font; self.weight = weight }
+    var body: some View {
+        let offsets: [CGSize] = [.init(width: weight, height: 0), .init(width: -weight, height: 0),
+                                 .init(width: 0, height: weight), .init(width: 0, height: -weight),
+                                 .init(width: weight * 0.7, height: weight * 0.7), .init(width: -weight * 0.7, height: -weight * 0.7),
+                                 .init(width: weight * 0.7, height: -weight * 0.7), .init(width: -weight * 0.7, height: weight * 0.7)]
+        Text(text).font(font)
+            .overlay { ZStack { ForEach(offsets.indices, id: \.self) { Text(text).font(font).offset(offsets[$0]) } } }
+    }
+}
+
+private struct SummaryBar: View {
+    let fraction: Double
+    var height: CGFloat = 10
+    /// Only calories turn red when over; going past a macro goal (e.g. protein) is often intended.
+    var warnsWhenOver = true
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.1))
+                Capsule().fill(fraction > 1 && warnsWhenOver ? Color.red : Color.caveOrange)
+                    .frame(width: geometry.size.width * min(max(fraction, 0), 1))
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Home summary: one wide calorie row with its bar, then compact macro columns with thinner bars.
+struct DailySummaryCard: View {
+    let calories: Double
+    let calorieGoal: Double?
+    let macros: MacroSummary?
+    let macroGoals: MacroNutrients
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                InkBoldText(calories.calorieText, font: .custom("Schoolbell-Regular", size: 44, relativeTo: .largeTitle))
+                Text(calorieGoal.map { "/ \($0.calorieText) cals" } ?? "cals")
+                    .font(.cave(.title3)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let calorieGoal {
+                    Text(calories > calorieGoal
+                         ? "\((calories - calorieGoal).calorieText) over"
+                         : "\((calorieGoal - calories).calorieText) left")
+                        .font(.cave(.title3))
+                        .foregroundStyle(calories > calorieGoal ? Color.red : Color.primary)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            // Trim the big font's empty descender space so the bar sits just under the numbers.
+            .padding(.bottom, (UIFont(name: "Schoolbell-Regular",
+                                      size: UIFontMetrics(forTextStyle: .largeTitle).scaledValue(for: 44))?.descender ?? 0) + 4)
+            if let calorieGoal {
+                SummaryBar(fraction: calories / calorieGoal)
+            }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(calorieGoal.map { "\(calories.calorieText) of \($0.calorieText) calories" } ?? "\(calories.calorieText) calories")
+            .accessibilityValue(calorieGoal.map { "\((max(calories / $0, 0) * 100).calorieText) percent of goal" } ?? "")
+            .accessibilityIdentifier("calorieSummary")
+            if let macros {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(MacroKind.primary) { kind in
+                        macroColumn(kind, total: macros.total(kind), goal: macroGoals[keyPath: kind.keyPath])
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
+        .padding(16)
+        .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dailySummaryCard")
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func macroColumn(_ kind: MacroKind, total: MacroTotal, goal: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                // Height-only sizing keeps each icon's own width (the wheat is narrow).
+                Image(glyph(kind).rawValue).renderingMode(.template).resizable().scaledToFit()
+                    .frame(height: 24).foregroundStyle(Color.caveOrange).accessibilityHidden(true)
+                Text(kind.title.uppercased()).font(.cave(.caption).bold())
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(wholeGrams(total)).font(.cave(.title2).bold())
+                if let goal, goal > 0 {
+                    Text("/ \(goal.formatted(.number.precision(.fractionLength(0))))g")
+                        .font(.cave(.caption)).foregroundStyle(.secondary)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .padding(.leading, 4)
+            if let goal, goal > 0 {
+                SummaryBar(fraction: (total.grams ?? 0) / goal, height: 6, warnsWhenOver: false)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(kind.title) \(total.text) g" + (goal.flatMap { $0 > 0 ? " of \($0.macroText) g" : nil } ?? ""))
+        .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
+    }
+
+    private func wholeGrams(_ total: MacroTotal) -> String {
+        guard let grams = total.grams else { return "—" }
+        return grams.formatted(.number.precision(.fractionLength(0))) + (total.incomplete ? "+" : "")
+    }
+
+    private func glyph(_ kind: MacroKind) -> CaveGlyph {
+        switch kind {
+        case .protein: .protein
+        case .totalCarbs: .carbs
+        default: .fat
         }
     }
 }

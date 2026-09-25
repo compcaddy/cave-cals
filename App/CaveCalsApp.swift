@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import CoreData
 
 @main struct CaveCalsApp: App {
@@ -52,11 +53,14 @@ import CoreData
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
     }
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
         WindowGroup {
             if let store {
                 RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights)
-                    .modelContainer(store.container).tint(.blue).accentColor(.blue)
+                    .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
+                    .onAppear { appearance.apply() }
+                    .onChange(of: appearance) { _, value in value.apply() }
                     .onOpenURL { LoggingActionRouter.shared.open(url: $0) }
             } else {
                 ContentUnavailableView { Label { Text("Unable to open your data") } icon: { CaveIcon(.warning, size: 48) } } description: { Text(failure ?? "Please try reopening the app.") }
@@ -217,5 +221,33 @@ struct SetupView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.9)
             .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+/// In-app override of the system Light/Dark setting; the widget always follows the system.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    static let storageKey = "appAppearance"
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+    private var style: UIUserInterfaceStyle {
+        switch self {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+    /// Setting the style on every window (not `preferredColorScheme`) also updates open sheets,
+    /// including when switching back to System.
+    @MainActor func apply() {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            for window in scene.windows { window.overrideUserInterfaceStyle = style }
+        }
     }
 }

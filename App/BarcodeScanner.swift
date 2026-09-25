@@ -36,7 +36,7 @@ struct BarcodeSheet: View {
                     if loading { ProgressView("Looking up barcode…") }
                     if let message { Text(message).font(.cave(.subheadline)).foregroundStyle(.secondary) }
                 }.padding(20)
-            }
+            }.caveScreenBackground()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CaptureCancelButton {
                     task?.cancel()

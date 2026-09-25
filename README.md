@@ -48,7 +48,7 @@ Before TestFlight/App Store release, initialize and inspect the development Clou
 
 `FoodSearchService` and `BarcodeLookupService` isolate the providers. Food search uses the free `/api/v1/foods/search` backend endpoint and FatSecret. Barcode lookup stays on Open Food Facts. Local matches never wait for either provider. A 450 ms debounce and request identity guard prevent excessive requests and stale results after query changes.
 
-FatSecret credentials and OAuth tokens remain server-side. Basic search uses v1; set `FATSECRET_API_TIER=premier` after account approval to use v5 with structured default servings. Restaurant/brand names and calorie portions are retained in logged entries. Search has distributed per-IP and provider-wide quotas independent of paid AI subscriptions. See [FatSecret setup and verification](Documentation/FatSecret.md).
+FatSecret credentials and OAuth tokens remain server-side. Basic search uses v1; set `FATSECRET_API_TIER=premier` after account approval to use v5 with structured default servings. Branded results are named by the product itself ("Diet Coke"); the brand appears beside the serving in search results, and one-word product names keep their brand ("Starbucks Latte"). Calorie portions are retained in logged entries. Search has distributed per-IP and provider-wide quotas independent of paid AI subscriptions. See [FatSecret setup and verification](Documentation/FatSecret.md).
 
 Empty results and errors are never cached. FatSecret Basic results are not cached; Premier positive search results expire after one hour, including across app restarts. Old unversioned caches are no longer read. Offline manual logging, diary history, saved meals, and local common-food suggestions continue to work.
 

@@ -125,7 +125,7 @@ struct EntryEditorSheet: View {
                         }
                     }
                 }
-            }
+            }.caveScreenBackground()
             .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add Calories" : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingTime) {
@@ -148,7 +148,7 @@ struct EntryEditorSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.blue)
+                    .buttonStyle(.borderedProminent).tint(.caveOrange)
                     .fontWeight(.semibold).disabled(!draft.isValid)
                     .accessibilityIdentifier("saveEntry")
                 }
@@ -328,7 +328,7 @@ struct ServingControl: View {
                         }.buttonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
                     }
                 }
-            }.frame(height: 176).padding(.top, 8)
+            }.caveScreenBackground().frame(height: 176).padding(.top, 8)
         }
         }
     }

@@ -53,7 +53,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["calorieSummary"].exists)
         XCTAssertFalse(app.buttons["Settings"].exists)
         XCTAssertFalse(app.buttons["searchQuickCalories"].exists)
-        XCTAssertGreaterThan(manualAdd.frame.minY, search.frame.maxY)
+        XCTAssertLessThan(manualAdd.frame.maxY, search.frame.minY)
         XCTAssertTrue(app.staticTexts["Results"].exists)
         app.buttons["Clear search"].tap()
         XCTAssertTrue(app.buttons["Quick Add"].isSelected)
@@ -376,7 +376,7 @@ final class ECCUITests: XCTestCase {
         closeSearchDrawer()
         app.buttons["Meals"].tap()
         app.buttons["newMeal"].tap()
-        app.buttons["Create from Today's Entries"].tap()
+        app.buttons["newMealToday"].tap()
         app.buttons["Select Cheerios"].tap()
         let mealName = app.textFields["mealName"]; mealName.tap(); mealName.typeText("Breakfast")
         app.buttons["Save Meal"].tap()
@@ -406,10 +406,11 @@ final class ECCUITests: XCTestCase {
     func testMealFromScratchAndScaledAdd() {
         closeSearchDrawer()
         app.buttons["Meals"].tap(); app.buttons["newMeal"].tap()
-        XCTAssertTrue(app.buttons["Create from Meal Scan"].exists)
-        XCTAssertTrue(app.buttons["Create from Voice Log"].exists)
-        XCTAssertTrue(app.buttons["Import from Link/Website"].exists)
-        app.buttons["Manually Add Meal Items"].tap()
+        XCTAssertTrue(app.buttons["newMealPhoto"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["newMealVoice"].exists)
+        XCTAssertTrue(app.buttons["newMealLink"].exists)
+        XCTAssertFalse(app.buttons["newMealToday"].isEnabled)
+        app.buttons["newMealManual"].tap()
         let mealName = app.textFields["mealName"]
         XCTAssertTrue(mealName.waitForExistence(timeout: 3)); mealName.tap(); mealName.typeText("Coffee break")
         app.buttons["Add food"].tap()
@@ -418,6 +419,8 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(calories.waitForExistence(timeout: 3)); calories.tap(); calories.typeText(XCUIKeyboardKey.delete.rawValue + "120")
         let name = app.textFields["entryName"]; name.tap(); name.typeText("Coffee")
         app.buttons["saveEntry"].tap()
+        // The food picker stays open for adding several foods; Done returns to the meal.
+        XCTAssertTrue(app.buttons["mealPickerDone"].waitForExistence(timeout: 4)); app.buttons["mealPickerDone"].tap()
         XCTAssertTrue(app.buttons["Save Meal"].waitForExistence(timeout: 4)); app.buttons["Save Meal"].tap()
         let add = app.buttons["Add Coffee break"].firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 3))
@@ -427,7 +430,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Pin"].exists)
         app.buttons["Pin"].tap()
         XCTAssertTrue(add.waitForExistence(timeout: 3))
-        XCTAssertEqual(add.value as? String, "Pinned")
+        XCTAssertTrue((add.value as? String)?.hasPrefix("Pinned") == true)
         add.tap()
         let mealServings = app.textFields["servingCount"]
         XCTAssertTrue(mealServings.waitForExistence(timeout: 3))

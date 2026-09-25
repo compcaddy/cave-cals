@@ -86,7 +86,7 @@ struct OnboardingView: View {
                     // Large accessibility text needs the full viewport for each question.
                     if dynamicTypeSize.isAccessibilitySize { footer }
                 }
-            }
+            }.caveScreenBackground()
             .scrollDismissesKeyboard(.interactively)
             .id(step)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -169,7 +169,7 @@ struct OnboardingView: View {
                         .font(.custom("Schoolbell-Regular", size: 58, relativeTo: .largeTitle)).multilineTextAlignment(.center)
                         .accessibilityLabel("Daily calorie target").accessibilityIdentifier("planCalories")
                     Text("Tap to adjust").font(.cave(.caption)).foregroundStyle(.secondary)
-                }.padding(24).frame(maxWidth: .infinity).background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
+                }.padding(24).frame(maxWidth: .infinity).background(Color.caveOrange.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
                 if !validStep {
                     Text("Enter \(Int(gender?.minimumCalories ?? 1500).formatted())–6,000 calories, or go back to change your plan.")
                         .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planTargetValidation")
@@ -188,7 +188,7 @@ struct OnboardingView: View {
                     }.font(.cave(.footnote)).padding(.top, 8)
                 }
             } else {
-                CaveIcon(.person, size: 44).foregroundStyle(.blue)
+                CaveIcon(.person, size: 44).foregroundStyle(Color.caveOrange)
                 Text(manualReason ?? "Use a target that fits your needs.").font(.cave(.title3))
                 Text("You can use a clinician’s target or start without a calorie goal.").foregroundStyle(.secondary)
             }
@@ -237,9 +237,9 @@ struct OnboardingView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) { Text(title); if let detail { Text(detail).font(.cave(.caption)).foregroundStyle(.secondary) } }
                 Spacer(minLength: 8)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.blue : .secondary)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.caveOrange : .secondary)
             }.padding(16).frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                .background(selected ? Color.blue.opacity(0.1) : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                .background(selected ? Color.caveOrange.opacity(0.1) : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : []).accessibilityIdentifier(id)
     }
