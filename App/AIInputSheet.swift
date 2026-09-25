@@ -55,6 +55,7 @@ struct AIInputSheet: View {
     @State private var resumeAfterPurchase = false
     @State private var operation: Task<Void, Never>?
     @State private var mealRoute: MealRoute?
+    @State private var gatedOnOpen = false
 
     var body: some View {
         NavigationStack {
@@ -79,6 +80,7 @@ struct AIInputSheet: View {
             .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Speak Food") : "Review Scan")
             .navigationBarTitleDisplayMode(.inline)
             .task { autoStartRecordingIfReady() }
+            .task { await gateAccessOnOpen() }
             .task(id: photo) {
                 guard let photo else { return }
                 preparingPhoto = true
@@ -446,13 +448,31 @@ struct AIInputSheet: View {
         }
     }
 
+    /// Runs alongside the camera/microphone start so paying users see no delay. When scans are used up,
+    /// the paywall appears before anything is captured, uploaded, or analyzed.
+    private func gateAccessOnOpen() async {
+        guard !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+        await subscriptions.refresh(regularLogCount: store.regularLogCount)
+        guard !Task.isCancelled, let account = subscriptions.account, !account.canScan,
+              subscriptions.offering != nil, result == nil, uploadId == nil else { return }
+        recorder.cancel(); media = nil; image = nil
+        gatedOnOpen = true
+        showPaywall = true
+    }
+
     private func closePaywall() {
         showPaywall = false
-        guard resumeAfterPurchase else { return }
+        guard resumeAfterPurchase else {
+            // Declining the up-front paywall leaves nothing usable here, so close the capture screen too.
+            if gatedOnOpen { dismiss() }
+            return
+        }
         resumeAfterPurchase = false
+        gatedOnOpen = false
         Task { @MainActor in
             await Task.yield()
-            requestAnalysis()
+            if media != nil { requestAnalysis() }
+            else if mode == .voice { startRecording() }
         }
     }
 

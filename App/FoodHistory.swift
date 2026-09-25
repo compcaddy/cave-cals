@@ -109,6 +109,9 @@ enum FoodHistory {
         entry.externalID.map { "external:\($0)" } ?? "name:\(normalizedFoodName(entry.name))"
     }
 
+    /// The Quick Add identity of a logged entry (matches `HistoricalFood.id`).
+    static func foodID(for entry: CalorieEntry) -> String { key(for: entry) }
+
     static func identifier(for draft: EntryDraft) -> String? {
         if let externalID = draft.externalID, !externalID.isEmpty { return "external:\(externalID)" }
         let name = normalizedFoodName(draft.name)
@@ -155,7 +158,7 @@ enum FoodHistory {
             return normalizedFoodName($0.food.draft.name) < normalizedFoodName($1.food.draft.name)
         }.map(\.food)
     }
-    static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = []) -> [HistoricalFood] {
+    static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = [], hiddenIDs: Set<String> = []) -> [HistoricalFood] {
         let eligible = entries
             .filter { $0.timestamp <= date && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.timestamp < $1.timestamp }
@@ -189,9 +192,9 @@ enum FoodHistory {
             return a.score > b.score
         }
         let foodsByID = Dictionary(uniqueKeysWithValues: scored.map { ($0.food.id, $0.food) })
-        let pinned = pinnedIDs.compactMap { foodsByID[$0] }
+        let pinned = pinnedIDs.filter { !hiddenIDs.contains($0) }.compactMap { foodsByID[$0] }
         let pinnedSet = Set(pinned.map(\.id))
-        let unpinned = ranked.map(\.food).filter { !pinnedSet.contains($0.id) }
+        let unpinned = ranked.map(\.food).filter { !pinnedSet.contains($0.id) && !hiddenIDs.contains($0.id) }
         return Array((pinned + unpinned).prefix(suggestionLimit))
     }
 

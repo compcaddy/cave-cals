@@ -327,6 +327,38 @@ import SwiftData
         XCTAssertEqual(Array(suggestions.prefix(2).map(\.id)), pinnedIDs)
         XCTAssertEqual(Set(suggestions.map(\.id)).count, suggestions.count)
     }
+    func testHiddenQuickAddFoodsSnoozeForTwoWeeksAndReturnWhenLogged() throws {
+        let suite = "CaveCalsTests.hidden.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+                             publishesWidget: false, preferences: preferences)
+        store.add([EntryDraft(name: "Cookies", calories: 200, timestamp: Date().addingTimeInterval(-3_600))])
+        store.add([EntryDraft(name: "Apple", calories: 90, timestamp: Date().addingTimeInterval(-3_600))])
+        let cookies = "name:cookies"
+        store.setPinned(true, foodID: cookies)
+        store.hideFromQuickAdd(foodID: cookies, name: "Cookies")
+        XCTAssertFalse(store.isPinned(cookies))
+        XCTAssertEqual(store.hiddenQuickAddIDs(), [cookies])
+        var names = FoodHistory.suggestions(entries: store.entries, date: Date(), hiddenIDs: store.hiddenQuickAddIDs()).map(\.draft.name)
+        XCTAssertFalse(names.contains("Cookies"))
+        XCTAssertTrue(names.contains("Apple"))
+        // Undo restores both visibility and the pin.
+        store.undo()
+        XCTAssertTrue(store.hiddenQuickAddIDs().isEmpty)
+        XCTAssertTrue(store.isPinned(cookies))
+        // The snooze lasts two weeks, survives reopening, and ends early when the food is logged again.
+        store.hideFromQuickAdd(foodID: cookies, name: "Cookies")
+        XCTAssertEqual(store.hiddenQuickAddIDs(at: Date().addingTimeInterval(13 * 86_400)), [cookies])
+        XCTAssertTrue(store.hiddenQuickAddIDs(at: Date().addingTimeInterval(15 * 86_400)).isEmpty)
+        let reopened = AppStore(container: store.container, publishesWidget: false, preferences: preferences)
+        XCTAssertEqual(reopened.hiddenQuickAddIDs(), [cookies])
+        reopened.add([EntryDraft(name: "Cookies", calories: 200)])
+        XCTAssertTrue(reopened.hiddenQuickAddIDs().isEmpty)
+        names = FoodHistory.suggestions(entries: reopened.entries, date: Date(), hiddenIDs: reopened.hiddenQuickAddIDs()).map(\.draft.name)
+        XCTAssertTrue(names.contains("Cookies"))
+    }
     func testPinPreferencesPreserveOrderRenameAndUnpin() throws {
         let suite = "CaveCalsTests.pins.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))

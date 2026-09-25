@@ -51,7 +51,7 @@ final class ECCUITests: XCTestCase {
         let manualAdd = app.buttons["Add \"Ban\", enter calories"]
         XCTAssertTrue(manualAdd.waitForExistence(timeout: 3))
         XCTAssertFalse(app.otherElements["calorieSummary"].exists)
-        XCTAssertFalse(app.buttons["Settings"].exists)
+        XCTAssertFalse(app.buttons["profile"].exists)
         XCTAssertFalse(app.buttons["searchQuickCalories"].exists)
         XCTAssertLessThan(manualAdd.frame.maxY, search.frame.minY)
         XCTAssertTrue(app.staticTexts["Results"].exists)
@@ -150,7 +150,7 @@ final class ECCUITests: XCTestCase {
         assertSummary("325 calories")
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'remaining'")).firstMatch.exists)
         closeSearchDrawer()
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         XCTAssertFalse(app.textFields["settingsName"].exists)
         app.buttons["adjustGoal"].tap()
         let goal = app.textFields["profileGoal"]
@@ -160,7 +160,7 @@ final class ECCUITests: XCTestCase {
         app.buttons["Done"].tap()
         assertSummary("325 of 2,100 calories")
         closeSearchDrawer()
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         app.buttons["adjustGoal"].tap()
         XCTAssertTrue(goal.waitForExistence(timeout: 5))
         XCTAssertEqual(goal.value as? String, "2100")
@@ -170,7 +170,7 @@ final class ECCUITests: XCTestCase {
     }
     func testAdjustGoalCancelKeepsExistingGoal() {
         closeSearchDrawer()
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         app.buttons["adjustGoal"].tap()
         let goal = app.textFields["profileGoal"]
         XCTAssertTrue(goal.waitForExistence(timeout: 5))
@@ -241,7 +241,7 @@ final class ECCUITests: XCTestCase {
         let proteinTotal = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
         XCTAssertTrue(proteinTotal.waitForExistence(timeout: 5))
         XCTAssertTrue(proteinTotal.label.contains("1.5"))
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         let tracking = app.switches["trackMacros"]
         XCTAssertTrue(tracking.waitForExistence(timeout: 5))
         XCTAssertEqual(tracking.value as? String, "1")
@@ -252,7 +252,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(tracking.waitForExistence(timeout: 5))
         (tracking.switches.firstMatch.exists ? tracking.switches.firstMatch : tracking).tap(); app.buttons["Done"].firstMatch.tap()
         XCTAssertFalse(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.exists)
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         (tracking.switches.firstMatch.exists ? tracking.switches.firstMatch : tracking).tap(); app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(proteinTotal.waitForExistence(timeout: 5))
         XCTAssertTrue(proteinTotal.label.contains("120"))
@@ -302,7 +302,7 @@ final class ECCUITests: XCTestCase {
     func testQuickAddLongPressOffersPinAndEditorShowsPinToggle() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("180")
-        app.buttons["Edit 180 calories"].tap()
+        app.buttons["Edit 180 calories"].firstMatch.tap()
         let name = app.textFields["entryName"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         name.tap(); name.typeText("Pinned snack")
@@ -325,11 +325,13 @@ final class ECCUITests: XCTestCase {
         app.buttons["Pin"].tap()
 
         XCTAssertTrue(row.waitForExistence(timeout: 3))
-        XCTAssertEqual(row.value as? String, "Pinned")
-        let pencil = app.buttons["Edit Pinned snack"].firstMatch
+        XCTAssertTrue((row.value as? String)?.hasPrefix("Pinned") == true)
+        let pencil = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Edit Pinned snack", "foodDetails-Pinned snack")).firstMatch
         XCTAssertTrue(pencil.waitForExistence(timeout: 3))
         pencil.tap()
         let pinToggle = app.switches["pinOnQuickAdd"]
+        XCTAssertTrue(app.textFields["entryName"].waitForExistence(timeout: 3))
+        for _ in 0..<6 where !pinToggle.isHittable { app.swipeUp() }
         XCTAssertTrue(pinToggle.waitForExistence(timeout: 3))
         XCTAssertEqual(pinToggle.value as? String, "1")
         app.buttons["Cancel"].tap()

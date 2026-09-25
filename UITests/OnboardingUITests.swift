@@ -62,7 +62,7 @@ final class OnboardingUITests: XCTestCase {
         next()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,050 calories")
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         XCTAssertTrue(app.buttons["todayWeight"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
         app.buttons["caloriePlan"].tap(); next()
@@ -108,7 +108,7 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["planTargetValidation"].exists)
         replace("planCalories", with: "2500")
         next()
-        app.buttons["Settings"].tap()
+        app.buttons["profile"].tap()
         app.buttons["forgetCaloriePlan"].tap()
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["forgetCaloriePlan"].exists)
@@ -157,7 +157,7 @@ final class OnboardingUITests: XCTestCase {
     }
     func testCancelRevisedPlanKeepsAcceptedDetails() {
         basics(); enter("planGoalWeight", "80"); app.buttons["pace-0.5"].tap(); next(); next()
-        app.buttons["Settings"].tap(); app.buttons["caloriePlan"].tap(); next()
+        app.buttons["profile"].tap(); app.buttons["caloriePlan"].tap(); next()
         replace("planAge", with: "45")
         app.buttons["Cancel"].tap()
         XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,050")

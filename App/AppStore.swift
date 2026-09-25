@@ -11,6 +11,9 @@ import WidgetKit
     private let persistsUsage: Bool
     private static let pinnedFoodIDsKey = "pinnedFoodIDs.v1"
     private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
+    private static let hiddenQuickAddKey = "hiddenQuickAddFoods.v1"
+    /// Hiding is a snooze: long enough for the food's recency weight to fade, short enough not to be forgotten.
+    static let quickAddHideDuration: TimeInterval = 14 * 86_400
     let container: ModelContainer
     let context: ModelContext
     let cloudEnabled: Bool
@@ -26,6 +29,7 @@ import WidgetKit
             .flatMap { try? JSONDecoder().decode([String: CommonFoodDefault].self, from: $0) } ?? [:]
     private(set) var pinnedFoodIDs: [String]
     private(set) var pinnedMealIDs: [String]
+    private(set) var hiddenQuickAddFoods: [HiddenQuickAddFood]
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
@@ -39,6 +43,8 @@ import WidgetKit
         self.persistsUsage = persistsUsage
         pinnedFoodIDs = preferences.stringArray(forKey: Self.pinnedFoodIDsKey) ?? []
         pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
+        hiddenQuickAddFoods = preferences.data(forKey: Self.hiddenQuickAddKey)
+            .flatMap { try? JSONDecoder().decode([HiddenQuickAddFood].self, from: $0) } ?? []
         self.publishesWidget = publishesWidget
         self.container = container; context = container.mainContext
         self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
@@ -108,6 +114,41 @@ import WidgetKit
         guard updated != pinnedFoodIDs else { return }
         preferences.set(updated, forKey: Self.pinnedFoodIDsKey)
         pinnedFoodIDs = updated
+    }
+    /// Foods currently kept off Quick Add. A snooze ends after two weeks, or as soon as the food is logged again.
+    func activeHiddenQuickAddFoods(at now: Date = Date()) -> [HiddenQuickAddFood] {
+        hiddenQuickAddFoods.filter { hidden in
+            now < hidden.returnsAt && !entries.contains {
+                $0.createdAt > hidden.hiddenAt && FoodHistory.foodID(for: $0) == hidden.id
+            }
+        }
+    }
+    func hiddenQuickAddIDs(at now: Date = Date()) -> Set<String> { Set(activeHiddenQuickAddFoods(at: now).map(\.id)) }
+    func hideFromQuickAdd(foodID: String, name: String, now: Date = Date()) {
+        guard !foodID.isEmpty else { return }
+        let wasPinned = isPinned(foodID)
+        if wasPinned { setPinned(false, foodID: foodID) }
+        var updated = activeHiddenQuickAddFoods(at: now).filter { $0.id != foodID }
+        updated.append(HiddenQuickAddFood(id: foodID, name: name, hiddenAt: now))
+        saveHiddenQuickAddFoods(updated)
+        let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        feedback("\(label.isEmpty ? "Food" : label) hidden for 2 weeks") { [weak self] in
+            guard let self else { return }
+            self.unhideQuickAdd(foodID)
+            if wasPinned { self.setPinned(true, foodID: foodID) }
+        }
+    }
+    func unhideQuickAdd(_ foodID: String) {
+        saveHiddenQuickAddFoods(hiddenQuickAddFoods.filter { $0.id != foodID })
+    }
+    private func saveHiddenQuickAddFoods(_ foods: [HiddenQuickAddFood]) {
+        // Expired and already-restored snoozes are dropped whenever the list changes.
+        let live = foods.filter { hidden in
+            Date() < hidden.returnsAt && !entries.contains { $0.createdAt > hidden.hiddenAt && FoodHistory.foodID(for: $0) == hidden.id }
+        }
+        guard live != hiddenQuickAddFoods else { return }
+        preferences.set(try? JSONEncoder().encode(live), forKey: Self.hiddenQuickAddKey)
+        hiddenQuickAddFoods = live
     }
     func isMealPinned(_ mealID: UUID) -> Bool { pinnedMealIDs.contains(mealID.uuidString) }
     func setMealPinned(_ pinned: Bool, mealID: UUID) {
@@ -281,4 +322,11 @@ enum Persistence {
             return store
         }
     }
+}
+
+struct HiddenQuickAddFood: Codable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let hiddenAt: Date
+    var returnsAt: Date { hiddenAt.addingTimeInterval(AppStore.quickAddHideDuration) }
 }

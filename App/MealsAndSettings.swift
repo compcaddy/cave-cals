@@ -1,6 +1,7 @@
 import SwiftUI
 
-struct SettingsView: View {
+/// Person icon: the user's own goals and tracking choices.
+struct ProfileView: View {
     @State private var aiSubscriptions = AISubscriptions()
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -10,7 +11,6 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
-    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
 
     var body: some View {
         NavigationStack {
@@ -44,31 +44,8 @@ struct SettingsView: View {
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
-                if AIConfiguration.developerSettingsAvailable {
-                    Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
-                }
-                Section("Appearance") {
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("appearancePicker")
-                }
-                Section("iCloud") {
-                    Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
-                    Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device, with optional sharing to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
-                }
-                Section("About") {
-                    Text(appVersionLabel)
-                    Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!)
-                    Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
-                    Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
-                    Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
-                }
-                legalLinks
             }.caveScreenBackground()
-            .navigationTitle("You").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("About You").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
@@ -84,10 +61,75 @@ struct SettingsView: View {
                 WeightEditorSheet(record: route.record, unit: weights.unit)
             }
             .navigationDestination(isPresented: $showingPaywall) {
-                AIUpgradePaywall(
-                    subscriptions: aiSubscriptions,
-                    onDismissRequested: { showingPaywall = false }
-                )
+                AIUpgradePaywall(subscriptions: aiSubscriptions, onDismissRequested: { showingPaywall = false })
+            }
+            .task { await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
+        }
+    }
+}
+
+/// Cog icon: app-wide settings, sync status, and credits.
+struct SettingsView: View {
+    @State private var aiSubscriptions = AISubscriptions()
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingPaywall = false
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
+                if AIConfiguration.developerSettingsAvailable {
+                    Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
+                }
+                Section("Appearance") {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("appearancePicker")
+                }
+                let hidden = store.activeHiddenQuickAddFoods()
+                if !hidden.isEmpty {
+                    Section {
+                        ForEach(hidden) { food in
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(food.name.isEmpty ? "Unnamed food" : food.name).lineLimit(2)
+                                    Text("Back \(food.returnsAt.formatted(.dateTime.month(.abbreviated).day()))")
+                                        .font(.cave(.caption)).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Button("Unhide") { store.unhideQuickAdd(food.id) }
+                                    .buttonStyle(.bordered).tint(.caveOrange)
+                                    .accessibilityLabel("Unhide \(food.name)")
+                            }
+                        }
+                    } header: {
+                        Text("Hidden from Quick Add")
+                    } footer: {
+                        Text("Hidden foods return after two weeks, or sooner if you log them again.")
+                    }
+                }
+                Section("iCloud") {
+                    Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
+                    Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device, with optional sharing to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                }
+                Section("About") {
+                    Text(appVersionLabel)
+                    Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!)
+                    Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
+                    Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
+                    Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
+                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                }
+                legalLinks
+            }.caveScreenBackground()
+            .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .navigationDestination(isPresented: $showingPaywall) {
+                AIUpgradePaywall(subscriptions: aiSubscriptions, onDismissRequested: { showingPaywall = false })
             }
             .task { await store.checkCloud(); await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
         }
@@ -339,6 +381,7 @@ struct MealLinkImportSheet: View {
     @State private var error: String?
     @State private var showPaywall = false
     @State private var retryAfterPurchase = false
+    @State private var gatedOnOpen = false
 
     var body: some View {
         NavigationStack {
@@ -385,6 +428,15 @@ struct MealLinkImportSheet: View {
                     Section { Text(error).foregroundStyle(.red) }
                 }
             }.caveScreenBackground()
+            .task {
+                // Importing is a Cave Cals+ feature: show the paywall before the user pastes anything.
+                guard !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+                await subscriptions.refresh()
+                if let account = subscriptions.account, !account.active, subscriptions.offering != nil {
+                    gatedOnOpen = true
+                    showPaywall = true
+                }
+            }
             .navigationTitle("Import Meal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -445,8 +497,13 @@ struct MealLinkImportSheet: View {
 
     private func closePaywall() {
         showPaywall = false
-        guard retryAfterPurchase else { return }
+        guard retryAfterPurchase else {
+            if gatedOnOpen { dismiss() }
+            return
+        }
         retryAfterPurchase = false
+        gatedOnOpen = false
+        guard validURL != nil else { return }
         Task { @MainActor in
             await Task.yield()
             importLink()

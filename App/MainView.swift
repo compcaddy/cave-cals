@@ -16,7 +16,7 @@ struct FatSecretAttribution: View {
 }
 
 enum MainSheet: Identifiable {
-    case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, barcode(Date), meal(UUID, Date), photo, voice, calendar
+    case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, profile, barcode(Date), meal(UUID, Date), photo, voice, calendar
     case weighIn
     case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport
     var id: String {
@@ -26,6 +26,7 @@ enum MainSheet: Identifiable {
         case .namedEntry(let draft): "named-entry-\(draft.id)"
         case .quickEntry(let draft): "quick-entry-\(draft.id)"
         case .settings: "settings"
+        case .profile: "profile"
         case .weighIn: "weigh-in"
         case .barcode: "barcode"
         case .meal(let id, _): "meal-\(id)"
@@ -199,6 +200,9 @@ struct MainView: View {
             .onChange(of: store.pinnedFoodIDs) { _, _ in
                 if listMode == .quickAdd { refreshSuggestions() }
             }
+            .onChange(of: store.hiddenQuickAddFoods) { _, _ in
+                if listMode == .quickAdd { withAnimation { refreshSuggestions() } }
+            }
             .onChange(of: cleanQuery) { _, value in
                 if !value.isEmpty { showingQuickCalories = false }
             }
@@ -226,15 +230,15 @@ struct MainView: View {
     }
 
     @ViewBuilder private var homeHeader: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                DaySelector(selected: $selected, today: today, openCalendar: { sheet = .calendar })
-                    .frame(width: geometry.size.width * 0.75)
-                Spacer(minLength: 0)
-                Button { sheet = .settings } label: {
-                    CaveIcon(.person, size: 26).frame(width: 44, height: 44)
-                }.accessibilityLabel("You").accessibilityIdentifier("Settings")
-            }
+        HStack(spacing: 0) {
+            DaySelector(selected: $selected, today: today, openCalendar: { sheet = .calendar })
+            Spacer(minLength: 0)
+            Button { sheet = .profile } label: {
+                CaveIcon(.person, size: 26).frame(width: 44, height: 44)
+            }.accessibilityLabel("About You").accessibilityIdentifier("profile")
+            Button { sheet = .settings } label: {
+                CaveIcon(.gear, size: 26).frame(width: 44, height: 44)
+            }.accessibilityLabel("Settings").accessibilityIdentifier("appSettings")
         }
         .frame(height: 44)
         .padding(.horizontal, 20).padding(.top, 8)
@@ -335,6 +339,7 @@ struct MainView: View {
         case .quickEntry(let draft):
             EntryEditorSheet(draft: draft, focusNameOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
         case .settings: SettingsView()
+        case .profile: ProfileView()
         case .weighIn: WeightEditorSheet(record: weights.record(on: Date()), unit: weights.unit)
         case .barcode(let date): BarcodeSheet(date: date)
         case .meal(let id, let date): MealAddSheet(mealID: id, date: date)
@@ -448,39 +453,52 @@ struct MainView: View {
                             } label: {
                                 Label(pinned ? "Un-Pin" : "Pin", systemImage: pinned ? "pin.slash" : "pin")
                             }
+                            Button {
+                                store.hideFromQuickAdd(foodID: food.id, name: draft.name)
+                            } label: {
+                                Label("Hide for 2 weeks", systemImage: "eye.slash")
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("Hide") { store.hideFromQuickAdd(foodID: food.id, name: draft.name) }
+                                .tint(.gray)
                         }
                 }
             }
         }
     }
+    private var newMealButton: some View {
+        Button {
+            sheet = .newMeal
+        } label: {
+            HStack(spacing: 8) {
+                CaveIcon(.plus, size: 18)
+                Text("New Meal")
+            }
+            .font(.cave(.subheadline).weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 38)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.caveOrange)
+        .frame(maxWidth: .infinity)
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .accessibilityIdentifier("newMeal")
+    }
     private var mealRows: some View {
         Group {
-            Button {
-                sheet = .newMeal
-            } label: {
-                HStack(spacing: 8) {
-                    CaveIcon(.plus, size: 18)
-                    Text("New Meal")
-                }
-                .font(.cave(.subheadline).weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .frame(minHeight: 38)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.caveOrange)
-            .frame(maxWidth: .infinity)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .accessibilityIdentifier("newMeal")
-
             if store.meals.isEmpty {
+                // With no meals the prompt comes first (in the spot it had below the button), then the button.
                 Text("Save foods you often eat together.")
                     .font(.cave(.body)).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 8)
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 70)
                     .listRowSeparator(.hidden)
+                newMealButton
             } else {
+                newMealButton
                 ForEach(orderedMeals) { meal in
                     let pinned = store.isMealPinned(meal.id)
                     FoodRow(name: meal.name, calories: meal.calories, macros: MacroSummary(meal.items), suggestionLayout: true, pinned: pinned, add: {
@@ -744,7 +762,8 @@ struct MainView: View {
         suggestedFoods = FoodHistory.suggestions(
             entries: store.entries,
             date: loggingDate,
-            pinnedIDs: store.pinnedFoodIDs
+            pinnedIDs: store.pinnedFoodIDs,
+            hiddenIDs: store.hiddenQuickAddIDs()
         )
     }
     private func edit(_ input: EntryDraft, source: String? = nil, focusName: Bool = false, pinFoodID: String? = nil, revealAfterSave: Bool) {
@@ -777,9 +796,13 @@ struct FoodRow: View {
         if !suggestionLayout, store.tracksMacros, let macros { parts.append(macros.compactText) }
         return parts.joined(separator: " · ")
     }
+    private var rowValue: String {
+        [pinned ? "Pinned" : "", store.tracksMacros ? macros?.accessibilityText ?? "" : ""].filter { !$0.isEmpty }.joined(separator: "; ")
+    }
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: suggestionLayout ? addWithFeedback : edit) {
+            // Only the + button adds; tapping the name or calories opens the editor.
+            Button(action: edit) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
@@ -797,6 +820,8 @@ struct FoodRow: View {
                         }
                         if suggestionLayout, store.tracksMacros, let macros { MacroLine(summary: macros) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
+                    // Wrapped names grow the card instead of touching its edges; one-line rows keep the 52-pt height.
+                    .padding(.vertical, suggestionLayout ? 12 : 0)
                     if suggestionLayout, let calories {
                         Text(calories.calorieText).font(.cave(.body).weight(.semibold)).monospacedDigit()
                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
@@ -804,9 +829,9 @@ struct FoodRow: View {
                     }
                 }.frame(maxWidth: .infinity, minHeight: suggestionLayout ? 52 : 48, alignment: .leading)
                     .contentShape(Rectangle())
-            }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "\(suggestionLayout ? "Add" : "Edit") \(actionName)")
+            }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "Edit \(actionName)")
                 .accessibilityIdentifier("foodDetails-\(actionName)")
-                .accessibilityValue([pinned ? "Pinned" : "", store.tracksMacros ? macros?.accessibilityText ?? "" : ""].filter { !$0.isEmpty }.joined(separator: "; "))
+                .accessibilityValue(rowValue)
                 .disabled(added)
             Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 52 : 48) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")
@@ -822,6 +847,7 @@ struct FoodRow: View {
                         .frame(width: 44, height: suggestionLayout ? 52 : 48)
                 }
             }.buttonStyle(.borderless).accessibilityLabel(added ? "Added \(actionName)" : "Add \(actionName)")
+                .accessibilityValue(rowValue)
                 .disabled(added)
         }
         .task(id: confirming) {
@@ -911,7 +937,7 @@ struct DaySelector: View {
             Button(action: openCalendar) {
                 Text(dateLabel).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
                     .lineLimit(1).minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.horizontal, 12).frame(minHeight: 44)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("selectedDate")
                 .accessibilityHint("Open calorie calendar")

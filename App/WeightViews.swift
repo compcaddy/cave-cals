@@ -58,7 +58,7 @@ struct WeightProfileSections: View {
                         Button("Retry sharing") { Task { await weights.syncHealth() } }.disabled(weights.syncing)
                     }
                 } header: { Text("Apple Health") } footer: {
-                    Text("Shares existing and future Cave Cals weigh-ins, including corrections and deletions. No weight data is read from other apps. Connect Trainerize to Apple Health separately to receive supported weight updates. Turning sharing off leaves existing Health entries in place.")
+                    Text("Shares existing and future Cave Cals weigh-ins, including corrections and deletions. No weight data is read from other apps. Turning sharing off leaves existing Health entries in place.")
                 }
             }
             if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
