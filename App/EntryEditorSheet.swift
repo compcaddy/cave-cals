@@ -25,7 +25,8 @@ struct EntryEditorSheet: View {
                     Group {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("CALORIES").font(.cave(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                        CalorieAmountField(value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), focusOnOpen: focusCaloriesOnOpen, blankOnOpen: blankCaloriesOnOpen)
+                        CalorieAmountField(value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), focusOnOpen: focusCaloriesOnOpen, blankOnOpen: blankCaloriesOnOpen,
+                                           selectOnOpen: draft.entryID != nil)
                             .frame(height: calorieFieldHeight)
                     }.padding(.top, 10)
                     VStack(alignment: .leading, spacing: 0) {
@@ -237,7 +238,9 @@ private struct CalorieAmountField: UIViewRepresentable {
     @Binding var value: Double
     let focusOnOpen: Bool
     let blankOnOpen: Bool
-    func makeCoordinator() -> Coordinator { Coordinator(value: $value, initiallyBlank: blankOnOpen) }
+    /// Editing a logged entry opens with the amount selected so typing replaces it.
+    var selectOnOpen = false
+    func makeCoordinator() -> Coordinator { Coordinator(value: $value, initiallyBlank: blankOnOpen, selectOnFirstFocus: selectOnOpen && focusOnOpen) }
     func makeUIView(context: Context) -> AmountTextField {
         let field = AmountTextField()
         field.focusOnOpen = focusOnOpen
@@ -272,6 +275,7 @@ private struct CalorieAmountField: UIViewRepresentable {
     final class Coordinator: NSObject, UITextFieldDelegate {
         var value: Binding<Double>
         var initiallyBlank: Bool
+        var selectOnFirstFocus: Bool
         let formatter: NumberFormatter = {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
@@ -279,18 +283,21 @@ private struct CalorieAmountField: UIViewRepresentable {
             formatter.maximumFractionDigits = 0
             return formatter
         }()
-        init(value: Binding<Double>, initiallyBlank: Bool) {
+        init(value: Binding<Double>, initiallyBlank: Bool, selectOnFirstFocus: Bool) {
             self.value = value
             self.initiallyBlank = initiallyBlank
+            self.selectOnFirstFocus = selectOnFirstFocus
         }
         func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
             string.allSatisfy { $0.isWholeNumber }
         }
         func textFieldDidBeginEditing(_ textField: UITextField) {
+            let selectAll = selectOnFirstFocus
+            selectOnFirstFocus = false
             DispatchQueue.main.async {
                 guard textField.isFirstResponder else { return }
                 let end = textField.endOfDocument
-                textField.selectedTextRange = textField.textRange(from: end, to: end)
+                textField.selectedTextRange = textField.textRange(from: selectAll ? textField.beginningOfDocument : end, to: end)
             }
         }
         @objc func changed(_ field: UITextField) {

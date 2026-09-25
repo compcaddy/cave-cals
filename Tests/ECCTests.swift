@@ -37,23 +37,19 @@ import SwiftData
         XCTAssertEqual(account.freeScansRemaining, 10)
     }
 
-    func testShortcutMenuRoutesAndPreservesQuickCaloriesOnColdStart() {
+    func testShortcutMenuRoutesEachLoggingChoice() {
         let router = LoggingActionRouter()
         for (choice, action) in [(CalorieLoggingChoice.voice, LoggingAction.voice), (.meal, .image), (.barcode, .barcode)] {
             choice.open(using: router)
             XCTAssertEqual(router.consume(), action)
             XCTAssertNil(router.pending)
         }
-        CalorieLoggingChoice.quickCalories.open(using: router)
-        XCTAssertEqual(router.pending?.action, .add)
-        XCTAssertEqual(router.pending?.quickCalories, true)
+        router.open(.add)
         let firstID = router.pending?.id
-        CalorieLoggingChoice.quickCalories.open(using: router)
+        router.open(.add)
         XCTAssertNotEqual(router.pending?.id, firstID)
         XCTAssertEqual(router.consume(), .add)
         XCTAssertNil(router.pending)
-        router.open(.add)
-        XCTAssertEqual(router.pending?.quickCalories, false)
     }
 
     func makeStore() throws -> AppStore { try Persistence.make(inMemory: true) }

@@ -60,11 +60,10 @@ struct MainView: View {
     @State private var selected = Date()
     @State private var today = Date()
     @State private var query = ""
-    @State private var showingQuickCalories = false
     @State private var listMode: HomeListMode = .quickAdd
+    /// Home shows the day's totals and log; tapping search enters add mode (pills, Quick Add first) until the red X.
+    @State private var addMode = false
     @State private var revealNextAddedEntry = false
-    @State private var quickAmount: Int?
-    @State private var quickName = ""
     @State private var suggestedFoods: [HistoricalFood] = []
     @State private var localSearchFoods: [HistoricalFood] = []
     @State private var search = FoodSearchState()
@@ -72,7 +71,6 @@ struct MainView: View {
     @State private var openedInitially = false
     @State private var backgroundedAt: Date?
     @FocusState private var searching: Bool
-    @FocusState private var quickNameFocused: Bool
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsFatSecretAttribution: Bool {
@@ -90,69 +88,24 @@ struct MainView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if cleanQuery.isEmpty {
+                if !addMode {
                     homeHeader
+                } else if cleanQuery.isEmpty {
+                    addModeHeader
                 }
             ScrollViewReader { proxy in
                 List {
                     Group {
                     if !cleanQuery.isEmpty {
                         searchSection
+                    } else if !addMode {
+                        loggedRows
                     } else if listMode == .quickAdd {
                         suggestionRows
                     } else if listMode == .meals {
                         mealRows
                     } else {
-                        if store.dayEntries(selected).isEmpty {
-                            Text(Calendar.current.isDateInToday(selected)
-                                 ? "You haven't logged anything yet today."
-                                 : "No food logged for this day.")
-                                .font(.cave(.body)).foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 16)
-                                .listRowSeparator(.hidden)
-                        }
-                        Section {
-                            ForEach(store.dayEntries(selected)) { entry in
-                                Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
-                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                        Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
-                                        Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                            .lineLimit(1).truncationMode(.tail)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        Text(entry.totalCalories.calorieText)
-                                            .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                            .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
-                                        CaveIcon(.pencil, size: 22).foregroundStyle(.secondary).padding(.leading, 6)
-                                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
-                                            .accessibilityHidden(true)
-                                    }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain).id(entry.id)
-                                .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
-                                .caveCardRow()
-                                .accessibilityIdentifier("entry-\(entry.id)")
-                                .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
-                                .contextMenu {
-                                    Button {
-                                        searching = false
-                                        sheet = .entry(EntryDraft(entry))
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-                                    Button(role: .destructive) {
-                                        store.delete(entry)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button("Delete", role: .destructive) { store.delete(entry) }
-                                        .tint(.red)
-                                }
-                            }
-                        }.listSectionSeparator(.hidden)
+                        repeatRows
                     }
                     if showsFatSecretAttribution {
                         FatSecretAttribution().listRowSeparator(.hidden)
@@ -168,7 +121,7 @@ struct MainView: View {
                         revealNextAddedEntry = false
                         showLogged()
                     }
-                    guard listMode == .logged, cleanQuery.isEmpty else { return }
+                    guard !addMode || listMode == .logged, cleanQuery.isEmpty else { return }
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(100))
                         withAnimation { proxy.scrollTo(value, anchor: .bottom) }
@@ -204,7 +157,9 @@ struct MainView: View {
                 if listMode == .quickAdd { withAnimation { refreshSuggestions() } }
             }
             .onChange(of: cleanQuery) { _, value in
-                if !value.isEmpty { showingQuickCalories = false }
+            }
+            .onChange(of: searching) { _, focused in
+                if focused && !addMode { enterAddMode() }
             }
             .onChange(of: actionRouter.pending) { _, request in
                 if request != nil { _ = openPendingAction() }
@@ -246,8 +201,19 @@ struct MainView: View {
                          macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
                          macroGoals: store.macroGoals(selected))
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
+        if !store.dayEntries(selected).isEmpty {
+            Text(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected))
+                .font(.cave(.subheadline).bold()).foregroundStyle(Color.caveOrange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 32).padding(.bottom, 2)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("homeLogHeader")
+        }
+    }
+
+    @ViewBuilder private var addModeHeader: some View {
         foodListPicker
-            .padding(.horizontal, 20).padding(.bottom, 12)
+            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
         // Card rows need no rule under the pills; keep it only above an empty list.
         Divider().padding(.horizontal, 20).opacity(listHasRows ? 0 : 1)
     }
@@ -301,7 +267,6 @@ struct MainView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
     @discardableResult private func openPendingAction() -> Bool {
-        let quickCalories = actionRouter.pending?.quickCalories == true
         guard let action = actionRouter.consume() else { return false }
         openedInitially = true
         // External logging always starts today, even if a past day was selected.
@@ -320,8 +285,8 @@ struct MainView: View {
             revealNextAddedEntry = true
             sheet = .photo
         case .add:
-            openSearch()
-            showingQuickCalories = quickCalories
+            enterAddMode()
+            searching = true
         }
         return true
     }
@@ -413,6 +378,86 @@ struct MainView: View {
         }
         }
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+    }
+    @ViewBuilder private var loggedRows: some View {
+            if store.dayEntries(selected).isEmpty {
+                Text(Calendar.current.isDateInToday(selected)
+                     ? "You haven't logged anything yet today."
+                     : "No food logged for this day.")
+                    .font(.cave(.body)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 16)
+                    .listRowSeparator(.hidden)
+            }
+            Section {
+                ForEach(store.dayEntries(selected)) { entry in
+                    Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
+                            Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                                .lineLimit(1).truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(entry.totalCalories.calorieText)
+                                .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                                .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
+                            CaveIcon(.pencil, size: 22).foregroundStyle(.secondary).padding(.leading, 6)
+                                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
+                                .accessibilityHidden(true)
+                        }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).id(entry.id)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
+                    .caveCardRow()
+                    .accessibilityIdentifier("entry-\(entry.id)")
+                    .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
+                    .contextMenu {
+                        Button {
+                            searching = false
+                            sheet = .entry(EntryDraft(entry))
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        Button {
+                            duplicate(entry)
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                        Button(role: .destructive) {
+                            store.delete(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    // A full swipe deletes (rightmost action); Duplicate sits to its left.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button("Delete", role: .destructive) { store.delete(entry) }
+                            .tint(.red)
+                        Button("Duplicate") { duplicate(entry) }
+                            .tint(.gray)
+                    }
+                }
+            }.listSectionSeparator(.hidden)
+    }
+    /// Add mode's Today list: log something from today again, or edit a copy before adding it.
+    @ViewBuilder private var repeatRows: some View {
+        let entries = store.dayEntries(selected)
+        if entries.isEmpty {
+            Text(Calendar.current.isDateInToday(selected) ? "Nothing logged yet today." : "No food logged for this day.")
+                .font(.cave(.body)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 16)
+                .listRowSeparator(.hidden)
+        } else {
+            ForEach(entries) { entry in
+                let draft = EntryDraft(entry)
+                FoodRow(name: entry.foodDisplayName.isEmpty ? "\(entry.totalCalories.calorieText) calories" : entry.foodDisplayName,
+                        calories: entry.totalCalories, suggestionLayout: true,
+                        add: { revealNextAddedEntry = false; add(draft) },
+                        edit: { edit(draft, revealAfterSave: false) })
+                    .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
+                    .caveCardRow()
+            }
+        }
     }
     private var suggestionRows: some View {
         Group {
@@ -546,7 +591,6 @@ struct MainView: View {
     }
     private var bottomBar: some View {
             VStack(spacing: 0) {
-                if showingQuickCalories { quickCalorieGrid }
                 if let toast = store.toast {
                     HStack {
                         Text(toast).font(.cave(.subheadline)).lineLimit(2)
@@ -557,7 +601,7 @@ struct MainView: View {
                         .accessibilityIdentifier("searchUndoBanner")
                 }
                 if weights.shouldPrompt(on: today), Calendar.current.isDateInToday(selected),
-                   !searching, !quickNameFocused, cleanQuery.isEmpty, !showingQuickCalories {
+                   !addMode, cleanQuery.isEmpty {
                     HStack(spacing: 0) {
                         Button { sheet = .weighIn } label: {
                             HStack(spacing: 8) {
@@ -593,16 +637,17 @@ struct MainView: View {
                         TextField(searchExpanded ? "search food or enter cals" : "search / add", text: $query)
                             .focused($searching).submitLabel(.search).autocorrectionDisabled()
                             .accessibilityIdentifier("foodSearch")
-                        if searching || !query.isEmpty {
+                        // With text: "Clear" empties the field and stays in add mode. Empty: "Cancel" returns home.
+                        if addMode || !query.isEmpty {
+                            let clearing = !query.isEmpty
                             Button {
-                                query = ""
-                                searching = false
-                                showingQuickCalories = false
-                                refreshSuggestions()
+                                if clearing { query = "" } else { exitAddMode() }
                             } label: {
-                                CaveIcon(.plus, size: 17).rotationEffect(.degrees(45))
-                                    .foregroundStyle(.red).frame(width: 44, height: 44)
-                            }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                                Text(clearing ? "Clear" : "Cancel")
+                                    .font(.cave(.subheadline)).foregroundStyle(.red)
+                                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                            .accessibilityIdentifier(clearing ? "clearSearch" : "cancelAddMode")
                         }
                     }.padding(.horizontal, 12).frame(minHeight: 48)
                     .background(Color.caveBackground, in: RoundedRectangle(cornerRadius: 14))
@@ -614,7 +659,7 @@ struct MainView: View {
                 .animation(.easeInOut(duration: 0.22), value: searchExpanded)
             }.background(Color.caveSurface)
     }
-    private var searchExpanded: Bool { searching || !query.isEmpty }
+    private var searchExpanded: Bool { addMode || !query.isEmpty }
     private var entryShortcuts: some View {
         HStack(spacing: 0) {
             Button {
@@ -664,68 +709,23 @@ struct MainView: View {
         .accessibilityLabel("Add \"\(cleanQuery)\", enter calories")
         .accessibilityIdentifier("manualSearchEntry")
     }
-    private var quickCalorieGrid: some View {
-        VStack(spacing: 6) {
-            Text("Select Calories").font(.cave(.subheadline))
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
-                ForEach(Array(stride(from: 50, through: 1000, by: 50)), id: \.self) { amount in
-                    Button {
-                        quickAmount = amount
-                        quickNameFocused = true
-                    } label: {
-                        Text(amount.formatted()).font(.cave(.subheadline)).lineLimit(1).minimumScaleFactor(0.7)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(quickAmount == amount ? Color.accentColor : Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                    }.buttonStyle(.plain)
-                        .foregroundStyle(quickAmount == amount ? Color(.systemBackground) : Color.accentColor)
-                        .accessibilityLabel("Select \(amount) calories")
-                        .accessibilityAddTraits(quickAmount == amount ? .isSelected : [])
-
-                }
-            }
-            HStack(spacing: 8) {
-                TextField("Name (optional)", text: $quickName)
-                    .focused($quickNameFocused)
-                    .font(.cave(.subheadline))
-                    .padding(12)
-                    .background(Color.caveBackground, in: RoundedRectangle(cornerRadius: 10))
-                    .accessibilityIdentifier("quickCalorieName")
-                    .submitLabel(.done)
-                    .onSubmit { addQuickCalories() }
-                Button(action: addQuickCalories) {
-                    CaveIcon(.plus, size: 18).foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Color.accentColor, in: Circle())
-                        .opacity(quickAmount == nil ? 0.35 : 1)
-                        .frame(width: 44, height: 44)
-                }.buttonStyle(.plain)
-                    .disabled(quickAmount == nil)
-                    .accessibilityLabel("Add quick calories")
-            }.padding(.top, 6)
-        }.padding(12)
+    private func enterAddMode() {
+        addMode = true
+        listMode = .quickAdd
+        refreshSuggestions()
     }
-    private func addQuickCalories() {
-        guard let quickAmount else { return }
-        let draft = EntryDraft(name: quickName.trimmingCharacters(in: .whitespacesAndNewlines),
-                               calories: Double(quickAmount), timestamp: loggingDate)
-        revealNextAddedEntry = true
-        guard store.add([draft]) else {
-            revealNextAddedEntry = false
-            return
-        }
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        quickNameFocused = false
-        self.quickAmount = nil
-        quickName = ""
-        showLogged()
+    private func exitAddMode() {
+        query = ""
+        searching = false
+        addMode = false
+        refreshSuggestions()
     }
+    /// Returns to the home screen (totals and the day's log).
     private func openSearch(autofocus: Bool = false) {
         searching = autofocus
-        listMode = .quickAdd
+        addMode = autofocus
+        listMode = autofocus ? .quickAdd : .logged
         query = ""
-        showingQuickCalories = false
-        quickAmount = nil
-        quickName = ""
         // Keep rows stable while logging several foods and showing confirmation.
         refreshSuggestions()
         sheet = nil
@@ -734,7 +734,7 @@ struct MainView: View {
     private func showLogged() {
         query = ""
         searching = false
-        showingQuickCalories = false
+        addMode = false
         listMode = .logged
     }
     private func openMealStart(_ start: NewMealStart) {
@@ -757,6 +757,11 @@ struct MainView: View {
     @discardableResult private func add(_ input: EntryDraft, source: String? = nil) -> Bool {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
         return store.add([draft])
+    }
+    /// Logs a fresh copy of an entry on the selected day at the current time.
+    private func duplicate(_ entry: CalorieEntry) {
+        revealNextAddedEntry = false
+        add(EntryDraft(entry))
     }
     private func refreshSuggestions() {
         suggestedFoods = FoodHistory.suggestions(
@@ -905,26 +910,6 @@ private struct FlipAddIcon: View, Animatable {
     }
 }
 
-private struct QuickCaloriesIcon: View {
-    var body: some View {
-        Canvas { context, size in
-            var path = Path()
-            for row in 0..<2 {
-                for column in 0..<2 {
-                    let x = CGFloat(column) * size.width * 0.55 + 1
-                    let y = CGFloat(row) * size.height * 0.55 + 1
-                    path.move(to: CGPoint(x: x, y: y + 1))
-                    path.addLine(to: CGPoint(x: x + size.width * 0.36, y: y))
-                    path.addLine(to: CGPoint(x: x + size.width * 0.38, y: y + size.height * 0.37))
-                    path.addLine(to: CGPoint(x: x + 1, y: y + size.height * 0.39))
-                    path.closeSubpath()
-                }
-            }
-            context.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        }.accessibilityHidden(true)
-    }
-}
-
 struct DaySelector: View {
     @Binding var selected: Date
     var today: Date
@@ -935,10 +920,20 @@ struct DaySelector: View {
                 CaveIcon(.chevronLeft, size: 22).frame(width: 44, height: 44)
             }.buttonStyle(.borderless).accessibilityLabel("Previous day")
             Button(action: openCalendar) {
-                Text(dateLabel).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .padding(.horizontal, 12).frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                HStack(alignment: .firstTextBaseline, spacing: relativeDayName == nil ? 6 : 12) {
+                    Text(relativeDayName ?? fullDateLabel)
+                        .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
+                    if relativeDayName != nil {
+                        Text(fullDateLabel)
+                            .font(.custom("Schoolbell-Regular", size: 13, relativeTo: .caption))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.center)
+                // Today's wider label sits closer to the chevrons.
+                .padding(.horizontal, relativeDayName == nil ? 12 : 2).frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityElement(children: .combine)
             }.buttonStyle(.plain).accessibilityIdentifier("selectedDate")
                 .accessibilityHint("Open calorie calendar")
             Button { move(1) } label: {
@@ -947,7 +942,11 @@ struct DaySelector: View {
                 .disabled(Calendar.current.startOfDay(for: selected) >= Calendar.current.startOfDay(for: today))
         }
     }
-    private var dateLabel: String {
+    /// Only the current day gets the "Today" label beside its full date.
+    private var relativeDayName: String? {
+        Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : nil
+    }
+    private var fullDateLabel: String {
         let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thur", "Fri", "Sat"]
         let weekday = weekdays[Calendar.current.component(.weekday, from: selected) - 1]
         return "\(weekday), \(monthDayLabel(selected))"

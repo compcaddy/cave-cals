@@ -68,12 +68,13 @@ struct MacroAmountField: View {
     @FocusState private var focused: Bool
     var body: some View {
         HStack {
-            Text(title)
+            // Matches the serving rows above: lowercase, smaller, lighter label.
+            Text(title.lowercased()).font(.cave(.subheadline)).opacity(0.65)
             if estimated { Text("≈").foregroundStyle(.secondary).accessibilityLabel("Estimated") }
             Spacer(minLength: 16)
             TextField(placeholder, text: $text)
                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                .frame(maxWidth: 110, minHeight: 44).focused($focused)
+                .frame(maxWidth: 110).focused($focused)
                 .foregroundStyle(value.map { !$0.isFinite || $0 < 0 } == true ? Color.red : Color.primary)
                 .accessibilityLabel(title).accessibilityIdentifier(identifier)
                 .selectValueOnFocus(identifier: identifier)
@@ -93,6 +94,7 @@ struct MacroAmountField: View {
             Text("g").foregroundStyle(.secondary)
         }
         .selectValueOnTap(focus: $focused)
+        .editorRowInsets()
     }
     private func updateText() { text = value.flatMap { $0.isFinite ? $0.macroText : nil } ?? (value == nil ? "" : text) }
 }
@@ -107,12 +109,13 @@ struct MacroEditorSection: View {
                 MacroAmountField(title: kind.editorTitle, value: binding(kind), estimated: draft.macrosPerServing?[keyPath: kind.estimateKeyPath] == true, identifier: "macro-\(kind.rawValue)")
             }
             HStack {
-                Text("Net carbs").foregroundStyle(.secondary)
+                Text("net carbs (calculated)").font(.cave(.subheadline)).opacity(0.65)
                 Spacer()
                 Text(draft.totalMacros?.netCarbs.map { "\(draft.totalMacros?.estimatedNetCarbs == true ? "≈" : "")\($0.macroText) g" } ?? "—")
                     .foregroundStyle(.secondary)
             }
             .accessibilityIdentifier("calculatedNetCarbs")
+            .editorRowInsets()
             if let macros = draft.totalMacros, let carbs = macros.totalCarbs, let fiber = macros.fiber, fiber > carbs {
                 Text("Fiber cannot exceed total carbohydrates.").font(.cave(.caption)).foregroundStyle(.red)
             }
@@ -132,9 +135,7 @@ struct MacroEditorSection: View {
         } header: {
             Text("Macros · total")
         } footer: {
-            Text(draft.totalMacros?.hasEstimates == true
-                 ? "≈ Estimated. Carbohydrates include fiber. Net carbs = carbohydrates − fiber."
-                 : "Optional. Carbohydrates include fiber. Net carbs = carbohydrates − fiber. Estimates use AI.")
+            if draft.totalMacros?.hasEstimates == true { Text("≈ Estimated") }
         }
         .task(id: estimating) {
             guard estimating else { return }

@@ -14,50 +14,72 @@ final class ECCUITests: XCTestCase {
         app.buttons["Save Changes"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
+    /// Home = date, totals, and the day's log. Clearing search always returns there.
     private func closeSearchDrawer() {
-        if app.buttons["Clear search"].exists { app.buttons["Clear search"].tap() }
-        app.buttons["Logged"].tap()
+        if app.buttons["clearSearch"].exists { app.buttons["clearSearch"].tap() }
+        if app.buttons["cancelAddMode"].exists { app.buttons["cancelAddMode"].tap() }
+        XCTAssertTrue(app.otherElements["calorieSummary"].waitForExistence(timeout: 5))
     }
+    /// Add mode (pills) opens by tapping search; pills: "Logged" (Today), "Quick Add", "Meals".
+    private func openAddMode(_ pill: String = "Quick Add") {
+        let search = app.textFields["foodSearch"]
+        if !app.buttons["Quick Add"].exists { search.tap() }
+        XCTAssertTrue(app.buttons[pill].waitForExistence(timeout: 5))
+        app.buttons[pill].tap()
+    }
+    private var onHome: Bool { app.otherElements["calorieSummary"].waitForExistence(timeout: 5) && !app.buttons["Quick Add"].exists }
     func testBriefBackgroundPreservesLoggedTab() {
-        app.buttons["Logged"].tap()
+        openAddMode("Meals")
         XCUIDevice.shared.press(.home)
         app.activate()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Logged"].isSelected)
-        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.buttons["Meals"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Meals"].isSelected)
     }
 
     func testUnifiedHomeSearchRestoresSelectedList() {
-        XCTAssertTrue(app.buttons["Quick Add"].isSelected)
+        XCTAssertTrue(onHome)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
-        XCTAssertFalse(app.buttons["Close search"].exists)
+        XCTAssertFalse(app.buttons["Logged"].exists)
         let search = app.textFields["foodSearch"]
-        XCTAssertLessThan(search.frame.maxY, app.buttons["searchQuickCalories"].frame.minY)
-        app.buttons["Logged"].tap()
+        XCTAssertTrue(app.buttons["Voice entry"].exists)
+        // Tapping search hides the date and totals and shows the pills with Quick Add selected.
         search.tap()
+        XCTAssertTrue(app.buttons["Quick Add"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Quick Add"].isSelected)
+        XCTAssertFalse(app.otherElements["calorieSummary"].exists)
+        XCTAssertFalse(app.buttons["profile"].exists)
+        XCTAssertFalse(app.buttons["Voice entry"].exists)
         search.typeText("75")
-        XCTAssertFalse(app.segmentedControls["foodListPicker"].exists)
         let add = app.buttons["Add 75 calories"].firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 3))
         add.tap()
-        XCTAssertEqual(search.value as? String, "search food or enter cals")
-        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        XCTAssertEqual(search.value as? String, "search / add")
+        XCTAssertTrue(onHome)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         assertSummary("75 of 2,100 calories")
+        XCTAssertTrue(app.staticTexts["homeLogHeader"].exists)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).firstMatch.exists)
-        app.buttons["Quick Add"].tap()
         search.tap()
         search.typeText("Ban")
         let manualAdd = app.buttons["Add \"Ban\", enter calories"]
         XCTAssertTrue(manualAdd.waitForExistence(timeout: 3))
-        XCTAssertFalse(app.otherElements["calorieSummary"].exists)
-        XCTAssertFalse(app.buttons["profile"].exists)
-        XCTAssertFalse(app.buttons["searchQuickCalories"].exists)
+        XCTAssertFalse(app.buttons["Quick Add"].exists)
         XCTAssertLessThan(manualAdd.frame.maxY, search.frame.minY)
         XCTAssertTrue(app.staticTexts["Results"].exists)
-        app.buttons["Clear search"].tap()
-        XCTAssertTrue(app.buttons["Quick Add"].isSelected)
-        XCTAssertTrue(app.buttons["searchQuickCalories"].exists)
+        closeSearchDrawer()
+        XCTAssertTrue(onHome)
+        XCTAssertTrue(app.buttons["Voice entry"].exists)
+    }
+    func testAddModeTodayListRepeatsOrEditsWithoutChangingTheOriginal() {
+        quickAdd("140")
+        openAddMode("Logged")
+        let again = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add 140 calories", "foodDetails-140 calories")).firstMatch
+        XCTAssertTrue(again.waitForExistence(timeout: 3))
+        again.tap()
+        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        closeSearchDrawer()
+        assertSummary("280 of 2,100 calories")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).count, 2)
     }
     func quickAdd(_ calories: String) {
         let search = app.textFields["foodSearch"]
@@ -86,8 +108,7 @@ final class ECCUITests: XCTestCase {
         let add = row.buttons.matching(identifier: "Add Banana")
         XCTAssertEqual(add.count, 1)
         add.firstMatch.tap()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        XCTAssertTrue(onHome)
         assertSummary("110 of 2,100 calories")
         app.buttons["Undo"].firstMatch.tap()
         assertSummary("0 of 2,100 calories")
@@ -101,43 +122,11 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 3))
         add.tap()
         XCTAssertTrue(search.exists)
-        XCTAssertEqual(search.value as? String, "search food or enter cals")
-        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        XCTAssertEqual(search.value as? String, "search / add")
+        XCTAssertTrue(onHome)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         app.buttons["Undo"].firstMatch.tap()
         assertSummary("0 of 2,100 calories")
-    }
-
-    func testQuickCalorieGridAddsWithoutOpeningEditor() {
-        app.buttons["Quick Calories"].tap()
-        let firstAmount = app.buttons["Select 50 calories"]
-        XCTAssertTrue(firstAmount.exists)
-        XCTAssertTrue(app.buttons["Select 1,000 calories"].exists || app.buttons["Select 1000 calories"].exists)
-        let search = app.textFields["foodSearch"]
-        XCTAssertLessThan(firstAmount.frame.maxY, search.frame.minY)
-        XCTAssertLessThan(search.frame.maxY, app.buttons["searchQuickCalories"].frame.minY)
-        let gridShot = XCTAttachment(screenshot: app.screenshot())
-        gridShot.name = "Quick calorie grid"
-        gridShot.lifetime = .keepAlways
-        add(gridShot)
-        XCTAssertFalse(app.buttons["Add quick calories"].isEnabled)
-        app.buttons["Select 200 calories"].tap()
-        let name = app.textFields["quickCalorieName"]
-        name.tap()
-        name.typeText("Afternoon snack")
-        XCTAssertTrue(app.buttons["Add quick calories"].isEnabled)
-        app.buttons["Add quick calories"].tap()
-        let logged = app.buttons["Logged"]
-        XCTAssertTrue(logged.waitForExistence(timeout: 3))
-        XCTAssertTrue(logged.isSelected)
-        XCTAssertFalse(app.buttons["Select 200 calories"].exists)
-        let addedEntry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).firstMatch
-        XCTAssertTrue(addedEntry.waitForExistence(timeout: 3))
-        XCTAssertTrue(addedEntry.isHittable)
-        XCTAssertTrue(addedEntry.label.contains("Afternoon snack"))
-        XCTAssertTrue(app.textFields["foodSearch"].exists)
-        XCTAssertFalse(app.textFields["servingSize"].exists)
-        assertSummary("200 of 2,100 calories")
     }
 
     func testSkipGoalThenAddGoalInSettings() {
@@ -188,19 +177,21 @@ final class ECCUITests: XCTestCase {
         XCTAssertFalse(details.label.contains("Protein"))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'P 1 · C 30'")).firstMatch.exists)
         app.buttons["Add Banana"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
+        XCTAssertTrue(onHome)
         let carbs = app.descendants(matching: .any)["dailyMacro-totalCarbs"].firstMatch
         XCTAssertTrue(carbs.waitForExistence(timeout: 5))
         XCTAssertTrue(carbs.label.contains("30 g"))
-        app.buttons["Quick Add"].tap()
+        openAddMode("Quick Add")
         XCTAssertTrue(details.waitForExistence(timeout: 5))
         XCTAssertFalse(details.label.contains("Protein"))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'P 1 · C 30'")).firstMatch.exists)
         app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add Banana", "foodDetails-Banana")).firstMatch.tap()
         XCTAssertTrue(app.buttons["Quick Add"].isSelected)
+        closeSearchDrawer()
         let total = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '60 g'"), object: carbs)
         XCTAssertEqual(XCTWaiter.wait(for: [total], timeout: 5), .completed)
-        app.buttons["Edit Banana"].firstMatch.tap()
+        openAddMode("Quick Add")
+        app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Edit Banana", "foodDetails-Banana")).firstMatch.tap()
         let fiber = app.textFields["macro-fiber"]
         for _ in 0..<4 where !fiber.isHittable { app.swipeUp() }
         XCTAssertTrue(fiber.waitForExistence(timeout: 3))
@@ -237,7 +228,7 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(app.buttons["saveEntry"].isEnabled)
         let editorShot = XCTAttachment(screenshot: app.screenshot()); editorShot.name = "Macros editor"; editorShot.lifetime = .keepAlways; add(editorShot)
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
+        XCTAssertTrue(onHome)
         let proteinTotal = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
         XCTAssertTrue(proteinTotal.waitForExistence(timeout: 5))
         XCTAssertTrue(proteinTotal.label.contains("1.5"))
@@ -277,17 +268,23 @@ final class ECCUITests: XCTestCase {
         XCTAssertEqual(result, .completed)
     }
     func testQuickAddUndoAndDelete() {
+        let entries = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-' "))
         quickAdd("325")
-        XCTAssertTrue(app.staticTexts["325 calories"].waitForExistence(timeout: 3))
-        app.buttons["Undo"].tap()
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-' ")).count, 0)
+        assertSummary("325 of 2,100 calories")
+        app.buttons["Undo"].firstMatch.tap()
+        assertSummary("0 of 2,100 calories")
+        XCTAssertEqual(entries.count, 0)
         quickAdd("180")
-        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-' ")).firstMatch
+        let entry = entries.firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 3))
-        entry.swipeLeft(); app.buttons["Delete"].tap()
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-' ")).count, 0)
-        app.buttons["Undo"].tap()
-        XCTAssertTrue(app.staticTexts["180 calories"].waitForExistence(timeout: 3))
+        entry.swipeLeft()
+        XCTAssertTrue(app.buttons["Duplicate"].waitForExistence(timeout: 3))
+        app.buttons["Delete"].tap()
+        assertSummary("0 of 2,100 calories")
+        XCTAssertEqual(entries.count, 0)
+        app.buttons["Undo"].firstMatch.tap()
+        assertSummary("180 of 2,100 calories")
+        XCTAssertTrue(entry.waitForExistence(timeout: 3))
     }
     func testLoggedEntryLongPressOffersEditAndDelete() {
         quickAdd("180")
@@ -308,8 +305,8 @@ final class ECCUITests: XCTestCase {
         name.tap(); name.typeText("Pinned snack")
         app.buttons["saveEntry"].tap()
 
-        app.buttons["Quick Add"].tap()
-        let row = app.buttons["Add Pinned snack"].firstMatch
+        openAddMode("Quick Add")
+        let row = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add Pinned snack", "foodDetails-Pinned snack")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 3))
         row.press(forDuration: 0.8)
         XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 3))
@@ -376,7 +373,7 @@ final class ECCUITests: XCTestCase {
         entryServings.tap(); entryServings.typeText("2")
         app.buttons["saveEntry"].tap()
         closeSearchDrawer()
-        app.buttons["Meals"].tap()
+        openAddMode("Meals")
         app.buttons["newMeal"].tap()
         app.buttons["newMealToday"].tap()
         app.buttons["Select Cheerios"].tap()
@@ -391,7 +388,7 @@ final class ECCUITests: XCTestCase {
         app.buttons["Next day"].tap()
         XCTAssertFalse(app.buttons["Next day"].isEnabled)
         app.buttons["Scan barcode"].tap()
-        XCTAssertTrue(app.navigationBars["Scan a Barcode"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Barcode Scan"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Enter calories manually"].exists)
         app.buttons["captureCancel"].tap()
     }
@@ -407,7 +404,7 @@ final class ECCUITests: XCTestCase {
     }
     func testMealFromScratchAndScaledAdd() {
         closeSearchDrawer()
-        app.buttons["Meals"].tap(); app.buttons["newMeal"].tap()
+        openAddMode("Meals"); app.buttons["newMeal"].tap()
         XCTAssertTrue(app.buttons["newMealPhoto"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["newMealVoice"].exists)
         XCTAssertTrue(app.buttons["newMealLink"].exists)
@@ -438,8 +435,9 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(mealServings.waitForExistence(timeout: 3))
         mealServings.tap(); mealServings.typeText("1.5")
         app.buttons["Add Meal"].tap()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.buttons["Logged"].isSelected)
+        XCTAssertTrue(app.buttons["cancelAddMode"].waitForExistence(timeout: 4))
+        closeSearchDrawer()
+        XCTAssertTrue(onHome)
         XCTAssertTrue(app.staticTexts["180"].waitForExistence(timeout: 4))
     }
 }
@@ -464,8 +462,7 @@ final class ReleaseScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--screenshots"]
         app.launch()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 10))
-        app.buttons["Logged"].tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.otherElements["calorieSummary"].waitForExistence(timeout: 5))
         capture(app, "01-Daily-diary")
         app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH 'entry-' ")).firstMatch.tap()
@@ -503,8 +500,7 @@ final class AICaptureFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--screenshots"]
         app.launch()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
-        app.buttons["Logged"].tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         app.buttons["Photo entry"].tap()
         XCTAssertTrue(app.navigationBars["Meal Scan"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["Meal Scan"].buttons["Cancel"].exists)
@@ -532,8 +528,7 @@ final class AICaptureFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--screenshots"]
         app.launch()
-        XCTAssertTrue(app.buttons["Logged"].waitForExistence(timeout: 5))
-        app.buttons["Logged"].tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         app.buttons["Voice entry"].tap()
         XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["aiRecord"].waitForExistence(timeout: 5))
