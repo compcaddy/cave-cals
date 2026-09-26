@@ -11,40 +11,52 @@ struct ProfileView: View {
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
+    private var planTitle: String { weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan" }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Button { adjustingGoal = true } label: {
+                    Button { planningCalories = true } label: {
                         HStack(spacing: 12) {
-                            Text("Daily calorie goal").foregroundStyle(.primary)
+                            CaveIcon(.meals, size: 26).foregroundStyle(Color.caveOrange)
+                            Text(planTitle).foregroundStyle(Color.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
-                            Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
-                                .font(.cave(.title3))
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }.frame(minHeight: 44).contentShape(Rectangle())
+                            CaveIcon(.chevronRight, size: 16).foregroundStyle(Color.secondary)
+                        }.contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("adjustGoal")
-                    .accessibilityLabel("Daily calorie goal")
-                    .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
-                    .accessibilityHint("Edit daily calorie goal")
-                }
-                Section {
-                    Button(weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan") { planningCalories = true }
-                        .accessibilityIdentifier("caloriePlan")
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(planTitle)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("caloriePlan")
                     if weights.caloriePlan != nil {
                         Button("Forget plan details", role: .destructive) { forgettingPlan = true }
                             .foregroundStyle(.red).accessibilityIdentifier("forgetCaloriePlan")
                     }
                 }
+                Section {
+                    Button { adjustingGoal = true } label: {
+                        HStack(spacing: 12) {
+                            Text("Daily calorie goal").foregroundStyle(Color.primary)
+                            Spacer(minLength: 8)
+                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                            Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
+                                .font(.cave(.title3))
+                                .foregroundStyle(Color.primary)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }.contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("adjustGoal")
+                    .accessibilityLabel("Daily calorie goal")
+                    .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
+                    .accessibilityHint("Edit daily calorie goal")
+                }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
             }.caveScreenBackground()
+            // Every row, whether a button, switch or link, shares one height; whole rows are the tap targets.
+            .environment(\.defaultMinListRowHeight, 60)
             .navigationTitle("About You").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .fullScreenCover(isPresented: $adjustingGoal) {
@@ -75,6 +87,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingPaywall = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAdd = true
 
     var body: some View {
         NavigationStack {
@@ -90,6 +103,13 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("appearancePicker")
                 }
+                Section {
+                    Toggle("Show Quick Add at day start", isOn: $showsHomeQuickAdd)
+                        .accessibilityIdentifier("showHomeQuickAdd")
+                } header: { Text("Home") } footer: {
+                    Text("Shows your top Quick Add foods on Home until you log another way that day.").font(.cave(.caption2))
+                }
+                AppleHealthSection()
                 let hidden = store.activeHiddenQuickAddFoods()
                 if !hidden.isEmpty {
                     Section {
@@ -109,12 +129,12 @@ struct SettingsView: View {
                     } header: {
                         Text("Hidden from Quick Add")
                     } footer: {
-                        Text("Hidden foods return after two weeks, or sooner if you log them again.")
+                        Text("Hidden foods return after two weeks, or sooner if you log them again.").font(.cave(.caption2))
                     }
                 }
                 Section("iCloud") {
                     Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
-                    Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device, with optional sharing to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device. Food and weigh-ins can optionally be shared to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 Section("About") {
                     Text(appVersionLabel)
@@ -122,7 +142,7 @@ struct SettingsView: View {
                     Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
                     Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account, and in Apple Health only if you turn on sharing. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 legalLinks
             }.caveScreenBackground()

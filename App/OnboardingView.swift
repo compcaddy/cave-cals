@@ -139,7 +139,8 @@ struct OnboardingView: View {
         case 2:
             unitPicker
             if unit == .pounds {
-                HStack(spacing: 12) {
+                // Only feet carries the "Height" label, so align the boxes by their bottoms.
+                HStack(alignment: .bottom, spacing: 12) {
                     numberField("Height", text: $height, suffix: "ft", id: "planHeight", decimal: false)
                     numberField("", text: $inches, suffix: "in", id: "planInches")
                 }
@@ -210,13 +211,15 @@ struct OnboardingView: View {
                 Button("Start without a goal") { finishWithoutGoal() }.frame(minHeight: 44).accessibilityIdentifier("skipGoal")
             } else {
                 Button { advance() } label: {
-                    Text(step == 0 ? "Build my plan" : step == 5 ? (isRevising ? "Save my plan" : "Let’s go") : "Continue")
-                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    HStack(spacing: 10) {
+                        Text(step == 0 ? "Me Build Plan" : step == 5 ? (isRevising ? "Save my plan" : "Let’s go") : "Continue")
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        if step == 0 { CaveIcon(.arrowRight, size: 22).accessibilityHidden(true) }
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(.borderedProminent).disabled(!validStep || saving).accessibilityIdentifier("onboardingContinue")
-                if step == 0 {
-                    Button("Set my own goal") { showingManual = true }.frame(minHeight: 44).accessibilityIdentifier("manualSetup")
-                    if !isRevising { Button("Just start tracking") { finishWithoutGoal() }.frame(minHeight: 44).accessibilityIdentifier("skipGoal") }
+                if step == 0 && !isRevising {
+                    Button("Just start tracking") { finishWithoutGoal() }.frame(minHeight: 44).accessibilityIdentifier("skipGoal")
                 }
             }
         }.font(.cave(.body)).padding(.horizontal, 24).padding(.vertical, 12)

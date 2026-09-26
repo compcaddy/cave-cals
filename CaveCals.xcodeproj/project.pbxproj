@@ -34,6 +34,8 @@
 		4CA3A27C87A131EBC3CF7E51 /* CaveIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B627F5DE7B765F759D4C456 /* CaveIcon.swift */; };
 		4D20A17E184A713A9C9FED1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3309369A483B862BEEDEA084 /* Assets.xcassets */; };
 		4E7B1B71B0ED7650AA0C64FF /* LoggingActionRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */; };
+		5A7E0C11D2B34F6A9C1E0001 /* SpokenLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E0C11D2B34F6A9C1E0002 /* SpokenLogging.swift */; };
+		5A7E0C11D2B34F6A9C1E0003 /* NutritionHealthSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E0C11D2B34F6A9C1E0004 /* NutritionHealthSync.swift */; };
 		522662E0D3EFC4510F1CD187 /* CaveCalsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E23E99F767CFFDE893A6C5C /* CaveCalsApp.swift */; };
 		5375DD35EE413C5EB0AFE9FB /* MacroViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6090BE1E903328BCEA1F74C8 /* MacroViews.swift */; };
 		5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */; };
@@ -137,6 +139,8 @@
 		8DFEBB16FFDCBF92F04E9AD5 /* Models.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		98D7A35899A8761DB580D5EA /* Macros.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Macros.swift; sourceTree = "<group>"; };
 		9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoggingActionRouter.swift; sourceTree = "<group>"; };
+		5A7E0C11D2B34F6A9C1E0002 /* SpokenLogging.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpokenLogging.swift; sourceTree = "<group>"; };
+		5A7E0C11D2B34F6A9C1E0004 /* NutritionHealthSync.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NutritionHealthSync.swift; sourceTree = "<group>"; };
 		9C3F508E7A7C05D60934A294 /* FoodProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoodProvider.swift; sourceTree = "<group>"; };
 		9E67F8CD524B7AD2039451D1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A17492053FBE305D6482D24C /* AIInputSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIInputSheet.swift; sourceTree = "<group>"; };
@@ -298,6 +302,8 @@
 				A17492053FBE305D6482D24C /* AIInputSheet.swift */,
 				25E7486514F9CFE0D95E4D4D /* AIDeveloperSettings.swift */,
 				9BD73988D78B0505D85E71C8 /* LoggingActionRouter.swift */,
+				5A7E0C11D2B34F6A9C1E0002 /* SpokenLogging.swift */,
+				5A7E0C11D2B34F6A9C1E0004 /* NutritionHealthSync.swift */,
 				14753FAE2AF643CE8497A9E9 /* WeightTracking.swift */,
 				0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */,
 				294EBEE8DA9D387437E6085E /* WeightViews.swift */,
@@ -505,6 +511,8 @@
 				F7E222213BDE0B50CD1DA2ED /* AIDeveloperSettings.swift in Sources */,
 				39CEC742B684188B0F99300C /* LoggingAction.swift in Sources */,
 				4E7B1B71B0ED7650AA0C64FF /* LoggingActionRouter.swift in Sources */,
+				5A7E0C11D2B34F6A9C1E0001 /* SpokenLogging.swift in Sources */,
+				5A7E0C11D2B34F6A9C1E0003 /* NutritionHealthSync.swift in Sources */,
 				186180071911FF89526CB293 /* CalorieWidgetSnapshot.swift in Sources */,
 				4CA3A27C87A131EBC3CF7E51 /* CaveIcon.swift in Sources */,
 				5946EC65DF97DC883DCE60C4 /* WeightTracking.swift in Sources */,

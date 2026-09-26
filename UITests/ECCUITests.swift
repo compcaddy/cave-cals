@@ -4,15 +4,8 @@ final class ECCUITests: XCTestCase {
     var app: XCUIApplication!
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
-        XCTAssertTrue(app.buttons["manualSetup"].waitForExistence(timeout: 10))
-        app.buttons["manualSetup"].tap()
-        XCTAssertTrue(app.textFields["profileGoal"].waitForExistence(timeout: 5))
-        app.textFields["profileGoal"].tap(); app.textFields["profileGoal"].typeText("2100")
-        XCTAssertFalse(app.textFields["profileName"].exists)
-        XCTAssertTrue(app.buttons["Save Changes"].isEnabled)
-        app.buttons["Save Changes"].tap()
-        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+        app = XCUIApplication(); app.launchArguments = ["--uitesting", "--seed-goal", "2100"]; app.launch()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 10))
     }
     /// Home = date, totals, and the day's log. Clearing search always returns there.
     private func closeSearchDrawer() {
@@ -53,9 +46,10 @@ final class ECCUITests: XCTestCase {
         let add = app.buttons["Add 75 calories"].firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 3))
         add.tap()
-        XCTAssertEqual(search.value as? String, "search / add")
+        // Home shows the new total and row, with the field still ready for the next food.
+        XCTAssertEqual(search.value as? String, "search food or enter cals")
         XCTAssertTrue(onHome)
-        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
         assertSummary("75 of 2,100 calories")
         XCTAssertTrue(app.staticTexts["homeLogHeader"].exists)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).firstMatch.exists)
@@ -84,7 +78,9 @@ final class ECCUITests: XCTestCase {
     func quickAdd(_ calories: String) {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText(calories)
-        let add = app.buttons["Add \(calories) calories"].firstMatch
+        let parts = calories.split(separator: " ")
+        let label = parts.count == 2 ? "Add \"\(parts[0])\" · \(parts[1]) calories" : "Add \(calories) calories"
+        let add = app.buttons[label].firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 3)); add.tap()
         closeSearchDrawer()
     }
@@ -122,15 +118,53 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 3))
         add.tap()
         XCTAssertTrue(search.exists)
-        XCTAssertEqual(search.value as? String, "search / add")
         XCTAssertTrue(onHome)
-        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        // The next food can be typed straight away, without tapping search again.
+        search.typeText("pizza 300")
+        let named = app.buttons["Add \"pizza\" · 300 calories"].firstMatch
+        XCTAssertTrue(named.waitForExistence(timeout: 3))
+        named.tap()
+        XCTAssertTrue(onHome)
+        assertSummary("375 of 2,100 calories")
+        XCTAssertTrue(app.buttons["cancelAddMode"].exists)
+        app.buttons["cancelAddMode"].tap()
+        XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 1))
+        XCTAssertTrue(onHome)
+        XCTAssertEqual(search.value as? String, "search / add")
         app.buttons["Undo"].firstMatch.tap()
-        assertSummary("0 of 2,100 calories")
+        assertSummary("75 of 2,100 calories")
+    }
+    func testEmptyTodayOffersQuickAddOnHome() {
+        let header = app.descendants(matching: .any)["homeQuickAddHeader"]
+        XCTAssertFalse(header.exists)
+        // Backfilling yesterday leaves today's picks available.
+        app.buttons["Previous day"].tap()
+        quickAdd("Banana 110"); quickAdd("Yogurt 130")
+        app.buttons["Next day"].tap()
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        func plus(_ name: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add \(name)", "foodDetails-\(name)")).firstMatch
+        }
+        XCTAssertTrue(plus("Banana").waitForExistence(timeout: 3))
+        plus("Banana").tap()
+        assertSummary("110 of 2,100 calories")
+        XCTAssertTrue(onHome)
+        XCTAssertTrue(app.staticTexts["homeLogHeader"].waitForExistence(timeout: 3))
+        // The added pick leaves after its confirmation; the others stay for a second add.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: plus("Banana"))
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+        XCTAssertTrue(header.exists)
+        plus("Yogurt").tap()
+        assertSummary("240 of 2,100 calories")
+        // Using search retires the picks for the rest of the day.
+        app.textFields["foodSearch"].tap()
+        closeSearchDrawer()
+        XCTAssertFalse(header.waitForExistence(timeout: 2))
     }
 
     func testSkipGoalThenAddGoalInSettings() {
-        app.terminate(); app.launch()
+        app.terminate(); app.launchArguments = ["--uitesting"]; app.launch()
         let skip = app.buttons["skipGoal"]
         XCTAssertTrue(skip.waitForExistence(timeout: 5)); skip.tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))

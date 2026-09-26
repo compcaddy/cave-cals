@@ -158,6 +158,17 @@ enum FoodHistory {
             return normalizedFoodName($0.food.draft.name) < normalizedFoodName($1.food.draft.name)
         }.map(\.food)
     }
+    /// True when a food is usually logged more than once on the days it's eaten (two coffees most
+    /// mornings) and today's count hasn't reached that usual number yet.
+    static func expectsAnotherToday(foodID: String, entries: [CalorieEntry], date: Date, calendar: Calendar = .current) -> Bool {
+        let uses = entries.filter { key(for: $0) == foodID && $0.timestamp <= date }
+        let startOfToday = calendar.startOfDay(for: date)
+        let loggedToday = uses.filter { $0.timestamp >= startOfToday }.count
+        let counts = Dictionary(grouping: uses.filter { $0.timestamp < startOfToday }) { calendar.startOfDay(for: $0.timestamp) }
+            .values.map(\.count).sorted()
+        guard counts.count >= 3, counts.filter({ $0 > 1 }).count * 2 > counts.count else { return false }
+        return loggedToday < counts[counts.count / 2]
+    }
     static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = [], hiddenIDs: Set<String> = []) -> [HistoricalFood] {
         let eligible = entries
             .filter { $0.timestamp <= date && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

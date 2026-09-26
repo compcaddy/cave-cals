@@ -7,7 +7,7 @@ Implemented September 22, 2026 on `codex/onboarding-and-launch`, starting from f
 Welcome -> About you -> Starting point -> Usual day -> Goal and pace -> Editable target.
 
 - The welcome preserves Cave Cals' supplied artwork, Schoolbell typography, and “You Eat. / App Track. / Weight Drop.” headline.
-- Build my plan starts five short steps. Set my own goal and Just start tracking remain available immediately. There is no account, subscription, notification, tracking, camera, or Health permission prompt in onboarding.
+- **Me Build Plan** starts five short steps; **Just start tracking** skips setup without a goal. The welcome-screen manual-goal shortcut was removed September 26, 2026; a manual target remains on the result step when the calculator can't estimate, and in About You. There is no account, subscription, notification, tracking, camera, or Health permission prompt in onboarding.
 - Gender/reference category and age inform the equation; height and current weight support metric or imperial input. Activity choices include work and walking, not only gym sessions.
 - Lose weight supports a goal weight and three requested rates (0.25, 0.5, 0.75 kg/week; converted for pounds). Maintain weight skips deficit and goal-weight entry. We do not promise a deadline or a fixed weight-loss outcome.
 - The target is editable before saving. Optional Track my weight adds the initial weight only if today has no record, and never replaces an existing weigh-in. Existing Health sharing is respected; onboarding does not turn it on.

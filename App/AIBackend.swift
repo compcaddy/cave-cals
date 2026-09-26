@@ -12,6 +12,8 @@ struct AIAccount: Decodable {
     let scansUsed: Int
     let regularLogCount: Int
     var testing: Bool? = nil
+    /// Issued once per install when requested; kept in the Keychain so a reinstall resumes earlier usage.
+    var trialKey: String? = nil
     let productIds: [String]
     let dailyLimit: Int
     let monthlyLimit: Int
@@ -136,7 +138,14 @@ actor AIBackend {
         config.timeoutIntervalForRequest = 240; config.timeoutIntervalForResource = 300
         session = URLSession(configuration: config)
     }
-    func status(regularLogCount: Int = 0) async throws -> AIAccount { try await signed("account/status", fields: ["regularLogCount": regularLogCount]) }
+    func status(regularLogCount: Int = 0) async throws -> AIAccount {
+        let trialKeyName = AIConfiguration.baseURL.map(Self.trialKeyName)
+        var fields: [String: Any] = ["regularLogCount": regularLogCount]
+        if let trialKeyName, KeychainValue.read(trialKeyName) == nil { fields["issueTrialKey"] = true }
+        let account: AIAccount = try await signed("account/status", fields: fields)
+        if let key = account.trialKey, let trialKeyName { try? KeychainValue.save(key, key: trialKeyName) }
+        return account
+    }
     func purchase(_ jws: String) async throws {
         struct Result: Decodable { let accountId: UUID }
         let _: Result = try await signed("purchase/verify", fields: ["signedTransaction":jws])
@@ -167,6 +176,10 @@ actor AIBackend {
     }
     func importMeal(from url: URL) async throws -> AIMealImportResult {
         try await signed("meal/import", fields: ["url": url.absoluteString])
+    }
+    /// Estimates foods from what the person said (Siri/Shortcuts). Uses one scan, like a voice recording.
+    func describe(text: String, regularLogCount: Int = 0) async throws -> AIResult {
+        try await signed("food/describe", fields: ["text": text, "regularLogCount": regularLogCount])
     }
     private func signed<T: Decodable>(_ path: String, fields: [String:Any]) async throws -> T {
         let previous = gate
@@ -227,7 +240,7 @@ actor AIBackend {
         var request = URLRequest(url: base.appendingPathComponent("api/v1/\(path)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze", "meal/import"].contains(path) {
+        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze", "food/describe", "meal/import"].contains(path) {
             // The separately issued owner capability authorizes testing without App Attest.
             request.setValue("1", forHTTPHeaderField: "X-Cave-Owner-Test")
             body["nonce"] = UUID().uuidString
@@ -250,6 +263,7 @@ actor AIBackend {
         return try await send(request)
     }
     private func credentialName(_ base: URL) -> String { "ai.attest." + base.absoluteString }
+    private static func trialKeyName(_ base: URL) -> String { "ai.trial." + base.absoluteString }
     private func deviceKey(base: URL) async throws -> String {
         let service = DCAppAttestService.shared
         guard service.isSupported else { throw AIServiceError(code:"unsupported_device",message:"Secure AI logging requires a supported physical iPhone. Use local developer settings for Simulator testing.") }
@@ -259,7 +273,10 @@ actor AIBackend {
         let attestation = try await service.attestKey(key,clientDataHash:Data(SHA256.hash(data:Data(nonce.utf8))))
         var request=URLRequest(url:base.appendingPathComponent("api/v1/device/register"));request.httpMethod="POST"
         request.setValue("application/json",forHTTPHeaderField:"Content-Type")
-        request.httpBody=try JSONSerialization.data(withJSONObject:["keyId":key,"nonce":nonce,"attestation":attestation.base64EncodedString()])
+        var registration: [String: Any] = ["keyId":key,"nonce":nonce,"attestation":attestation.base64EncodedString()]
+        // The install key outlives a reinstall in the Keychain, so the new key resumes this iPhone's usage.
+        if let trialKey = KeychainValue.read(Self.trialKeyName(base)) { registration["trialKey"] = trialKey }
+        request.httpBody=try JSONSerialization.data(withJSONObject:registration)
         struct Registration: Decodable {let accountId:UUID}
         let _:Registration=try await send(request)
         try KeychainValue.save(key,key:credentialName(base))

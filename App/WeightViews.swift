@@ -15,15 +15,15 @@ struct WeightProfileSections: View {
                 Section {
                     Button { editor = WeightEditorRoute(record: weights.record(on: Date())) } label: {
                         HStack(spacing: 12) {
-                            Text("Today’s weight").foregroundStyle(.primary)
+                            // A concrete color: `.primary` inside a list button resolves to the orange tint.
+                            Text("Today’s weight").foregroundStyle(Color.primary)
                             Spacer(minLength: 8)
                             CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
                             Text(weights.record(on: Date()).map { weights.unit.text($0.kilograms) } ?? "Not logged yet")
-                                .font(.cave(.title3)).foregroundStyle(.primary)
+                                .font(.cave(.title3)).foregroundStyle(Color.primary)
                                 .fixedSize(horizontal: true, vertical: false)
-                        }.frame(minHeight: 44).contentShape(Rectangle())
+                        }.contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("todayWeight")
                 }
                 Section("Weight history") {
@@ -42,24 +42,41 @@ struct WeightProfileSections: View {
                     }.accessibilityIdentifier("weightUnit")
                 }
             }
-            if weights.tracking {
-                Section {
-                    Toggle("Save to Apple Health", isOn: Binding(get: { weights.healthSharing }, set: { enabled in
-                        Task { await weights.setHealthSharing(enabled) }
-                    }))
-                    .disabled(weights.connecting || !weights.healthAvailable)
-                    .accessibilityIdentifier("shareWeightHealth")
-                    if weights.connecting || weights.syncing { ProgressView(weights.connecting ? "Connecting…" : "Sharing weigh-ins…") }
-                    if let message = weights.healthMessage { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
-                    if !weights.healthAvailable { Text("Apple Health is unavailable on this device.").font(.cave(.footnote)).foregroundStyle(.secondary) }
-                    if weights.healthSharing && weights.pendingCount > 0 {
-                        Button("Retry sharing") { Task { await weights.syncHealth() } }.disabled(weights.syncing)
-                    }
-                } header: { Text("Apple Health") } footer: {
-                    Text("Shares existing and future Cave Cals weigh-ins, including corrections and deletions. No weight data is read from other apps. Turning sharing off leaves existing Health entries in place.")
-                }
-            }
             if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
+        }
+    }
+}
+
+/// Settings → Apple Health: food (calories & macros) and weigh-ins. Weight tracking itself stays in About You.
+struct AppleHealthSection: View {
+    @Environment(AppStore.self) private var store
+    @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutrition
+    var body: some View {
+        Section {
+            Toggle("Calories & macros", isOn: Binding(get: { nutrition.enabled }, set: { enabled in
+                Task { await nutrition.setEnabled(enabled, entries: store.entries) }
+            }))
+            .disabled(nutrition.connecting || !nutrition.available)
+            .accessibilityIdentifier("shareNutritionHealth")
+            if nutrition.connecting || nutrition.syncing { ProgressView(nutrition.connecting ? "Connecting…" : "Sharing food…") }
+            if let message = nutrition.message { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
+            Toggle("Weigh-ins", isOn: Binding(get: { weights.healthSharing }, set: { enabled in
+                Task { await weights.setHealthSharing(enabled) }
+            }))
+            .disabled(!weights.tracking || weights.connecting || !weights.healthAvailable)
+            .accessibilityIdentifier("shareWeightHealth")
+            if weights.connecting || weights.syncing { ProgressView(weights.connecting ? "Connecting…" : "Sharing weigh-ins…") }
+            if let message = weights.healthMessage { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
+            if !weights.healthAvailable { Text("Apple Health is unavailable on this device.").font(.cave(.footnote)).foregroundStyle(.secondary) }
+            if weights.tracking && weights.healthSharing && weights.pendingCount > 0 {
+                Button("Retry sharing") { Task { await weights.syncHealth() } }.disabled(weights.syncing)
+            }
+        } header: { Text("Apple Health") } footer: {
+            Text("Calories & macros shares the calories, protein, carbs, fat and fiber of foods you log from the day you turn it on, and keeps them updated when you edit or delete. Weigh-ins shares all your weigh-ins"
+                 + (weights.tracking ? "." : " once Track weight is on in About You.")
+                 + " Cave Cals never reads your Health data. Pausing sharing leaves what’s already in Apple Health.")
+                .font(.cave(.caption2))
         }
     }
 }

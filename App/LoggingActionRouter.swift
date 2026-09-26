@@ -80,8 +80,21 @@ struct ChooseCalorieLoggingIntent: AppIntent {
 struct CaveCalsShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: LogFoodIntent(),
+            phrases: [
+                "Log food with \(.applicationName)",
+                "Log food in \(.applicationName)",
+                "Log a meal in \(.applicationName)",
+                "Log calories in \(.applicationName)",
+                "Add food to \(.applicationName)",
+                "Track food in \(.applicationName)"
+            ],
+            shortTitle: "Log Food",
+            systemImageName: "fork.knife"
+        )
+        AppShortcut(
             intent: ChooseCalorieLoggingIntent(),
-            phrases: ["Log food with \(.applicationName)", "Open \(.applicationName)"],
+            phrases: ["Open \(.applicationName)"],
             shortTitle: "Open Cave Cals",
             systemImageName: "square.grid.2x2"
         )

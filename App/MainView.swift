@@ -64,6 +64,12 @@ struct MainView: View {
     /// Home shows the day's totals and log; tapping search enters add mode (pills, Quick Add first) until the red X.
     @State private var addMode = false
     @State private var revealNextAddedEntry = false
+    /// A search add returns Home with the field still focused, ready for the next food.
+    @State private var primeSearchAfterReveal = false
+    @State private var searchPrimedOnHome = false
+    /// A Home Quick Add pick that was just added stays until its confirmation animation finishes.
+    @State private var settlingHomeQuickAddID: String?
+    @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAddSetting = true
     @State private var suggestedFoods: [HistoricalFood] = []
     @State private var localSearchFoods: [HistoricalFood] = []
     @State private var search = FoodSearchState()
@@ -120,7 +126,12 @@ struct MainView: View {
                     if revealNextAddedEntry || cameFromScan {
                         revealNextAddedEntry = false
                         showLogged()
+                        if primeSearchAfterReveal {
+                            searchPrimedOnHome = true
+                            searching = true
+                        }
                     }
+                    primeSearchAfterReveal = false
                     guard !addMode || listMode == .logged, cleanQuery.isEmpty else { return }
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(100))
@@ -157,9 +168,21 @@ struct MainView: View {
                 if listMode == .quickAdd { withAnimation { refreshSuggestions() } }
             }
             .onChange(of: cleanQuery) { _, value in
+                // Typing into the field left ready on Home continues in add mode, so Clear returns to the pills.
+                if !value.isEmpty, !addMode {
+                    searchPrimedOnHome = false
+                    addMode = true
+                    listMode = .quickAdd
+                }
+            }
+            // Search, voice, meal scan, or barcode on Today retires Home's Quick Add picks for the day.
+            .onChange(of: addMode) { _, adding in if adding { retireHomeQuickAdd() } }
+            .onChange(of: sheet?.id) { _, id in
+                if ["photo", "voice", "barcode"].contains(id) { retireHomeQuickAdd() }
             }
             .onChange(of: searching) { _, focused in
-                if focused && !addMode { enterAddMode() }
+                if !focused { searchPrimedOnHome = false }
+                else if !addMode && !searchPrimedOnHome { enterAddMode() }
             }
             .onChange(of: actionRouter.pending) { _, request in
                 if request != nil { _ = openPendingAction() }
@@ -175,6 +198,8 @@ struct MainView: View {
                         openSearch()
                     }
                     backgroundedAt = nil
+                    // Home's Quick Add picks follow the time of day; add mode keeps its rows stable.
+                    if !addMode { refreshSuggestions() }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in resetToday() }
@@ -338,7 +363,7 @@ struct MainView: View {
     private var searchSection: some View {
         Group {
         Group {
-            if Double(cleanQuery) == nil {
+            if Double(cleanQuery) == nil, QuickEntryText.parse(cleanQuery)?.name.isEmpty != true {
             Text("Results").font(.cave(.caption2)).foregroundStyle(.secondary)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
                 .listRowSeparator(.hidden)
@@ -354,10 +379,10 @@ struct MainView: View {
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { meal in
                 FoodRow(name: meal.name, calories: meal.calories, add: {
                     revealNextAddedEntry = true
-                    if store.addMeal(meal, date: loggingDate) {
-                        showLogged()
-                    } else {
+                    primeSearchAfterReveal = true
+                    if !store.addMeal(meal, date: loggingDate) {
                         revealNextAddedEntry = false
+                        primeSearchAfterReveal = false
                     }
                 }, edit: {
                     searching = false
@@ -447,6 +472,53 @@ struct MainView: View {
                     }
                 }
             }.listSectionSeparator(.hidden)
+            if showsHomeQuickAddSetting, Calendar.current.isDate(selected, inSameDayAs: today), store.showsHomeQuickAdd(on: today) {
+                homeQuickAddRows
+            }
+    }
+    /// Home's top Quick Add picks, so the day's first foods are one tap each. A pick leaves once added,
+    /// unless it's usually logged more than once a day; the next suggestion takes its place.
+    private var homeQuickAddPicks: [HistoricalFood] {
+        let logged = Set(store.dayEntries(today).map(FoodHistory.foodID))
+        return Array(suggestedFoods.filter { food in
+            food.id == settlingHomeQuickAddID || !logged.contains(food.id)
+                || FoodHistory.expectsAnotherToday(foodID: food.id, entries: store.entries, date: Date())
+        }.prefix(3))
+    }
+    @ViewBuilder private var homeQuickAddRows: some View {
+        let picks = homeQuickAddPicks
+        if !picks.isEmpty {
+            HStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    CaveIcon(.lightning, size: 15)
+                    Text("Quick Add")
+                }
+                .font(.cave(.subheadline).bold()).foregroundStyle(Color.caveOrange)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("homeQuickAddHeader")
+                Spacer(minLength: 8)
+                // Lines up with the rows' + buttons; closes the picks for the rest of today.
+                Button { withAnimation { store.dismissHomeQuickAdd(on: today) } } label: {
+                    CaveIcon(.plus, size: 15).rotationEffect(.degrees(45)).frame(width: 44, height: 36)
+                }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                    .accessibilityLabel("Hide Quick Add for today").accessibilityIdentifier("dismissHomeQuickAdd")
+            }
+            .padding(.top, 12)
+            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
+            .listRowSeparator(.hidden)
+            ForEach(picks) { food in
+                let draft = store.applyingCommonDefault(to: food.draft)
+                FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: store.isPinned(food.id),
+                        add: { addHomeQuickAdd(draft, foodID: food.id) },
+                        edit: {
+                            store.markHomeQuickAddUsed(on: today)
+                            edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: true)
+                        })
+                    .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
+                    .caveCardRow()
+            }
+        }
     }
     /// Add mode's Today list: log something from today again, or edit a copy before adding it.
     @ViewBuilder private var repeatRows: some View {
@@ -599,6 +671,11 @@ struct MainView: View {
         return pinned + store.meals.filter { !pinnedSet.contains($0.id) }
     }
     private var bottomBar: some View {
+        VStack(spacing: 0) {
+            if weights.shouldPrompt(on: today), Calendar.current.isDateInToday(selected),
+               !addMode, !searching, cleanQuery.isEmpty {
+                weighInReminder
+            }
             VStack(spacing: 0) {
                 if let toast = store.toast {
                     HStack {
@@ -609,23 +686,6 @@ struct MainView: View {
                     }.padding(.horizontal, 20).background(Color.accentColor.opacity(0.1))
                         .accessibilityIdentifier("searchUndoBanner")
                 }
-                if weights.shouldPrompt(on: today), Calendar.current.isDateInToday(selected),
-                   !addMode, cleanQuery.isEmpty {
-                    HStack(spacing: 0) {
-                        Button { sheet = .weighIn } label: {
-                            HStack(spacing: 8) {
-                                CaveIcon(.person, size: 20)
-                                Text("Log today’s weight").font(.cave(.subheadline))
-                                Spacer()
-                            }.frame(minHeight: 44).contentShape(Rectangle())
-                        }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
-                            .accessibilityIdentifier("weighInReminder")
-                        Button { weights.dismissToday() } label: {
-                            CaveIcon(.plus, size: 15).rotationEffect(.degrees(45)).frame(width: 44, height: 44)
-                        }.buttonStyle(.plain).foregroundStyle(.secondary)
-                            .accessibilityLabel("Hide weigh-in reminder for today").accessibilityIdentifier("dismissWeighIn")
-                    }.padding(.leading, 20).padding(.trailing, 8)
-                }
                 // The typed-entry action sits directly above the search field, aligned with its magnifier.
                 if !cleanQuery.isEmpty {
                     Group {
@@ -633,6 +693,13 @@ struct MainView: View {
                             FoodRow(name: "Add \(amount.calorieText) calories", calories: nil,
                                     add: { addFromSearch(EntryDraft(calories: amount)) },
                                     edit: { edit(EntryDraft(calories: amount), focusName: true, revealAfterSave: true) })
+                        } else if let entry = QuickEntryText.parse(cleanQuery) {
+                            // "pizza 300" or "300 cal pizza" logs a named entry in one tap.
+                            let draft = EntryDraft(name: entry.name, calories: entry.calories)
+                            FoodRow(name: entry.name.isEmpty ? "Add \(entry.calories.calorieText) calories"
+                                        : "Add \"\(entry.name)\" · \(entry.calories.calorieText) calories", calories: nil,
+                                    add: { addFromSearch(draft) },
+                                    edit: { edit(draft, focusName: entry.name.isEmpty, revealAfterSave: true) })
                         } else if Double(cleanQuery) == nil {
                             manualSearchEntryButton
                         }
@@ -646,9 +713,16 @@ struct MainView: View {
                         CaveIcon(.search, size: 20).foregroundStyle(.secondary)
                         TextField(searchExpanded ? "search food or enter cals" : "search / add", text: $query)
                             .focused($searching).submitLabel(.search).autocorrectionDisabled()
+                            // Tapping the field left ready on Home opens add mode, as a first tap would.
+                            .simultaneousGesture(TapGesture().onEnded {
+                                if searchPrimedOnHome && cleanQuery.isEmpty {
+                                    searchPrimedOnHome = false
+                                    enterAddMode()
+                                }
+                            })
                             .accessibilityIdentifier("foodSearch")
                         // With text: "Clear" empties the field and stays in add mode. Empty: "Cancel" returns home.
-                        if addMode || !query.isEmpty {
+                        if searchExpanded {
                             let clearing = !query.isEmpty
                             Button {
                                 if clearing { query = "" } else { exitAddMode() }
@@ -668,8 +742,35 @@ struct MainView: View {
                 .padding(.horizontal, 16).padding(.top, cleanQuery.isEmpty ? 12 : 4).padding(.bottom, 12)
                 .animation(.easeInOut(duration: 0.22), value: searchExpanded)
             }.background(Color.caveSurface)
+        }
     }
-    private var searchExpanded: Bool { addMode || !query.isEmpty }
+    /// Sits on the page above the footer as its own outlined card; the chevron marks it as something to tap.
+    private var weighInReminder: some View {
+        HStack(spacing: 2) {
+            Button { sheet = .weighIn } label: {
+                HStack(spacing: 10) {
+                    CaveIcon(.person, size: 20)
+                    Text("Log today’s weight").font(.cave(.subheadline).weight(.semibold))
+                    Spacer(minLength: 8)
+                    CaveIcon(.chevronRight, size: 16)
+                }
+                .foregroundStyle(Color.caveOrange)
+                .padding(.horizontal, 14).frame(minHeight: 48)
+                .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.caveOrange.opacity(0.55), lineWidth: 1.5))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }.buttonStyle(.plain)
+                .accessibilityIdentifier("weighInReminder")
+                .accessibilityHint("Opens today’s weigh-in")
+            Button { weights.dismissToday() } label: {
+                CaveIcon(.plus, size: 15).rotationEffect(.degrees(45)).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
+                .accessibilityLabel("Hide weigh-in reminder for today").accessibilityIdentifier("dismissWeighIn")
+        }
+        .padding(.leading, 16).padding(.trailing, 6).padding(.top, 6).padding(.bottom, 8)
+        .background(Color.caveBackground)
+    }
+    private var searchExpanded: Bool { addMode || !query.isEmpty || searching }
     private var entryShortcuts: some View {
         HStack(spacing: 0) {
             Button {
@@ -720,6 +821,22 @@ struct MainView: View {
         .accessibilityLabel("Add \"\(cleanQuery)\", enter calories")
         .accessibilityIdentifier("manualSearchEntry")
     }
+    private func addHomeQuickAdd(_ draft: EntryDraft, foodID: String) {
+        revealNextAddedEntry = false
+        store.markHomeQuickAddUsed(on: today)
+        settlingHomeQuickAddID = foodID
+        guard add(draft, source: "suggestion") else { settlingHomeQuickAddID = nil; return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1100))
+            guard settlingHomeQuickAddID == foodID else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { settlingHomeQuickAddID = nil }
+        }
+    }
+    /// Backfilling another day leaves today's picks alone.
+    private func retireHomeQuickAdd() {
+        guard Calendar.current.isDate(selected, inSameDayAs: today) else { return }
+        store.dismissHomeQuickAdd(on: today)
+    }
     private func enterAddMode() {
         addMode = true
         listMode = .quickAdd
@@ -759,10 +876,10 @@ struct MainView: View {
     }
     private func addFromSearch(_ input: EntryDraft) {
         revealNextAddedEntry = true
-        if add(input) {
-            showLogged()
-        } else {
+        primeSearchAfterReveal = true
+        if !add(input) {
             revealNextAddedEntry = false
+            primeSearchAfterReveal = false
         }
     }
     @discardableResult private func add(_ input: EntryDraft, source: String? = nil) -> Bool {

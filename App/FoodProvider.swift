@@ -214,7 +214,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
         cache = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
         persist()
         message = nil; results = []; loading = false
-        guard query.count >= 2, Double(query) == nil else { return }
+        guard query.count >= 2, Double(query) == nil, QuickEntryText.parse(query)?.name.isEmpty != true else { return }
         if let hit = cache[query] { results = hit.results; return }
         loading = true
         defer { if requestID == id { loading = false } }

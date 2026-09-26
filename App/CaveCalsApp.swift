@@ -7,6 +7,7 @@ import CoreData
     @State private var store: AppStore?
     @State private var failure: String?
     @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+    @State private var nutritionHealth: NutritionHealthSync
     init() {
         let navFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 20)!)
         UINavigationBar.appearance().titleTextAttributes = [.font: navFont]
@@ -24,6 +25,8 @@ import CoreData
             _weights = State(initialValue: preview)
         }
         #endif
+        let nutrition = NutritionHealthSync(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+        _nutritionHealth = State(initialValue: nutrition)
         do {
             var screenshots = false
             #if DEBUG && targetEnvironment(simulator)
@@ -49,6 +52,14 @@ import CoreData
                 store.commit()
             }
             #endif
+            #if DEBUG
+            // UI tests start with a set goal instead of walking through onboarding.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let index = arguments.firstIndex(of: "--seed-goal"), arguments.indices.contains(index + 1),
+               let goal = Double(arguments[index + 1]) { store.saveGoal(goal) }
+            #endif
+            Persistence.shared = store
+            store.entriesDidChange = { nutrition.entriesChanged($0) }
             _store = State(initialValue: store)
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
@@ -57,7 +68,7 @@ import CoreData
     var body: some Scene {
         WindowGroup {
             if let store {
-                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights)
+                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights).environment(nutritionHealth)
                     .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
                     .onAppear { appearance.apply() }
                     .onChange(of: appearance) { _, value in value.apply() }
@@ -73,6 +84,7 @@ struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.scenePhase) private var phase
     @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutritionHealth
     var body: some View {
         @Bindable var store = store
         Group {
@@ -81,7 +93,7 @@ struct RootView: View {
         .alert("Couldn’t save changes", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
-        .task { await store.checkCloud(); await weights.syncHealth() }
+        .task { await store.checkCloud(); await weights.syncHealth(); await nutritionHealth.sync(store.entries) }
         .task { await AISubscriptions.listenForPurchases() }
         .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.refresh() }

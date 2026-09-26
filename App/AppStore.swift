@@ -12,6 +12,9 @@ import WidgetKit
     private static let pinnedFoodIDsKey = "pinnedFoodIDs.v1"
     private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
     private static let hiddenQuickAddKey = "hiddenQuickAddFoods.v1"
+    private static let homeQuickAddKey = "homeQuickAddDay.v1"
+    /// Settings → "Show Quick Add at day start" (on by default).
+    static let showsHomeQuickAddKey = "showsHomeQuickAdd.v1"
     /// Hiding is a snooze: long enough for the food's recency weight to fade, short enough not to be forgotten.
     static let quickAddHideDuration: TimeInterval = 14 * 86_400
     let container: ModelContainer
@@ -30,10 +33,13 @@ import WidgetKit
     private(set) var pinnedFoodIDs: [String]
     private(set) var pinnedMealIDs: [String]
     private(set) var hiddenQuickAddFoods: [HiddenQuickAddFood]
+    private(set) var homeQuickAdd: HomeQuickAddDay?
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
     var syncStatus = "Stored on this iPhone"
+    /// Called after every successful reload of the diary (local saves, iCloud imports, Siri).
+    @ObservationIgnored var entriesDidChange: (([CalorieEntry]) -> Void)?
     private var undoAction: (() -> Void)?
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
@@ -45,6 +51,8 @@ import WidgetKit
         pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
         hiddenQuickAddFoods = preferences.data(forKey: Self.hiddenQuickAddKey)
             .flatMap { try? JSONDecoder().decode([HiddenQuickAddFood].self, from: $0) } ?? []
+        homeQuickAdd = persistsUsage ? preferences.data(forKey: Self.homeQuickAddKey)
+            .flatMap { try? JSONDecoder().decode(HomeQuickAddDay.self, from: $0) } : nil
         self.publishesWidget = publishesWidget
         self.container = container; context = container.mainContext
         self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
@@ -70,6 +78,7 @@ import WidgetKit
             goals = try context.fetch(FetchDescriptor<DailyGoal>())
             meals = try context.fetch(FetchDescriptor<SavedMeal>(sortBy: [SortDescriptor(\.name)]))
             barcodes = try context.fetch(FetchDescriptor<BarcodeFood>())
+            entriesDidChange?(entries)
             if publishesWidget {
                 let now = Date()
                 let snapshot = CalorieWidgetSnapshot(day: Calendar.current.startOfDay(for: now), total: total(now), goal: goal(now))
@@ -149,6 +158,23 @@ import WidgetKit
         guard live != hiddenQuickAddFoods else { return }
         preferences.set(try? JSONEncoder().encode(live), forKey: Self.hiddenQuickAddKey)
         hiddenQuickAddFoods = live
+    }
+    /// Home's Quick Add picks show on an empty day and stay while they're being used, until
+    /// another way of logging (search, voice, meal scan, barcode) is used that day.
+    func showsHomeQuickAdd(on date: Date) -> Bool {
+        let state = homeQuickAdd?.day == Day.key(date) ? homeQuickAdd : nil
+        if state?.dismissed == true { return false }
+        return state?.used == true || dayEntries(date).isEmpty
+    }
+    func markHomeQuickAddUsed(on date: Date) { updateHomeQuickAdd(on: date) { $0.used = true } }
+    func dismissHomeQuickAdd(on date: Date) { updateHomeQuickAdd(on: date) { $0.dismissed = true } }
+    private func updateHomeQuickAdd(on date: Date, _ change: (inout HomeQuickAddDay) -> Void) {
+        let day = Day.key(date)
+        var state = homeQuickAdd?.day == day ? homeQuickAdd! : HomeQuickAddDay(day: day)
+        change(&state)
+        guard state != homeQuickAdd else { return }
+        homeQuickAdd = state
+        if persistsUsage { preferences.set(try? JSONEncoder().encode(state), forKey: Self.homeQuickAddKey) }
     }
     func isMealPinned(_ mealID: UUID) -> Bool { pinnedMealIDs.contains(mealID.uuidString) }
     func setMealPinned(_ pinned: Bool, mealID: UUID) {
@@ -302,6 +328,14 @@ import WidgetKit
 
 enum Persistence {
     static let cloudID = "iCloud.com.philstarkovich.cavecals"
+    /// The app's store, shared with App Intents (Siri) running in the same process.
+    @MainActor static var shared: AppStore?
+    @MainActor static func sharedStore() throws -> AppStore {
+        if let shared { return shared }
+        let store = try make()
+        shared = store
+        return store
+    }
     static let schema = Schema([UserProfile.self, DailyGoal.self, CalorieEntry.self, SavedMeal.self, BarcodeFood.self])
     @MainActor static func make(inMemory: Bool = false) throws -> AppStore {
         #if targetEnvironment(simulator)
@@ -322,6 +356,12 @@ enum Persistence {
             return store
         }
     }
+}
+
+struct HomeQuickAddDay: Codable, Equatable {
+    var day: String
+    var used = false
+    var dismissed = false
 }
 
 struct HiddenQuickAddFood: Codable, Equatable, Identifiable {

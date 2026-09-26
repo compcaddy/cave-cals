@@ -71,10 +71,9 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(app.textFields["planWeight"].value as? String, "90")
         XCTAssertEqual(app.textFields["planHeight"].value as? String, "180")
     }
-    func testSkipAndManualSetupRemainAvailable() {
-        app.buttons["manualSetup"].tap()
-        XCTAssertTrue(app.textFields["profileGoal"].waitForExistence(timeout: 5))
-        app.buttons["Me Go Back"].tap()
+    func testWelcomeOffersPlanOrSkipWithoutManualShortcut() {
+        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Me Build Plan")
+        XCTAssertFalse(app.buttons["manualSetup"].exists)
         app.buttons["skipGoal"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 calories")
