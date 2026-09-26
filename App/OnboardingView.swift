@@ -128,11 +128,11 @@ struct OnboardingView: View {
         case 1:
             VStack(alignment: .leading, spacing: 14) {
                 Text("Gender").font(.cave(.headline))
-                ForEach(PlanGender.allCases) { value in option(value.rawValue, selected: gender == value, id: "gender-\(value.id)") { gender = value } }
+                ForEach(PlanGender.choices) { value in option(value.rawValue, selected: gender == value, id: "gender-\(value.id)") { gender = value } }
                 Text("The equation uses female/male reference values. If neither fits, you can set your own goal.")
                     .font(.cave(.caption)).foregroundStyle(.secondary)
                 numberField("Age", text: $age, suffix: "years", id: "planAge", decimal: false)
-                Toggle("I need a clinician-led plan", isOn: $clinicianSupport).font(.cave(.subheadline))
+                switchRow("I need a clinician-led plan", isOn: $clinicianSupport, id: "planClinician").font(.cave(.subheadline))
                 Text("Choose this if pregnant, breastfeeding, or managing an eating disorder or medical nutrition needs.")
                     .font(.cave(.caption)).foregroundStyle(.secondary)
             }
@@ -176,7 +176,7 @@ struct OnboardingView: View {
                 }
                 if estimate.paceLimited { Text("We eased the pace to keep your starting target higher.").font(.cave(.subheadline)) }
                 Text("An estimate, not a promise. Track for a few weeks and adjust with your progress.").font(.cave(.subheadline)).foregroundStyle(.secondary)
-                Toggle("Track my weight", isOn: $trackWeight).accessibilityIdentifier("planTrackWeight")
+                switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight")
                 Text("Adds your starting weight if today is empty. Apple Health stays optional.").font(.cave(.caption)).foregroundStyle(.secondary)
                 DisclosureGroup("How we worked it out") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -231,6 +231,18 @@ struct OnboardingView: View {
                 Text(suffix).foregroundStyle(.secondary)
             }.padding(16).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         }
+    }
+    /// Scroll views swallow quick taps on a bare switch, so the whole row flips it.
+    private func switchRow(_ title: String, isOn: Binding<Bool>, id: String) -> some View {
+        Button { isOn.wrappedValue.toggle() } label: {
+            HStack {
+                Text(title).foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                Toggle(title, isOn: isOn).labelsHidden().allowsHitTesting(false)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityRepresentation { Toggle(title, isOn: isOn) }
+            .accessibilityIdentifier(id)
     }
     private func option(_ title: String, detail: String? = nil, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

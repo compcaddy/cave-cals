@@ -124,10 +124,11 @@ struct MacroEditorSection: View {
                     estimating = true; message = nil
                 } label: {
                     HStack {
-                        Text(estimating ? "Estimating…" : "Estimate missing")
-                        if estimating { Spacer(); ProgressView() }
-                    }.frame(minHeight: 44)
+                        Text(estimating ? "Estimating…" : "Estimate values using AI")
+                        if estimating { Spacer(); ProgressView().controlSize(.small) }
+                    }.font(.cave(.subheadline))
                 }
+                .editorRowInsets()
                 .disabled(estimating || !draft.isValid || draft.name.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 .accessibilityIdentifier("estimateMacros")
             }
@@ -147,7 +148,7 @@ struct MacroEditorSection: View {
                 // The user may edit the portion or food while the request is running.
                 guard draft.name == snapshot.name, draft.calories == snapshot.calories,
                       draft.servings == snapshot.servings, draft.servingDescription == snapshot.servingDescription else {
-                    message = "Food changed. Tap Estimate missing again."; return
+                    message = "Food changed. Tap Estimate values using AI again."; return
                 }
                 let totals = (draft.totalMacros ?? MacroNutrients()).fillingMissing(from: estimate)
                 guard totals.isValid else {

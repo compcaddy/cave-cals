@@ -106,3 +106,16 @@ These additional native credits are uploaded in 1.0.3 (3), processed VALID, and 
 ## Attribution placement — September 24, 2026
 
 At the owner's request the home Logged, Quick Add, and Meals lists no longer show the credit. The `Powered by fatsecret Platform API` link now appears at the bottom of search results whenever FatSecret results are shown (home search and the meal Add food picker), and permanently in You → About with the FatSecret Terms link. Detail sheets (food editor, meal editor, meal add) still show it when they display FatSecret data. Re-check https://platform.fatsecret.com/attribution before release if the account's terms require a credit on every screen that shows FatSecret-sourced values.
+
+## Static-IP proxy on the owner's Azure server — September 26, 2026
+
+FatSecret calls now leave from the owner's Azure VM (`51.143.6.219`, West US 2) instead of Fixie. The backend is unchanged: `FIXIE_URL` (Production, Preview, and Development) points to `http://cavecals:<password>@51.143.6.219:31280`, and the existing Undici CONNECT path uses it for FatSecret only.
+
+- Proxy: `ops/fatsecret-proxy/`, a small .NET 8 worker (self-contained `win-x64` single file) installed as the Windows service `CaveCalsFatSecretProxy` in `C:\CaveCalsProxy`, running as LocalService with automatic restart. It accepts only `CONNECT` to `oauth.fatsecret.com` / `platform.fatsecret.com` on 443 (others get 403 before authentication), requires Basic proxy auth (407 otherwise), and stores only the SHA-256 of the password in `appsettings.json`. `publish/` and build output are git-ignored; `/ops` is excluded from Vercel uploads.
+- Network: Windows Firewall rule "Cave Cals FatSecret proxy" and Azure NSG inbound rule (TCP 31280, source Any) on `C727-IsolationSubnet-SecurityGroup`. The source must stay open because Vercel egress IPs are not fixed; the host allowlist and password are the protection.
+- FatSecret: `51.143.6.219` is allowlisted alongside the former Fixie IPs. Remove the Fixie IPs and cancel Fixie once the new path has run cleanly for a few days.
+- Verification: from outside, the correct password tunnels to FatSecret (200); no or wrong password gets 407; other hosts and plain HTTP get 403. A real Premier search through the proxy using the backend's own client returned results, and live production search returned 25 "honeycrisp apple" results with macros after the redeploy.
+- Rotate the password: generate a new one, put its lowercase hex SHA-256 in `C:\CaveCalsProxy\appsettings.json`, restart the service, update `FIXIE_URL` in all three Vercel environments, and redeploy.
+- Rollback: set Production `FIXIE_URL` back to a Fixie URL (while its IPs remain allowlisted) and redeploy.
+- Squid for Windows was tried first and abandoned: both 4.14 and 7.7 ship `basic_ncsa_auth` without `cygcrypt-2.dll`, and the Cygwin build cannot use native Windows programs as helpers. Leftovers to remove on the server: the disabled `squidsrv` service/Squid install, `C:\cygwin64`, and `C:\SquidBackup`.
+- .NET 8 support ends November 2026; the service is self-contained, but rebuild it on a current LTS when convenient.

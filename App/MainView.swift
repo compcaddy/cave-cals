@@ -212,8 +212,16 @@ struct MainView: View {
     }
 
     @ViewBuilder private var addModeHeader: some View {
-        foodListPicker
-            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
+        HStack(spacing: 6) {
+            // Same as the empty-search Cancel: back to home.
+            Button { exitAddMode() } label: {
+                CaveIcon(.chevronLeft, size: 20).foregroundStyle(Color.caveOrange)
+                    .frame(width: 36, height: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel("Back").accessibilityIdentifier("addModeBack")
+            foodListPicker
+        }
+        .padding(.leading, 10).padding(.trailing, 20).padding(.top, 6).padding(.bottom, 6)
         // Card rows need no rule under the pills; keep it only above an empty list.
         Divider().padding(.horizontal, 20).opacity(listHasRows ? 0 : 1)
     }
@@ -227,7 +235,7 @@ struct MainView: View {
     }
 
     private var foodListPicker: some View {
-        HStack(spacing: 0) {
+        PillRowLayout {
             foodListButton(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected),
                            glyph: .check, mode: .logged)
             foodListButton("Quick Add", glyph: .lightning, mode: .quickAdd)
@@ -251,6 +259,7 @@ struct MainView: View {
             .font(.system(.subheadline, design: .rounded, weight: .medium))
             .lineLimit(1).minimumScaleFactor(0.75)
             .foregroundStyle(selected ? Color.white : Color.secondary)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 32)
             .background {
                 if selected {
@@ -907,6 +916,31 @@ private struct FlipAddIcon: View, Animatable {
         .foregroundStyle(showsCheck ? Color.primary : Color.white)
         .frame(width: 34, height: 34).background(showsCheck ? Color.clear : Color.accentColor, in: Circle())
         .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+    }
+}
+
+/// Sizes each pill to its label, then shares any leftover width evenly, so a longer label
+/// ("Quick Add", "Sept. 22nd") gets a wider pill. Labels shrink via their scale factor if space runs short.
+private struct PillRowLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified) }
+        let height = ideal.map(\.height).max() ?? 0
+        return CGSize(width: proposal.width ?? ideal.reduce(0) { $0 + $1.width }, height: height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let total = ideal.reduce(0, +)
+        // Extra space is shared evenly; a shortfall shrinks pills in proportion to their width.
+        let widths = total <= bounds.width
+            ? ideal.map { $0 + (bounds.width - total) / CGFloat(subviews.count) }
+            : ideal.map { $0 * bounds.width / total }
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths) {
+            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                          proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width
+        }
     }
 }
 

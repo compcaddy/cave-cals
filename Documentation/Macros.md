@@ -10,7 +10,7 @@ Macro tracking is on by default and can be hidden in You → Track macros. Optio
 - FatSecret Premier v5 preserves protein, total carbs, fiber, and fat for the same selected serving as calories. Basic search preserves protein, total carbs, and fat when present; missing fiber stays unknown. Contradictory provider fiber is discarded without losing valid total carbs. Attribution follows the existing FatSecret food IDs.
 - Open Food Facts `carbohydrates-total` includes fiber and is preferred. Otherwise add `fiber` to its available `carbohydrates` value. Both must be known to reconstruct total carbohydrates. Nutrients use the same serving/100 g basis as calories. Unknown values remain unknown.
 - Photo, voice, and website meal imports request full-portion grams, then divide by the normalized serving count once. Their values are marked estimated. Existing photo/voice allowance and paid website-import rules stay intact.
-- Manual/common/older foods can request **Estimate missing**. Only that entry’s name, portion and calories are sent; populated nutrient fields are preserved. Edits to the food/portion during the request prevent a stale estimate from being applied. Nothing automatically backfills historical entries or invents macros for a calorie-only shortcut.
+- Manual/common/older foods can request **Estimate values using AI**. Only that entry’s name, portion and calories are sent; populated nutrient fields are preserved. Edits to the food/portion during the request prevent a stale estimate from being applied. Nothing automatically backfills historical entries or invents macros for a calorie-only shortcut.
 
 ## Backend
 

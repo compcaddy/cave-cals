@@ -41,8 +41,6 @@ struct WeightProfileSections: View {
                         Text("Kilograms (kg)").tag(WeightUnit.kilograms)
                     }.accessibilityIdentifier("weightUnit")
                 }
-            } footer: {
-                Text("Optional. Turning this off hides weigh-ins and the daily reminder. Your history is kept on this device.")
             }
             if weights.tracking {
                 Section {

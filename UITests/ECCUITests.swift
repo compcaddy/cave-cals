@@ -331,7 +331,8 @@ final class ECCUITests: XCTestCase {
         for _ in 0..<6 where !pinToggle.isHittable { app.swipeUp() }
         XCTAssertTrue(pinToggle.waitForExistence(timeout: 3))
         XCTAssertEqual(pinToggle.value as? String, "1")
-        app.buttons["Cancel"].tap()
+        // Add mode's search Cancel is also on screen; close the editor.
+        app.navigationBars.buttons["Cancel"].firstMatch.tap()
 
         XCTAssertTrue(row.waitForExistence(timeout: 3))
         row.press(forDuration: 0.8)
