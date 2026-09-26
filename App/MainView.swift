@@ -637,7 +637,8 @@ struct MainView: View {
                             manualSearchEntryButton
                         }
                     }
-                    .padding(.leading, 31).padding(.trailing, 18).padding(.top, 8)
+                    // Trailing matches the result rows so the pencil lines up with their (+) buttons.
+                    .padding(.leading, 31).padding(.trailing, 20).padding(.top, 8).padding(.bottom, 8)
                 }
                 // Search shares the row with the capture shortcuts; focusing it (or typing) takes the full width.
                 HStack(spacing: 4) {
@@ -706,7 +707,8 @@ struct MainView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                CaveIcon(.pencil, size: 22)
+                // Same (+) as the result rows; it opens the editor to enter calories.
+                CaveIcon(.plus, size: 17)
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
                     .background(Color.accentColor, in: Circle())
