@@ -9,7 +9,7 @@ export const foodSearchInput = z.object({
 }).strict();
 export interface FoodResult {
   id: string; name: string; brand?: string; calories: number; servingDescription: string;
-  macros?: { protein?: number; netCarbs?: number; fat?: number };
+  macros?: { protein?: number; totalCarbs?: number; fiber?: number; fat?: number };
 }
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' && !Array.isArray(value) ? value as ObjectValue : {};
@@ -46,8 +46,9 @@ export function normalizeFoods(payload: unknown, premier: boolean): FoodResult[]
       calories = Number(serving.calories); servingDescription = string(serving.serving_description);
       const carbs = nutrient(serving.carbohydrate), fiber = nutrient(serving.fiber);
       macros = { protein: nutrient(serving.protein), fat: nutrient(serving.fat),
-        // Unknown fiber must not silently become zero. US total carbs include fiber.
-        netCarbs: carbs !== undefined && fiber !== undefined ? (fiber <= carbs ? carbs - fiber : undefined) : carbs === 0 ? 0 : undefined };
+        totalCarbs: carbs,
+        // Retain total carbs even when fiber is missing or contradictory.
+        fiber: fiber !== undefined && (carbs === undefined || fiber <= carbs) ? fiber : undefined };
     } else {
       // Basic returns nutrition for exactly the portion named in this description. Never assume a whole package.
       const match = /^Per\s+(.+?)\s+-\s+Calories:\s*([\d,]+(?:\.\d+)?)\s*kcal(?:\s*\||\s*$)/i.exec(string(food.food_description));
@@ -55,7 +56,7 @@ export function normalizeFoods(payload: unknown, premier: boolean): FoodResult[]
       servingDescription = match[1].trim(); calories = Number(match[2].replaceAll(',', ''));
       const description = string(food.food_description);
       const amount = (label: string) => nutrient(new RegExp(`(?:^|\\|)\\s*${label}:\\s*([0-9]+(?:\\.[0-9]+)?)g(?:\\s*\\||$)`, 'i').exec(description)?.[1]);
-      macros = { protein: amount('Protein'), fat: amount('Fat'), netCarbs: amount('Carbs') === 0 ? 0 : undefined };
+      macros = { protein: amount('Protein'), fat: amount('Fat'), totalCarbs: amount('Carbs'), fiber: undefined };
     }
     if (!servingDescription || !validCalories(calories)) continue;
     seen.add(id);

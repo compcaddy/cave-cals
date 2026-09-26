@@ -10,7 +10,7 @@ function wave(seconds=1) {
 }
 test('the OpenAI SDK sends image identification and transcribed voice through structured Responses',async()=>{
   const requests:{url:string;body:string}[]=[];
-  const result={items:[{name:'Eggs',calories:160,portion:'2 eggs',servingSize:'1 egg',servings:2,confidence:'medium',macros:{protein:12,netCarbs:1,fat:10}}],notes:'Estimated'};
+  const result={items:[{name:'Eggs',calories:160,portion:'2 eggs',servingSize:'1 egg',servings:2,confidence:'medium',macros:{protein:12,totalCarbs:1,fiber:0,fat:10}}],notes:'Estimated'};
   const server=createServer(async(req,res)=>{
     const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(chunk);
     requests.push({url:req.url!,body:Buffer.concat(chunks).toString()});res.setHeader('content-type','application/json');

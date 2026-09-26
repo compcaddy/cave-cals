@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import CoreData
 
 @main struct CaveCalsApp: App {
@@ -6,6 +7,7 @@ import CoreData
     @State private var store: AppStore?
     @State private var failure: String?
     @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+    @State private var nutritionHealth: NutritionHealthSync
     init() {
         let navFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 20)!)
         UINavigationBar.appearance().titleTextAttributes = [.font: navFont]
@@ -23,6 +25,8 @@ import CoreData
             _weights = State(initialValue: preview)
         }
         #endif
+        let nutrition = NutritionHealthSync(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+        _nutritionHealth = State(initialValue: nutrition)
         do {
             var screenshots = false
             #if DEBUG && targetEnvironment(simulator)
@@ -48,15 +52,26 @@ import CoreData
                 store.commit()
             }
             #endif
+            #if DEBUG
+            // UI tests start with a set goal instead of walking through onboarding.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let index = arguments.firstIndex(of: "--seed-goal"), arguments.indices.contains(index + 1),
+               let goal = Double(arguments[index + 1]) { store.saveGoal(goal) }
+            #endif
+            Persistence.shared = store
+            store.entriesDidChange = { nutrition.entriesChanged($0) }
             _store = State(initialValue: store)
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
     }
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
         WindowGroup {
             if let store {
-                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights)
-                    .modelContainer(store.container).tint(.blue).accentColor(.blue)
+                RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights).environment(nutritionHealth)
+                    .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
+                    .onAppear { appearance.apply() }
+                    .onChange(of: appearance) { _, value in value.apply() }
                     .onOpenURL { LoggingActionRouter.shared.open(url: $0) }
             } else {
                 ContentUnavailableView { Label { Text("Unable to open your data") } icon: { CaveIcon(.warning, size: 48) } } description: { Text(failure ?? "Please try reopening the app.") }
@@ -69,15 +84,16 @@ struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.scenePhase) private var phase
     @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutritionHealth
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.profile == nil { SetupView() } else { MainView() }
+            if store.profile == nil { OnboardingView() } else { MainView() }
         }
         .alert("Couldn’t save changes", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
-        .task { await store.checkCloud(); await weights.syncHealth() }
+        .task { await store.checkCloud(); await weights.syncHealth(); await nutritionHealth.sync(store.entries) }
         .task { await AISubscriptions.listenForPurchases() }
         .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.refresh() }
@@ -92,10 +108,12 @@ struct SetupView: View {
     @State private var goal: String
     @FocusState private var editingGoal: Bool
     let isAdjustingGoal: Bool
+    var onSaved: (() -> Void)?
     @ScaledMetric(relativeTo: .title) private var goalFontSize = 76.0
-    init(goal: Double? = 2100, isAdjustingGoal: Bool = false) {
+    init(goal: Double? = 2100, isAdjustingGoal: Bool = false, onSaved: (() -> Void)? = nil) {
         _goal = State(initialValue: goal.map(Self.formattedGoal) ?? "")
         self.isAdjustingGoal = isAdjustingGoal
+        self.onSaved = onSaved
     }
     var body: some View {
         GeometryReader { geometry in
@@ -194,7 +212,10 @@ struct SetupView: View {
     }
 
     private func saveGoal(_ value: Double?) {
-        if store.saveGoal(value), isAdjustingGoal { dismiss() }
+        if store.saveGoal(value) {
+            if isAdjustingGoal { dismiss() }
+            onSaved?()
+        }
     }
 
     private func headlineLine(_ text: String, width: CGFloat, height: CGFloat) -> some View {
@@ -212,5 +233,33 @@ struct SetupView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.9)
             .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+/// In-app override of the system Light/Dark setting; the widget always follows the system.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    static let storageKey = "appAppearance"
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+    private var style: UIUserInterfaceStyle {
+        switch self {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+    /// Setting the style on every window (not `preferredColorScheme`) also updates open sheets,
+    /// including when switching back to System.
+    @MainActor func apply() {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            for window in scene.windows { window.overrideUserInterfaceStyle = style }
+        }
     }
 }

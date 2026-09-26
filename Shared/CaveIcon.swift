@@ -23,6 +23,9 @@ enum CaveGlyph: String, CaseIterable {
     case warning = "CaveWarning"
     case gear = "CaveGear"
     case person = "CavePerson"
+    case protein = "CaveProtein"
+    case carbs = "CaveCarbs"
+    case fat = "CaveFat"
 }
 
 /// Single-color vector artwork inherits its parent's foreground style in either appearance.
@@ -78,5 +81,19 @@ extension Font {
         @unknown default: size = 20
         }
         return .custom("Schoolbell-Regular", size: size, relativeTo: style)
+    }
+}
+
+// Warm "cave" palette. Dark variants keep the same character without a bright cream screen at night.
+extension Color {
+    static let caveOrange = Color(light: (0.769, 0.325, 0.106), dark: (0.878, 0.420, 0.180))
+    static let caveBackground = Color(light: (0.961, 0.925, 0.863), dark: (0.110, 0.086, 0.067))
+    static let caveSurface = Color(light: (0.984, 0.965, 0.925), dark: (0.165, 0.133, 0.106))
+
+    private init(light: (Double, Double, Double), dark: (Double, Double, Double)) {
+        self.init(uiColor: UIColor { traits in
+            let c = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+        })
     }
 }

@@ -15,6 +15,13 @@
       "when": 1790040301957,
       "tag": "0001_abandoned_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790401007166,
+      "tag": "0002_trial_key_entitlement_cache",
+      "breakpoints": true
     }
   ]
 }

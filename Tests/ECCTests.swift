@@ -37,23 +37,19 @@ import SwiftData
         XCTAssertEqual(account.freeScansRemaining, 10)
     }
 
-    func testShortcutMenuRoutesAndPreservesQuickCaloriesOnColdStart() {
+    func testShortcutMenuRoutesEachLoggingChoice() {
         let router = LoggingActionRouter()
         for (choice, action) in [(CalorieLoggingChoice.voice, LoggingAction.voice), (.meal, .image), (.barcode, .barcode)] {
             choice.open(using: router)
             XCTAssertEqual(router.consume(), action)
             XCTAssertNil(router.pending)
         }
-        CalorieLoggingChoice.quickCalories.open(using: router)
-        XCTAssertEqual(router.pending?.action, .add)
-        XCTAssertEqual(router.pending?.quickCalories, true)
+        router.open(.add)
         let firstID = router.pending?.id
-        CalorieLoggingChoice.quickCalories.open(using: router)
+        router.open(.add)
         XCTAssertNotEqual(router.pending?.id, firstID)
         XCTAssertEqual(router.consume(), .add)
         XCTAssertNil(router.pending)
-        router.open(.add)
-        XCTAssertEqual(router.pending?.quickCalories, false)
     }
 
     func makeStore() throws -> AppStore { try Persistence.make(inMemory: true) }
@@ -100,22 +96,6 @@ import SwiftData
         XCTAssertFalse(store.saveGoal(10_000))
         XCTAssertFalse(store.saveGoal(0.5))
         XCTAssertEqual(store.goal(Date()), 9999)
-    }
-
-    func testCalorieProgressUsesWarningAndOverageBands() {
-        func assertSegments(_ total: Double, blue: Double, orange: Double, red: Double, line: UInt = #line) {
-            let segments = CalorieProgressSegments(total: total, goal: 1_000)
-            XCTAssertEqual(segments.blue, blue, accuracy: 0.0001, line: line)
-            XCTAssertEqual(segments.orange, orange, accuracy: 0.0001, line: line)
-            XCTAssertEqual(segments.red, red, accuracy: 0.0001, line: line)
-        }
-
-        assertSegments(500, blue: 0.5, orange: 0, red: 0)
-        assertSegments(900, blue: 0.8, orange: 0.1, red: 0)
-        assertSegments(1_000, blue: 0.8, orange: 0.2, red: 0)
-        assertSegments(1_200, blue: 0.6, orange: 0.2, red: 0.2)
-        assertSegments(1_400, blue: 0.4, orange: 0.2, red: 0.4)
-        assertSegments(1_900, blue: 0, orange: 0.2, red: 0.8)
     }
 
     func testNoGoalPreferencePersistsAcrossReopen() throws {
@@ -343,6 +323,38 @@ import SwiftData
         XCTAssertEqual(Array(suggestions.prefix(2).map(\.id)), pinnedIDs)
         XCTAssertEqual(Set(suggestions.map(\.id)).count, suggestions.count)
     }
+    func testHiddenQuickAddFoodsSnoozeForTwoWeeksAndReturnWhenLogged() throws {
+        let suite = "CaveCalsTests.hidden.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+                             publishesWidget: false, preferences: preferences)
+        store.add([EntryDraft(name: "Cookies", calories: 200, timestamp: Date().addingTimeInterval(-3_600))])
+        store.add([EntryDraft(name: "Apple", calories: 90, timestamp: Date().addingTimeInterval(-3_600))])
+        let cookies = "name:cookies"
+        store.setPinned(true, foodID: cookies)
+        store.hideFromQuickAdd(foodID: cookies, name: "Cookies")
+        XCTAssertFalse(store.isPinned(cookies))
+        XCTAssertEqual(store.hiddenQuickAddIDs(), [cookies])
+        var names = FoodHistory.suggestions(entries: store.entries, date: Date(), hiddenIDs: store.hiddenQuickAddIDs()).map(\.draft.name)
+        XCTAssertFalse(names.contains("Cookies"))
+        XCTAssertTrue(names.contains("Apple"))
+        // Undo restores both visibility and the pin.
+        store.undo()
+        XCTAssertTrue(store.hiddenQuickAddIDs().isEmpty)
+        XCTAssertTrue(store.isPinned(cookies))
+        // The snooze lasts two weeks, survives reopening, and ends early when the food is logged again.
+        store.hideFromQuickAdd(foodID: cookies, name: "Cookies")
+        XCTAssertEqual(store.hiddenQuickAddIDs(at: Date().addingTimeInterval(13 * 86_400)), [cookies])
+        XCTAssertTrue(store.hiddenQuickAddIDs(at: Date().addingTimeInterval(15 * 86_400)).isEmpty)
+        let reopened = AppStore(container: store.container, publishesWidget: false, preferences: preferences)
+        XCTAssertEqual(reopened.hiddenQuickAddIDs(), [cookies])
+        reopened.add([EntryDraft(name: "Cookies", calories: 200)])
+        XCTAssertTrue(reopened.hiddenQuickAddIDs().isEmpty)
+        names = FoodHistory.suggestions(entries: reopened.entries, date: Date(), hiddenIDs: reopened.hiddenQuickAddIDs()).map(\.draft.name)
+        XCTAssertTrue(names.contains("Cookies"))
+    }
     func testPinPreferencesPreserveOrderRenameAndUnpin() throws {
         let suite = "CaveCalsTests.pins.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -525,7 +537,18 @@ import SwiftData
         do { _ = try await provider.search(query: "busy"); XCTFail("Must surface rate limit") }
         catch { XCTAssertEqual(error.localizedDescription, FoodServiceError.rateLimited.localizedDescription) }
     }
-    func testFoodSearchNeverCachesEmptyResultsAndRetainsRestaurantName() async throws {
+    func testBrandedResultsLeadWithProductNameAndKeepBrandForOneWordNames() {
+        let diet = FoodResult(id: "fatsecret:1", name: "Diet Coke", brand: "Coca-Cola", calories: 0, servingDescription: "1 can")
+        XCTAssertEqual(diet.draft.name, "Diet Coke")
+        XCTAssertEqual(diet.searchDetail, "Coca-Cola · 1 can")
+        let latte = FoodResult(id: "fatsecret:2", name: "Latte", brand: "Starbucks", calories: 190, servingDescription: "1 grande")
+        XCTAssertEqual(latte.draft.name, "Starbucks Latte")
+        XCTAssertEqual(latte.searchDetail, "1 grande")
+        let named = FoodResult(id: "fatsecret:3", name: "Coca-Cola Classic", brand: "Coca-Cola", calories: 140, servingDescription: "1 can")
+        XCTAssertEqual(named.draft.name, "Coca-Cola Classic")
+        XCTAssertEqual(named.searchDetail, "1 can")
+    }
+    func testFoodSearchNeverCachesEmptyResultsAndShowsBrandBesideServing() async throws {
         let provider = SearchFixture(pages: [FoodSearchPage(results: [], cacheLifetime: 3600), SearchFixture.page])
         let search = FoodSearchState(provider: provider, persistCache: false, debounce: .zero)
         await search.search("Urbane Cafe")
@@ -533,7 +556,8 @@ import SwiftData
         XCTAssertNotNil(search.message)
         await search.search("Urbane Cafe")
         XCTAssertEqual(search.results.count, 1)
-        XCTAssertEqual(search.results.first?.draft.name, "Urbane Cafe — So-Cal Sandwich")
+        XCTAssertEqual(search.results.first?.draft.name, "So-Cal Sandwich")
+        XCTAssertEqual(search.results.first?.searchDetail, "Urbane Cafe · 1 sandwich")
         XCTAssertEqual(search.results.first?.draft.calories, 800)
         let calls = await provider.calls
         XCTAssertEqual(calls, 2)
@@ -637,8 +661,70 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
 @MainActor final class MacroTests: XCTestCase {
     private func food() -> EntryDraft {
         var draft = EntryDraft(name: "Egg", calories: 70)
-        draft.macrosPerServing = MacroNutrients(protein: 6.25, netCarbs: 0, fat: 5)
+        draft.macrosPerServing = MacroNutrients(protein: 6.25, totalCarbs: 0, fiber: 0, fat: 5)
         return draft
+    }
+    func testCatalogNutritionSurvivesSearchLoggingQuickAddMealsAndPortions() throws {
+        XCTAssertEqual(CommonFoods.foods.count, 5904)
+        XCTAssertTrue(CommonFoods.foods.allSatisfy { $0.draft.isValid && $0.macrosPerServing?.isComplete == true })
+        let banana = try XCTUnwrap(CommonFoods.search("banana").first { $0.id == "banana" })
+        XCTAssertEqual(banana.draft.totalMacros, MacroNutrients(protein: 1, totalCarbs: 30, fiber: 3, fat: 0))
+        let store = try Persistence.make(inMemory: true)
+        var draft = banana.draft
+        draft.timestamp = Date().addingTimeInterval(-60)
+        XCTAssertTrue(store.add([draft]))
+        let suggestion = try XCTUnwrap(FoodHistory.suggestions(entries: store.entries, date: Date()).first)
+        XCTAssertEqual(suggestion.draft.totalMacros, draft.totalMacros)
+        var repeated = suggestion.draft
+        repeated.changeServings(2)
+        XCTAssertTrue(store.add([repeated]))
+        let summary = MacroSummary(store.entries.map(EntryDraft.init))
+        XCTAssertEqual(summary.total(.totalCarbs).grams, 90)
+        XCTAssertEqual(summary.total(.fiber).grams, 9)
+        XCTAssertTrue(store.saveMeal(nil, name: "Fruit", items: [repeated]))
+        XCTAssertEqual(store.meals.first?.items.first?.totalMacros?.netCarbs, 54)
+    }
+    func testNetCarbsAreDerivedAndFiberScalesWithoutInventingUnknowns() throws {
+        let macros = MacroNutrients(protein: 1, totalCarbs: 30, fiber: 3, fat: 0)
+        XCTAssertEqual(macros.netCarbs, 27)
+        XCTAssertEqual(macros.scaled(2.5).fiber, 7.5)
+        XCTAssertEqual(macros.scaled(2.5).netCarbs, 67.5)
+        XCTAssertNil(MacroNutrients(totalCarbs: 30).netCarbs)
+        XCTAssertNil(MacroNutrients(fiber: 3).netCarbs)
+        XCTAssertEqual(MacroNutrients(totalCarbs: 0, fiber: 0).netCarbs, 0)
+        XCTAssertFalse(MacroNutrients(totalCarbs: 2, fiber: 3).isValid)
+        let filled = MacroNutrients(totalCarbs: 30).fillingMissing(from: macros.markedEstimated())
+        XCTAssertEqual(filled.totalCarbs, 30)
+        XCTAssertEqual(filled.fiber, 3)
+        XCTAssertTrue(filled.estimatedNetCarbs)
+        let encoded = try JSONEncoder().encode(macros)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(json["netCarbs"], "Derived values must not become a second source of truth")
+        XCTAssertEqual(try JSONDecoder().decode(MacroNutrients.self, from: encoded), macros)
+    }
+    func testBarcodeTotalCarbsPreferExplicitValuesAndPreserveUnknownFiber() throws {
+        func decode(_ nutrients: String) throws -> MacroNutrients {
+            let json = "{\"code\":\"123\",\"product_name\":\"Food\",\"nutriments\":{\"energy-kcal_100g\":100," + nutrients + "}}"
+            return try XCTUnwrap(JSONDecoder().decode(OpenFoodFacts.Product.self, from: Data(json.utf8)).result?.macros)
+        }
+        let explicit = try decode(#""carbohydrates-total_100g":30,"carbohydrates_100g":25,"fiber_100g":5"#)
+        XCTAssertEqual(explicit.totalCarbs, 30)
+        XCTAssertEqual(explicit.netCarbs, 25)
+        let unknown = try decode(#""carbohydrates_100g":25"#)
+        XCTAssertNil(unknown.totalCarbs)
+        XCTAssertNil(unknown.fiber)
+        let totalOnly = try decode(#""carbohydrates-total_100g":30"#)
+        XCTAssertEqual(totalOnly.totalCarbs, 30)
+        XCTAssertNil(totalOnly.netCarbs)
+        let invalid = try decode(#""carbohydrates-total_100g":3,"fiber_100g":5"#)
+        XCTAssertEqual(invalid.totalCarbs, 3)
+        XCTAssertNil(invalid.fiber)
+        let excessive = try decode(#""carbohydrates_100g":100000,"fiber_100g":1"#)
+        XCTAssertNil(excessive.totalCarbs)
+        XCTAssertTrue(excessive.isValid)
+        let zero = try decode(#""carbohydrates_100g":0,"fiber_100g":0"#)
+        XCTAssertEqual(zero.totalCarbs, 0)
+        XCTAssertEqual(zero.netCarbs, 0)
     }
     func testUpgradeFromCalorieOnlyStorePreservesHistoryAndDefaults() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -678,7 +764,7 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         var draft = food()
         draft.changeServings(2.5)
         XCTAssertEqual(draft.totalMacros?.protein, 15.625)
-        XCTAssertEqual(draft.totalMacros?.netCarbs, 0)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 0)
         draft.changeCalories(140)
         XCTAssertEqual(draft.totalMacros?.protein, 12.5)
         draft.changePerServing(80)
@@ -709,16 +795,16 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertEqual(summary.total(.protein).grams, 6.25)
         XCTAssertTrue(summary.total(.protein).incomplete)
         XCTAssertTrue(summary.total(.protein).text.hasSuffix("+"))
-        XCTAssertEqual(summary.total(.netCarbs).grams, 0)
+        XCTAssertEqual(summary.total(.totalCarbs).grams, 0)
         XCTAssertTrue(summary.incomplete)
     }
     func testEstimatesFillOnlyMissingFieldsAndPreserveProvenance() {
         let existing = MacroNutrients(protein: 0, fat: 3)
-        let filled = existing.fillingMissing(from: MacroNutrients(protein: 8, netCarbs: 6, fat: 5).markedEstimated())
-        XCTAssertEqual(filled.protein, 0); XCTAssertEqual(filled.fat, 3); XCTAssertEqual(filled.netCarbs, 6)
-        XCTAssertNotEqual(filled.estimatedProtein, true); XCTAssertEqual(filled.estimatedNetCarbs, true)
+        let filled = existing.fillingMissing(from: MacroNutrients(protein: 8, totalCarbs: 6, fiber: 2, fat: 5).markedEstimated())
+        XCTAssertEqual(filled.protein, 0); XCTAssertEqual(filled.fat, 3); XCTAssertEqual(filled.totalCarbs, 6)
+        XCTAssertNotEqual(filled.estimatedProtein, true); XCTAssertEqual(filled.estimatedTotalCarbs, true)
         var draft = food(); draft.macrosPerServing = filled
-        XCTAssertTrue(MacroSummary([draft]).total(.netCarbs).estimated)
+        XCTAssertTrue(MacroSummary([draft]).total(.totalCarbs).estimated)
         XCTAssertFalse(MacroSummary([draft]).total(.protein).estimated)
     }
     func testInvalidMacroInputCannotBeSaved() {
@@ -755,7 +841,7 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertTrue(store.tracksMacros)
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
         store.add([EntryDraft(calories: 100, timestamp: yesterday)])
-        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 140, netCarbs: 100)))
+        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 140, totalCarbs: 100)))
         XCTAssertEqual(store.macroGoals(Date()).protein, 140)
         XCTAssertNil(store.macroGoals(yesterday).protein)
         XCTAssertTrue(store.setTracksMacros(false))
@@ -768,13 +854,17 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertEqual(store.goal(Date()), 2100)
     }
     func testAIMacrosMatchEntirePortionIncludingLegacyFallback() {
-        let macros = MacroNutrients(protein: 6, netCarbs: 42, fat: 1)
+        let macros = MacroNutrients(protein: 6, totalCarbs: 48, fiber: 6, fat: 1)
         let item = AIFoodEstimate(name: "Bananas", calories: 210, portion: "2 bananas", servingSize: "1 banana", servings: 2, confidence: "high", macros: macros)
         var draft = AIResult(items: [item], notes: "").drafts(at: Date(), source: "aiAudio")[0]
         XCTAssertEqual(draft.macrosPerServing?.protein, 3)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 48)
+        XCTAssertEqual(draft.totalMacros?.fiber, 6)
         XCTAssertEqual(draft.totalMacros?.netCarbs, 42)
         XCTAssertTrue(draft.totalMacros?.hasEstimates == true)
         draft.changeServings(1)
+        XCTAssertEqual(draft.totalMacros?.totalCarbs, 24)
+        XCTAssertEqual(draft.totalMacros?.fiber, 3)
         XCTAssertEqual(draft.totalMacros?.netCarbs, 21)
         var legacy = item; legacy.servingSize = nil; legacy.servings = nil; legacy.macros = nil
         XCTAssertNil(AIResult(items: [legacy], notes: "").drafts(at: Date(), source: "aiAudio")[0].totalMacros)
@@ -785,9 +875,186 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         let result = try XCTUnwrap(product.result)
         XCTAssertEqual(result.calories, 120)
         XCTAssertEqual(result.macros?.protein, 3)
-        XCTAssertEqual(result.macros?.netCarbs, 18)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.totalCarbs), 21.6, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.fiber), 3.6, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(result.macros?.netCarbs), 18, accuracy: 0.0001)
         XCTAssertEqual(result.macros?.fat, 1.5)
         XCTAssertEqual(result.draft.macrosPerServing, result.macros)
+    }
+}
+
+@MainActor final class SpokenLoggingTests: XCTestCase {
+    func testShorthandParsesNamesAndCaloriesWithoutMistakingCounts() {
+        typealias P = QuickEntryText.Parsed
+        XCTAssertEqual(QuickEntryText.parse("300"), P(name: "", calories: 300))
+        XCTAssertEqual(QuickEntryText.parse("1,200 cals"), P(name: "", calories: 1200))
+        XCTAssertEqual(QuickEntryText.parse("Big Mac 550"), P(name: "Big Mac", calories: 550))
+        XCTAssertEqual(QuickEntryText.parse("pizza, 300 calories."), P(name: "pizza", calories: 300))
+        XCTAssertEqual(QuickEntryText.parse("Pizza with 300 calories"), P(name: "Pizza", calories: 300))
+        XCTAssertEqual(QuickEntryText.parse("a slice of pizza that was 300 calories"), P(name: "a slice of pizza", calories: 300))
+        XCTAssertEqual(QuickEntryText.parse("300 calories of pizza"), P(name: "pizza", calories: 300))
+        XCTAssertEqual(QuickEntryText.parse("7 layer dip 400"), P(name: "7 layer dip", calories: 400))
+        XCTAssertEqual(QuickEntryText.parse("coke zero 0 cal"), P(name: "coke zero", calories: 0))
+        // Counts and quantities stay searches; a small bare number is not read as calories.
+        for text in ["2 eggs", "eggs 2", "12 almonds", "coffee 16 oz", "protein bar 20g", "pizza", "", "300 400", "pizza 200000"] {
+            XCTAssertNil(QuickEntryText.parse(text), text)
+        }
+    }
+
+    func testSpokenCaloriesAndKnownFoodsLogLocallyWithoutAI() async throws {
+        let store = try Persistence.make(inMemory: true)
+        XCTAssertTrue(store.saveGoal(2000))
+        let earlier = Date().addingTimeInterval(-86_400)
+        XCTAssertTrue(store.add([EntryDraft(name: "Banana", calories: 105, timestamp: earlier)]))
+        XCTAssertTrue(store.saveMeal(nil, name: "My Breakfast", items: [EntryDraft(name: "Eggs", calories: 180), EntryDraft(name: "Toast", calories: 160)]))
+        var estimates = 0
+        let estimate: SpokenFoodLogger.Estimator = { _, _ in estimates += 1; return AIResult(items: [], notes: "") }
+
+        let pizza = await SpokenFoodLogger.log("pizza, 300 calories", store: store, estimate: estimate)
+        XCTAssertEqual(pizza, "Logged pizza, 300 calories. 300 today, 1,700 left.")
+        let banana = await SpokenFoodLogger.log("a banana", store: store, estimate: estimate)
+        XCTAssertEqual(banana, "Logged Banana, 105 calories. 405 today, 1,595 left.")
+        let meal = await SpokenFoodLogger.log("my breakfast", store: store, estimate: estimate)
+        XCTAssertEqual(meal, "Logged My Breakfast, 340 calories. 745 today, 1,255 left.")
+        let bare = await SpokenFoodLogger.log("250 calories", store: store, estimate: estimate)
+        XCTAssertEqual(bare, "Logged 250 calories. 995 today, 1,005 left.")
+        XCTAssertEqual(estimates, 0)
+        XCTAssertEqual(store.dayEntries(Date()).map(\.name), ["pizza", "Banana", "Eggs", "Toast", ""])
+    }
+
+    func testHomeQuickAddStaysWhileUsedAndRetiresForTheDay() throws {
+        let store = try Persistence.make(inMemory: true)
+        let today = Date()
+        XCTAssertTrue(store.showsHomeQuickAdd(on: today))
+        // Something logged another way before the picks were used hides them.
+        XCTAssertTrue(store.add([EntryDraft(name: "Toast", calories: 90, timestamp: today)]))
+        XCTAssertFalse(store.showsHomeQuickAdd(on: today))
+        store.markHomeQuickAddUsed(on: today)
+        XCTAssertTrue(store.showsHomeQuickAdd(on: today))
+        store.dismissHomeQuickAdd(on: today)
+        XCTAssertFalse(store.showsHomeQuickAdd(on: today))
+        store.markHomeQuickAddUsed(on: today)
+        XCTAssertFalse(store.showsHomeQuickAdd(on: today), "Retired picks stay hidden for the rest of the day")
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        XCTAssertTrue(store.showsHomeQuickAdd(on: tomorrow))
+    }
+
+    func testOnlyUsuallyRepeatedFoodsStayAfterBeingLogged() throws {
+        let store = try Persistence.make(inMemory: true)
+        let calendar = Calendar.current
+        // Today's entries sit between midnight and now, so the test works at any hour.
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        let morning = startOfToday.addingTimeInterval(now.timeIntervalSince(startOfToday) / 3)
+        let later = startOfToday.addingTimeInterval(now.timeIntervalSince(startOfToday) * 2 / 3)
+        var drafts: [EntryDraft] = []
+        for daysAgo in 1...4 {
+            let day = calendar.date(byAdding: .day, value: -daysAgo, to: morning)!
+            drafts.append(EntryDraft(name: "Coffee", calories: 40, timestamp: day))
+            drafts.append(EntryDraft(name: "Banana", calories: 105, timestamp: day))
+            if daysAgo != 4 { drafts.append(EntryDraft(name: "Coffee", calories: 40, timestamp: day.addingTimeInterval(3600))) }
+        }
+        drafts.append(EntryDraft(name: "Coffee", calories: 40, timestamp: morning))
+        drafts.append(EntryDraft(name: "Banana", calories: 105, timestamp: morning))
+        XCTAssertTrue(store.add(drafts))
+        XCTAssertTrue(FoodHistory.expectsAnotherToday(foodID: "name:coffee", entries: store.entries, date: now))
+        XCTAssertFalse(FoodHistory.expectsAnotherToday(foodID: "name:banana", entries: store.entries, date: now))
+        XCTAssertTrue(store.add([EntryDraft(name: "Coffee", calories: 40, timestamp: later)]))
+        XCTAssertFalse(FoodHistory.expectsAnotherToday(foodID: "name:coffee", entries: store.entries, date: now))
+    }
+
+    func testSpokenDescriptionsUseAIAndExplainWhenScansRunOut() async throws {
+        let store = try Persistence.make(inMemory: true)
+        XCTAssertTrue(store.saveGoal(nil))
+        let result = AIResult(items: [
+            AIFoodEstimate(name: "Scrambled eggs", calories: 180, portion: "2 eggs", servingSize: "1 egg", servings: 2, confidence: "medium"),
+            AIFoodEstimate(name: "Toast", calories: 90, portion: "1 slice", confidence: "high"),
+        ], notes: "")
+        var received: String?
+        let logged = await SpokenFoodLogger.log("two scrambled eggs and toast", store: store) { text, _ in received = text; return result }
+        XCTAssertEqual(received, "two scrambled eggs and toast")
+        XCTAssertEqual(logged, "Logged 2 foods, 270 calories: Scrambled eggs and Toast. 270 today.")
+        XCTAssertEqual(store.dayEntries(Date()).map(\.sourceType), ["aiVoice", "aiVoice"])
+        XCTAssertEqual(store.dayEntries(Date()).first?.servings, 2)
+
+        let paywalled = await SpokenFoodLogger.log("grandma’s mystery casserole", store: store) { _, _ in
+            throw AIServiceError(code: "subscription_required", message: "Upgrade")
+        }
+        XCTAssertTrue(paywalled.hasPrefix("Your free AI logs are used up."))
+        let empty = await SpokenFoodLogger.log("hmm", store: store) { _, _ in AIResult(items: [], notes: "No food") }
+        XCTAssertTrue(empty.hasPrefix("I couldn’t find a food"))
+        XCTAssertEqual(store.dayEntries(Date()).count, 2)
+    }
+}
+
+@MainActor final class NutritionHealthTests: XCTestCase {
+    final class FakeWriter: NutritionHealthWriting {
+        var available = true
+        var authorized = false
+        var grants = true
+        var writes: [(NutritionExport, Bool)] = []
+        var deletes: [UUID] = []
+        func authorize() async throws { authorized = grants }
+        func write(_ export: NutritionExport, replacing: Bool) async throws { writes.append((export, replacing)) }
+        func delete(_ id: UUID) async throws { deletes.append(id) }
+    }
+
+    func testExportScalesMacrosToTheLoggedAmount() throws {
+        let store = try Persistence.make(inMemory: true)
+        var draft = EntryDraft(name: "Eggs", calories: 70, timestamp: Date())
+        draft.macrosPerServing = MacroNutrients(protein: 6, totalCarbs: 0.5, fat: 5)
+        draft.changeServings(2)
+        XCTAssertTrue(store.add([draft]))
+        let export = NutritionExport(store.entries[0])
+        XCTAssertEqual(export.name, "Eggs")
+        XCTAssertEqual(export.values, [.energy: 140, .protein: 12, .carbohydrates: 1, .fat: 10])
+    }
+
+    func testSharesFromTheStartDayAndFollowsEditsAndDeletes() async throws {
+        let store = try Persistence.make(inMemory: true)
+        let now = Date()
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+        XCTAssertTrue(store.add([EntryDraft(name: "Old toast", calories: 90, timestamp: yesterday)]))
+        XCTAssertTrue(store.add([EntryDraft(name: "Banana", calories: 105, timestamp: now)]))
+        let writer = FakeWriter()
+        let sync = NutritionHealthSync(inMemory: true, writer: writer)
+        await sync.setEnabled(true, entries: store.entries, now: now)
+        XCTAssertTrue(sync.enabled)
+        XCTAssertEqual(writer.writes.map(\.0.name), ["Banana"], "Entries from before sharing started stay out of Health")
+        XCTAssertEqual(writer.writes.map(\.1), [false])
+
+        // Unchanged entries are not rewritten; an edit replaces the earlier copy.
+        await sync.sync(store.entries)
+        XCTAssertEqual(writer.writes.count, 1)
+        let banana = store.entries.first { $0.name == "Banana" }!
+        var edited = EntryDraft(banana); edited.changeCalories(120)
+        try await Task.sleep(for: .milliseconds(5))
+        XCTAssertTrue(store.update(edited))
+        await sync.sync(store.entries)
+        XCTAssertEqual(writer.writes.count, 2)
+        XCTAssertEqual(writer.writes.last?.0.values[.energy], 120)
+        XCTAssertEqual(writer.writes.last?.1, true)
+
+        // Deleting (here or via iCloud from another iPhone) removes it from Health.
+        store.delete(banana)
+        await sync.sync(store.entries)
+        XCTAssertEqual(writer.deletes, [banana.id])
+
+        // Paused sharing writes nothing.
+        await sync.setEnabled(false, entries: store.entries)
+        XCTAssertTrue(store.add([EntryDraft(name: "Yogurt", calories: 130, timestamp: Date())]))
+        await sync.sync(store.entries)
+        XCTAssertEqual(writer.writes.count, 2)
+    }
+
+    func testDeclinedPermissionLeavesSharingOff() async throws {
+        let store = try Persistence.make(inMemory: true)
+        let writer = FakeWriter(); writer.grants = false
+        let sync = NutritionHealthSync(inMemory: true, writer: writer)
+        await sync.setEnabled(true, entries: store.entries)
+        XCTAssertFalse(sync.enabled)
+        XCTAssertNotNil(sync.message)
+        XCTAssertTrue(writer.writes.isEmpty)
     }
 }
 

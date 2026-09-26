@@ -16,7 +16,7 @@ struct CaptureCancelButton: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.vertical, 4)
-        .background(.bar)
+        .background(Color.caveSurface)
         .accessibilityIdentifier("captureCancel")
     }
 }
@@ -54,6 +54,8 @@ struct AIInputSheet: View {
     @State private var showPaywall = false
     @State private var resumeAfterPurchase = false
     @State private var operation: Task<Void, Never>?
+    @State private var mealRoute: MealRoute?
+    @State private var gatedOnOpen = false
 
     var body: some View {
         NavigationStack {
@@ -68,7 +70,7 @@ struct AIInputSheet: View {
                     }
                 } else { review }
                 if let error { Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("aiError") } }
-            }
+            }.caveScreenBackground()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
                     reviewUndoBanner
@@ -77,10 +79,8 @@ struct AIInputSheet: View {
             }
             .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Speak Food") : "Review Scan")
             .navigationBarTitleDisplayMode(.inline)
-            .task {
-                guard !started else { return }
-                started = true
-            }
+            .task { autoStartRecordingIfReady() }
+            .task { await gateAccessOnOpen() }
             .task(id: photo) {
                 guard let photo else { return }
                 preparingPhoto = true
@@ -100,6 +100,7 @@ struct AIInputSheet: View {
                     onDismissRequested: closePaywall
                 )
             }
+            .sheet(item: $mealRoute) { route in MealEditorSheet(route: route) }
             .sheet(item: $editing) { draft in
                 EntryEditorSheet(draft: draft) { updated in
                     if let index = drafts.firstIndex(where: { $0.id == updated.id }) { drafts[index] = updated }
@@ -108,6 +109,7 @@ struct AIInputSheet: View {
             .onChange(of: scenePhase) { _, phase in
                 // Preserve interrupted recordings locally, without uploading in the background.
                 if phase != .active && recorder.recording { finishRecording(analyzeAfter: false) }
+                if phase == .active { autoStartRecordingIfReady() }
             }
             .onChange(of: recorder.finished) { _, done in
                 if done { finishRecording(analyzeAfter: false) }
@@ -178,6 +180,18 @@ struct AIInputSheet: View {
             Text(recorder.recording ? "Listening…" : working ? "Analyzing your meal…" : media != nil ? "Recording saved" : "You Talk. App Listen.")
                 .font(.cave(.title))
             Text(working ? "Finding foods and calories." : media != nil && !recorder.recording ? "Tap Analyze Recording to continue." : "Tell what you eat and how much.").foregroundStyle(.secondary)
+            if recorder.recording, let startedAt = recorder.startedAt {
+                TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                    let elapsed = min(context.date.timeIntervalSince(startedAt), FoodRecorder.maxDuration)
+                    Text("\(clock(elapsed)) / \(clock(FoodRecorder.maxDuration))")
+                        .font(.cave(.headline)).monospacedDigit().foregroundStyle(.secondary)
+                        .accessibilityLabel("\(Int(elapsed)) seconds recorded")
+                }
+            } else if !working && media == nil {
+                Text("Try: “Two scrambled eggs, toast with butter, and a coffee with milk.”")
+                    .font(.cave(.footnote)).foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center).padding(.horizontal, 12)
+            }
         }.frame(maxWidth: .infinity).padding(.vertical, 24)
         if working {
             ProgressView()
@@ -193,13 +207,18 @@ struct AIInputSheet: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
-            .tint(recorder.recording ? .red : .blue)
+            .tint(recorder.recording ? .red : .caveOrange)
             .disabled(startingRecording)
             .accessibilityIdentifier("aiRecord")
             if media != nil && !recorder.recording {
                 Button("Record again") { startRecording() }.disabled(startingRecording)
             }
         }
+    }
+
+    private func clock(_ seconds: TimeInterval) -> String {
+        let whole = Int(seconds)
+        return "\(whole / 60):" + String(format: "%02d", whole % 60)
     }
 
     @ViewBuilder private var review: some View {
@@ -234,10 +253,25 @@ struct AIInputSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .tint(.caveOrange)
                     .disabled(remainingDrafts.isEmpty || !remainingDrafts.allSatisfy(\.isValid))
                     .accessibilityIdentifier("aiAdd")
                     .accessibilityLabel("Add All")
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    Button {
+                        mealRoute = MealRoute(items: drafts)
+                    } label: {
+                        HStack(spacing: 8) {
+                            CaveIcon(.meals, size: 20)
+                            Text("Save as Meal")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.caveOrange)
+                    .disabled(drafts.isEmpty || !drafts.allSatisfy(\.isValid))
+                    .accessibilityIdentifier("aiSaveMeal")
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 }
@@ -350,6 +384,13 @@ struct AIInputSheet: View {
         let prepared = try Self.preparePhoto(data)
         image = UIImage(data: prepared); media = prepared; uploadId = nil; error = nil
     }
+    // Widget cold launches can present the sheet before the scene is active; recording then would be stopped immediately.
+    private func autoStartRecordingIfReady() {
+        guard mode == .voice, !started, scenePhase == .active,
+              !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+        started = true
+        startRecording()
+    }
     private func startRecording() {
         guard !startingRecording && !working else { return }
         startingRecording = true
@@ -407,13 +448,31 @@ struct AIInputSheet: View {
         }
     }
 
+    /// Runs alongside the camera/microphone start so paying users see no delay. When scans are used up,
+    /// the paywall appears before anything is captured, uploaded, or analyzed.
+    private func gateAccessOnOpen() async {
+        guard !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+        await subscriptions.refresh(regularLogCount: store.regularLogCount)
+        guard !Task.isCancelled, let account = subscriptions.account, !account.canScan,
+              subscriptions.offering != nil, result == nil, uploadId == nil else { return }
+        recorder.cancel(); media = nil; image = nil
+        gatedOnOpen = true
+        showPaywall = true
+    }
+
     private func closePaywall() {
         showPaywall = false
-        guard resumeAfterPurchase else { return }
+        guard resumeAfterPurchase else {
+            // Declining the up-front paywall leaves nothing usable here, so close the capture screen too.
+            if gatedOnOpen { dismiss() }
+            return
+        }
         resumeAfterPurchase = false
+        gatedOnOpen = false
         Task { @MainActor in
             await Task.yield()
-            requestAnalysis()
+            if media != nil { requestAnalysis() }
+            else if mode == .voice { startRecording() }
         }
     }
 
@@ -450,6 +509,8 @@ struct AIInputSheet: View {
 @MainActor @Observable final class FoodRecorder: NSObject, AVAudioRecorderDelegate {
     var recording=false
     var finished=false
+    static let maxDuration: TimeInterval = 60
+    private(set) var startedAt: Date?
     private var recorder:AVAudioRecorder?
     private var url:URL?
     func start() async throws {
@@ -462,11 +523,11 @@ struct AIInputSheet: View {
         let path=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
         let r=try AVAudioRecorder(url:path,settings:[AVFormatIDKey:kAudioFormatMPEG4AAC,AVSampleRateKey:22050,AVNumberOfChannelsKey:1,AVEncoderBitRateKey:64000])
         r.delegate=self;url=path;recorder=r
-        guard r.record(forDuration:60) else {cancel();throw AIServiceError(code:"recording",message:"Recording could not start.")}
-        recording=true
+        guard r.record(forDuration:Self.maxDuration) else {cancel();throw AIServiceError(code:"recording",message:"Recording could not start.")}
+        recording=true;startedAt=Date()
     }
     func stop() throws -> Data {
-        recorder?.delegate=nil;recorder?.stop();recording=false
+        recorder?.delegate=nil;recorder?.stop();recording=false;startedAt=nil
         defer {cancel()}
         guard let url else {throw AIServiceError(code:"recording",message:"No recording was captured.")}
         let data=try Data(contentsOf:url)
@@ -474,7 +535,7 @@ struct AIInputSheet: View {
         return data
     }
     func cancel() {
-        recorder?.delegate=nil;recorder?.stop();recorder=nil;recording=false;finished=false
+        recorder?.delegate=nil;recorder?.stop();recorder=nil;recording=false;finished=false;startedAt=nil
         if let url {try? FileManager.default.removeItem(at:url)};url=nil
         try? AVAudioSession.sharedInstance().setActive(false,options:.notifyOthersOnDeactivation)
     }

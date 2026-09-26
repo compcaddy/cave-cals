@@ -11,13 +11,15 @@ Implemented September 21, 2026. The owner chose **100 regular food-log entries**
 - Completed-upload retries return the stored result without recounting or paywalling, including scan 10. Stored results expire after the existing 24-hour upload window.
 - Active Apple-verified subscriptions bypass these introductory limits. Website/recipe import remains a subscription feature. Free access is separate from an App Store subscription trial.
 
+- Siri/Shortcuts **Log Food** descriptions that need AI (`food/describe`) use one scan, like a voice recording. The scan is charged under the account lock before OpenAI is called and refunded if estimation fails.
+
 ## Storage and enforcement
 
 `ai_accounts.scans_used` and `regular_log_count` persist independently of expiring upload metadata. Account row locks serialize reservations/completions across serverless instances. Processing uploads carry expiring `scan_reserved_until` reservations; completions increment usage and save the result in one transaction.
 
 The app remembers up to 100 regular entry UUIDs in local preferences. It seeds these from existing diary entries, deduplicates edits/iCloud deliveries, and retains the count after deletion or Undo. Only the aggregate count (capped at 100) is sent with signed status/upload/analyze requests; names, calories and entry UUIDs are not sent for this check. The server retains the greatest reported count. Purchases/restores preserve the highest counters when linking an installation to a purchase owner.
 
-This is an anonymous-install allowance, not an identity-verified per-person trial. New App Attest registration after reinstall/key loss can create a new anonymous account. Historical entries deleted before this feature existed cannot be reconstructed. The app-reported regular-entry count is not independently audited by the server; App Attest protects the signed request. No signup or diary upload was introduced.
+This is an anonymous-install allowance, not an identity-verified per-person trial. Since September 25, 2026, each install also receives a random install key (`account/status` with `issueTrialKey`) that the app keeps in its Keychain, which survives deleting the app. When a reinstall registers a new App Attest key, the app presents that install key and the new account starts from the highest `scans_used`/`regular_log_count` of earlier accounts with the same key (`ai_accounts.trial_key_hash`). Only an attested app can present it, and it can only raise counters. Erasing the iPhone (or anything else that clears the Keychain) still starts a fresh allowance. Historical entries deleted before this feature existed cannot be reconstructed. The app-reported regular-entry count is not independently audited by the server; App Attest protects the signed request. No signup or diary upload was introduced.
 
 ## Rollout
 

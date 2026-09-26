@@ -7,12 +7,10 @@ import AppIntents
     struct Request: Equatable {
         let id = UUID()
         let action: LoggingAction
-        var quickCalories = false
     }
     private(set) var pending: Request?
 
     func open(_ action: LoggingAction) { pending = Request(action: action) }
-    func openQuickCalories() { pending = Request(action: .add, quickCalories: true) }
     @discardableResult func open(url: URL) -> Bool {
         guard let action = LoggingAction(url: url) else { return false }
         open(action)
@@ -50,21 +48,20 @@ final class QuickActionSceneDelegate: NSObject, UIWindowSceneDelegate {
 
 // A fixed menu keeps the Action button useful without requiring users to build a shortcut.
 enum CalorieLoggingChoice: String, AppEnum {
-    case voice, meal, barcode, quickCalories
+    case voice, meal, barcode
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Logging option"
     static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
         .voice: "Voice Log",
         .meal: "Scan Meal",
-        .barcode: "Scan Barcode",
-        .quickCalories: "Quick Calories"
+        .barcode: "Scan Barcode"
     ]
 
-    @MainActor func open(using router: LoggingActionRouter = .shared) {
+    @MainActor func open(using router: LoggingActionRouter? = nil) {
+        let router = router ?? .shared
         switch self {
         case .voice: router.open(.voice)
         case .meal: router.open(.image)
         case .barcode: router.open(.barcode)
-        case .quickCalories: router.openQuickCalories()
         }
     }
 }
@@ -83,8 +80,21 @@ struct ChooseCalorieLoggingIntent: AppIntent {
 struct CaveCalsShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: LogFoodIntent(),
+            phrases: [
+                "Log food with \(.applicationName)",
+                "Log food in \(.applicationName)",
+                "Log a meal in \(.applicationName)",
+                "Log calories in \(.applicationName)",
+                "Add food to \(.applicationName)",
+                "Track food in \(.applicationName)"
+            ],
+            shortTitle: "Log Food",
+            systemImageName: "fork.knife"
+        )
+        AppShortcut(
             intent: ChooseCalorieLoggingIntent(),
-            phrases: ["Log food with \(.applicationName)", "Open \(.applicationName)"],
+            phrases: ["Open \(.applicationName)"],
             shortTitle: "Open Cave Cals",
             systemImageName: "square.grid.2x2"
         )

@@ -19,7 +19,7 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 
 ## Features
 
-- Optional daily-goal setup, with local persistence; no name is requested.
+- Short optional onboarding estimates an editable calorie goal from body details, activity, and preferred pace. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
 - Daily date navigation, disabled future dates, day status, and historical editing.
 - Calorie total and chronological entries; target/remaining amounts appear only when a goal is set. Goals can be enabled or removed in Settings without changing historical targets.
 - unified Logged / Quick Add screen, calorie shortcuts, barcode scanning, meal scanning and voice logging.
@@ -48,7 +48,7 @@ Before TestFlight/App Store release, initialize and inspect the development Clou
 
 `FoodSearchService` and `BarcodeLookupService` isolate the providers. Food search uses the free `/api/v1/foods/search` backend endpoint and FatSecret. Barcode lookup stays on Open Food Facts. Local matches never wait for either provider. A 450 ms debounce and request identity guard prevent excessive requests and stale results after query changes.
 
-FatSecret credentials and OAuth tokens remain server-side. Basic search uses v1; set `FATSECRET_API_TIER=premier` after account approval to use v5 with structured default servings. Restaurant/brand names and calorie portions are retained in logged entries. Search has distributed per-IP and provider-wide quotas independent of paid AI subscriptions. See [FatSecret setup and verification](Documentation/FatSecret.md).
+FatSecret credentials and OAuth tokens remain server-side. Basic search uses v1; set `FATSECRET_API_TIER=premier` after account approval to use v5 with structured default servings. Branded results are named by the product itself ("Diet Coke"); the brand appears beside the serving in search results, and one-word product names keep their brand ("Starbucks Latte"). Calorie portions are retained in logged entries. Search has distributed per-IP and provider-wide quotas independent of paid AI subscriptions. See [FatSecret setup and verification](Documentation/FatSecret.md).
 
 Empty results and errors are never cached. FatSecret Basic results are not cached; Premier positive search results expire after one hour, including across app restarts. Old unversioned caches are no longer read. Offline manual logging, diary history, saved meals, and local common-food suggestions continue to work.
 
@@ -69,9 +69,11 @@ xcodebuild test -project CaveCals.xcodeproj \
 
 Source files are grouped by feature under `App/`. Tests are under `Tests/` and `UITests/`. The optional `scripts/generate_project.rb` recreates the Xcode project using the Ruby `xcodeproj` gem. It is only needed when intentionally regenerating the project after source-file changes. `scripts/make_icon.swift` regenerates the 1024-pixel icon.
 
+Optional Apple Health sharing lives in Settings: **Calories & macros** writes each logged food's Dietary Energy, protein, carbs, fat and fiber (from the day it's turned on, updated on edit/delete), and **Weigh-ins** shares weight. Cave Cals never reads Health data.
+
 Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, editable history, Week/Month/Year graphs, a dismissible daily reminder, and opt-in Apple Health export. Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 
-Macros, water, exercise, meal categories, and future meal planning remain out of scope.
+Optional protein, total-carbohydrate, and fat tracking is on by default; goals and estimates are available. Food editors also store fiber and display calculated net carbs. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
 
 ## Widget calorie total
 

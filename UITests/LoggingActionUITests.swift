@@ -19,7 +19,7 @@ final class LoggingActionUITests: XCTestCase {
         XCUIDevice.shared.system.open(URL(string: "cavecals://log/voice")!)
         XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 5))
         completeSetup()
-        XCTAssertTrue(app.navigationBars["Voice logging"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
         if !app.buttons["aiRecord"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["aiRecord"].waitForExistence(timeout: 5))
     }
@@ -27,7 +27,7 @@ final class LoggingActionUITests: XCTestCase {
     func testAllLinksReplaceCurrentDrawerAndRepeat() {
         completeSetup()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        for (action, title) in [("voice", "Voice logging"), ("image", "Meal Scan"), ("barcode", "Scan a Barcode"), ("voice", "Voice logging")] {
+        for (action, title) in [("voice", "Speak Food"), ("image", "Meal Scan"), ("barcode", "Barcode Scan"), ("voice", "Speak Food")] {
             XCUIDevice.shared.system.open(URL(string: "cavecals://log/\(action)")!)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), action)
         }
@@ -62,7 +62,7 @@ final class LoggingActionUITests: XCTestCase {
     func testWarmQuickActionsOpenRequestedFeatures() {
         completeSetup()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        for (action, title) in [("Voice Log", "Voice logging"), ("Meal Scan", "Meal Scan"), ("Barcode Scan", "Scan a Barcode")] {
+        for (action, title) in [("Voice Log", "Speak Food"), ("Meal Scan", "Meal Scan"), ("Barcode Scan", "Barcode Scan")] {
             chooseQuickAction(action)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
         }
@@ -75,6 +75,6 @@ final class LoggingActionUITests: XCTestCase {
         chooseQuickAction("Voice Log")
         // SpringBoard launches without --uitesting, so it may use an existing profile.
         if app.buttons["skipGoal"].waitForExistence(timeout: 3) { completeSetup() }
-        XCTAssertTrue(app.navigationBars["Voice logging"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
     }
 }

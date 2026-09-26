@@ -9,10 +9,22 @@ struct FoodResult: Identifiable, Codable, Equatable, Sendable {
     var servingDescription: String
     var barcode: String?
     var macros: MacroNutrients?
+    /// Products read by their own name ("Diet Coke", not "Coca-Cola — Diet Coke"). A one-word name
+    /// ("Latte", "Original") means little alone, so it keeps its brand in front.
+    var displayName: String {
+        guard let brand = brand?.trimmingCharacters(in: .whitespaces), !brand.isEmpty,
+              name.range(of: brand, options: .caseInsensitive) == nil,
+              name.split(whereSeparator: \.isWhitespace).count <= 1 else { return name }
+        return "\(brand) \(name)"
+    }
+    /// Search rows show the brand quietly beside the serving so similar products stay distinguishable.
+    var searchDetail: String {
+        let shownBrand = brand.flatMap { brand in
+            !brand.isEmpty && displayName.range(of: brand, options: .caseInsensitive) == nil ? brand : nil
+        }
+        return [shownBrand, servingDescription].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
     var draft: EntryDraft {
-        let displayName = brand.flatMap { brand in
-            !brand.isEmpty && name.range(of: brand, options: .caseInsensitive) == nil ? "\(brand) — \(name)" : nil
-        } ?? name
         var value = EntryDraft(name: displayName, calories: calories)
         value.macrosPerServing = macros
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"
@@ -161,8 +173,13 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
                 } else { amount = n["\(key)_100g"]?.value.map { $0 * scale } }
                 return amount.flatMap { $0.isFinite && $0 >= 0 && $0 <= 100_000 ? $0 : nil }
             }
-            // OFF normalizes carbohydrates as available carbs (already excludes fiber).
-            let macros = MacroNutrients(protein: nutrient("proteins"), netCarbs: nutrient("carbohydrates"), fat: nutrient("fat"))
+            // OFF's carbohydrates exclude fiber; prefer its explicit US/Canada total.
+            let fiber = nutrient("fiber")
+            let totalCarbs = nutrient("carbohydrates-total") ?? nutrient("carbohydrates").flatMap { carbs in
+                fiber.flatMap { carbs + $0 <= 100_000 ? carbs + $0 : nil }
+            }
+            let validFiber = fiber.flatMap { amount in totalCarbs.map { amount <= $0 } == false ? nil : amount }
+            let macros = MacroNutrients(protein: nutrient("proteins"), totalCarbs: totalCarbs, fiber: validFiber, fat: nutrient("fat"))
             return FoodResult(id: "openfoodfacts:\(code)", name: name, brand: brands, calories: calories, servingDescription: description, barcode: code, macros: macros)
         }
     }
@@ -182,7 +199,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     init(provider: any FoodSearchService = FatSecretSearch.shared, persistCache: Bool = true,
          cacheURL: URL? = nil, now: @escaping () -> Date = Date.init, debounce: Duration = .milliseconds(450)) {
         self.provider = provider; self.now = now; self.debounce = debounce
-        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v3.json")) : nil
+        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v4.json")) : nil
         if let url = self.cacheURL, let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: Cached].self, from: data) {
             cache = values.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() && $0.value.expiresAt <= now().addingTimeInterval(3600) }
             persist()
@@ -197,7 +214,7 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
         cache = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
         persist()
         message = nil; results = []; loading = false
-        guard query.count >= 2, Double(query) == nil else { return }
+        guard query.count >= 2, Double(query) == nil, QuickEntryText.parse(query)?.name.isEmpty != true else { return }
         if let hit = cache[query] { results = hit.results; return }
         loading = true
         defer { if requestID == id { loading = false } }

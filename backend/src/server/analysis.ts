@@ -1,9 +1,10 @@
+import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { database, type DBTransaction } from './db';
 import { accounts, uploads } from './schema';
 import { APIError, positiveInt, required } from './config';
 import { consume, utcDay, tomorrow } from './rate-limit';
-import { identify, type FoodResult } from './ai';
+import { identify, identifyText, type FoodResult } from './ai';
 import { readUpload, deleteUpload } from './storage';
 import type { Identity } from './auth';
 import { entitlement } from './apple';
@@ -58,5 +59,26 @@ export async function analyze(identity: Identity, uploadId: string, runAI = iden
   } finally {
     // Keep the metadata row until expiry so cleanup retries deletion after an outage or late upload.
     await deleteUpload(upload).catch(() => console.error('Temporary upload cleanup deferred'));
+  }
+}
+
+export const describeInput = z.object({ text: z.string().trim().min(2).max(500).refine(value => !/[\x00-\x1f\x7f]/.test(value)) });
+// A spoken description (Siri/Shortcuts) uses one scan, like a voice recording. The scan is charged under the
+// account lock before OpenAI is called, so concurrent requests cannot exceed the allowance, and refunded on failure.
+export async function describe(identity: Identity, text: string, runAI: (text: string) => Promise<FoodResult> = identifyText, regularLogCount = 0): Promise<FoodResult> {
+  required('OPENAI_API_KEY');
+  const { active } = await entitlement(identity);
+  await database().transaction(async tx => {
+    await requireScanAccess(identity, active, regularLogCount, tx);
+    await reserveAIUsage(identity, tx);
+    await tx.update(accounts).set({ scansUsed: sql`${accounts.scansUsed} + 1` }).where(eq(accounts.id, identity.accountId));
+  });
+  try { return await runAI(text); }
+  catch (error) {
+    const detail = error as { name?: string; code?: string; status?: number };
+    console.error('AI text processing failure', { name: detail?.name, code: detail?.code, status: detail?.status });
+    await database().update(accounts).set({ scansUsed: sql`greatest(${accounts.scansUsed} - 1, 0)` }).where(eq(accounts.id, identity.accountId));
+    if (error instanceof APIError) throw error;
+    throw new APIError(502, 'ai_unavailable', 'AI processing is temporarily unavailable. Please try again later.');
   }
 }

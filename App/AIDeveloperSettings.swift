@@ -52,7 +52,7 @@ struct AIDeveloperSettings: View {
             } header: { Text("Subscription testing") }
             if busy { ProgressView("Loading…") }
             if let message { Section { Text(message).font(.cave(.footnote)) } }
-        }.navigationTitle("Developer settings")
+        }.caveScreenBackground().navigationTitle("Developer settings")
     }
     private func saveConnection() {
         do {

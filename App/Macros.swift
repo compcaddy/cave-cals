@@ -3,34 +3,50 @@ import Foundation
 /// Grams for one serving. Nil means unknown; zero is a known zero.
 struct MacroNutrients: Codable, Equatable, Sendable {
     var protein: Double?
-    var netCarbs: Double?
+    var totalCarbs: Double?
+    var fiber: Double?
     var fat: Double?
     // Preserve estimate provenance independently when a user edits another nutrient.
     var estimatedProtein: Bool? = nil
-    var estimatedNetCarbs: Bool? = nil
+    var estimatedTotalCarbs: Bool? = nil
+    var estimatedFiber: Bool? = nil
     var estimatedFat: Bool? = nil
 
-    var isValid: Bool { [protein, netCarbs, fat].allSatisfy { $0 == nil || ($0!.isFinite && $0! >= 0 && $0! <= 100_000) } }
-    var isValidGoal: Bool {
-        isValid && [protein, netCarbs, fat].compactMap { $0 }.allSatisfy { $0 > 0 && $0 <= 9999 }
+    var isValid: Bool {
+        let validAmounts = [protein, totalCarbs, fiber, fat].allSatisfy {
+            $0 == nil || ($0!.isFinite && $0! >= 0 && $0! <= 100_000)
+        }
+        guard validAmounts else { return false }
+        if let totalCarbs, let fiber { return fiber <= totalCarbs }
+        return true
     }
-    var hasValues: Bool { protein != nil || netCarbs != nil || fat != nil }
-    var isComplete: Bool { protein != nil && netCarbs != nil && fat != nil }
-    var hasEstimates: Bool { estimatedProtein == true || estimatedNetCarbs == true || estimatedFat == true }
+    /// Unknown fiber is never treated as zero.
+    var netCarbs: Double? {
+        guard isValid, let totalCarbs, let fiber else { return nil }
+        return totalCarbs - fiber
+    }
+    var estimatedNetCarbs: Bool { estimatedTotalCarbs == true || estimatedFiber == true }
+    var isValidGoal: Bool {
+        isValid && [protein, totalCarbs, fiber, fat].compactMap { $0 }.allSatisfy { $0 > 0 && $0 <= 9999 }
+    }
+    var hasValues: Bool { protein != nil || totalCarbs != nil || fiber != nil || fat != nil }
+    var isComplete: Bool { protein != nil && totalCarbs != nil && fiber != nil && fat != nil }
+    var hasEstimates: Bool { estimatedProtein == true || estimatedTotalCarbs == true || estimatedFiber == true || estimatedFat == true }
     func scaled(_ factor: Double) -> Self {
         var copy = self
-        copy.protein = protein.map { $0 * factor }; copy.netCarbs = netCarbs.map { $0 * factor }; copy.fat = fat.map { $0 * factor }
+        copy.protein = protein.map { $0 * factor }; copy.totalCarbs = totalCarbs.map { $0 * factor }; copy.fiber = fiber.map { $0 * factor }; copy.fat = fat.map { $0 * factor }
         return copy
     }
     func markedEstimated() -> Self {
         var copy = self
-        copy.estimatedProtein = protein != nil; copy.estimatedNetCarbs = netCarbs != nil; copy.estimatedFat = fat != nil
+        copy.estimatedProtein = protein != nil; copy.estimatedTotalCarbs = totalCarbs != nil; copy.estimatedFiber = fiber != nil; copy.estimatedFat = fat != nil
         return copy
     }
     func fillingMissing(from other: Self) -> Self {
         var copy = self
         if protein == nil { copy.protein = other.protein; copy.estimatedProtein = other.estimatedProtein }
-        if netCarbs == nil { copy.netCarbs = other.netCarbs; copy.estimatedNetCarbs = other.estimatedNetCarbs }
+        if totalCarbs == nil { copy.totalCarbs = other.totalCarbs; copy.estimatedTotalCarbs = other.estimatedTotalCarbs }
+        if fiber == nil { copy.fiber = other.fiber; copy.estimatedFiber = other.estimatedFiber }
         if fat == nil { copy.fat = other.fat; copy.estimatedFat = other.estimatedFat }
         return copy
     }
@@ -42,15 +58,17 @@ struct MacroNutrients: Codable, Equatable, Sendable {
 }
 
 enum MacroKind: String, CaseIterable, Identifiable {
-    case protein, netCarbs, fat
+    case protein, totalCarbs, fiber, fat
+    static let primary: [Self] = [.protein, .totalCarbs, .fat]
     var id: String { rawValue }
-    var title: String { switch self { case .protein: "Protein"; case .netCarbs: "Net carbs"; case .fat: "Fat" } }
-    var shortTitle: String { switch self { case .protein: "P"; case .netCarbs: "C"; case .fat: "F" } }
+    var title: String { switch self { case .protein: "Protein"; case .totalCarbs: "Carbs"; case .fiber: "Fiber"; case .fat: "Fat" } }
+    var editorTitle: String { self == .totalCarbs ? "Carbohydrates" : title }
+    var shortTitle: String { switch self { case .protein: "P"; case .totalCarbs: "C"; case .fiber: "Fiber"; case .fat: "F" } }
     var keyPath: WritableKeyPath<MacroNutrients, Double?> {
-        switch self { case .protein: \.protein; case .netCarbs: \.netCarbs; case .fat: \.fat }
+        switch self { case .protein: \.protein; case .totalCarbs: \.totalCarbs; case .fiber: \.fiber; case .fat: \.fat }
     }
     var estimateKeyPath: WritableKeyPath<MacroNutrients, Bool?> {
-        switch self { case .protein: \.estimatedProtein; case .netCarbs: \.estimatedNetCarbs; case .fat: \.estimatedFat }
+        switch self { case .protein: \.estimatedProtein; case .totalCarbs: \.estimatedTotalCarbs; case .fiber: \.estimatedFiber; case .fat: \.estimatedFat }
     }
 }
 
@@ -74,15 +92,15 @@ struct MacroSummary {
                           estimated: values.contains { $0?[keyPath: kind.estimateKeyPath] == true })
     }
     var compactText: String {
-        MacroKind.allCases.map { "\($0.shortTitle) \(total($0).text)" }.joined(separator: " · ") + " g"
+        MacroKind.primary.map { "\($0.shortTitle) \(total($0).text)" }.joined(separator: " · ") + " g"
     }
     var accessibilityText: String {
-        MacroKind.allCases.map { kind in
+        MacroKind.primary.map { kind in
             let amount = total(kind)
             return "\(kind.title), \(amount.grams.map { "\($0.macroText) grams" } ?? "unknown")\(amount.incomplete ? ", incomplete" : "")\(amount.estimated ? ", estimated" : "")"
         }.joined(separator: "; ")
     }
-    var incomplete: Bool { MacroKind.allCases.contains { total($0).incomplete } }
+    var incomplete: Bool { MacroKind.primary.contains { total($0).incomplete } }
 }
 
 extension Double {
