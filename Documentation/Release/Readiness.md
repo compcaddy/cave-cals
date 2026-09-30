@@ -1,3 +1,12 @@
+# Welcome intro, logo first — September 30, 2026 (local)
+
+- Follow-up: the welcome uses the new logo with CAVE CALS on one line (launch screen unchanged), capped at 250 pt, with more room between “Weight Drop.” and the buttons (about 76 pt on iPhone 17 Pro, up from 33). Checked on iPhone 17 Pro and iPhone SE.
+
+- The logo now sits above the words and drops in first from the top (slight overshoot, then settles); the lines and button panel follow as before, and the whole intro runs about 50% slower (~2.5 s). The logo sizes to the free space above the buttons (about 290 pt on iPhone 17 Pro, 140 pt on iPhone SE) so the words never touch the buttons.
+- Verification: simulator build passed; intro filmed frame by frame on iPhone 17 Pro and the resting layout inspected there and on iPhone SE (3rd generation). In dark mode the logo's dark lettering and outlines are hard to see on the dark background (not yet addressed).
+
+---
+
 # Welcome intro animation — September 30, 2026 (local)
 
 - The welcome drops the app icon and starts blank, then slides in “You Eat.” (left), “App Track.” (right), “Weight Drop.” (left), springs the Cave Cals logo up from the bottom (slight overshoot, then settles), and slides the button panel up, about 1.6 s in all. Reduce Motion fades in place; revisions, returning to the welcome, and UI tests skip the intro.

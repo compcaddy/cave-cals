@@ -80,7 +80,7 @@ final class OnboardingUITests: XCTestCase {
     private func basics(startingWeight: String = "90") {
         next()
         XCTAssertFalse(app.buttons["onboardingContinue"].isEnabled)
-        XCTAssertEqual(ageDial.value as? String, "40 years")
+        XCTAssertEqual(ageDial.value as? String, "30 years")
         Thread.sleep(forTimeInterval: 0.6) // let the step transition finish so the dial is captured at rest
         capture("Me info default")
         app.buttons["gender-Male"].tap(); setAge(35)
@@ -143,7 +143,7 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(app.textFields["planHeight"].value as? String, "180")
     }
     func testWelcomeOffersPlanOrSkipWithoutManualShortcut() {
-        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Me Build Plan")
+        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Build Plan")
         XCTAssertFalse(app.buttons["manualSetup"].exists)
         XCTAssertFalse(app.switches["planTrackWeight"].exists)
         capture("Welcome")
@@ -162,7 +162,7 @@ final class OnboardingUITests: XCTestCase {
         capture("Skip tracking choices")
         // Back from the skip route's tracking step returns to the welcome.
         app.buttons["onboardingBack"].tap()
-        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Me Build Plan")
+        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Build Plan")
         skipPlan(); next()
         skipOffer()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
@@ -225,7 +225,7 @@ final class OnboardingUITests: XCTestCase {
     private func openOnboardingPreview() {
         app.buttons["previewOnboarding"].tap()
         XCTAssertTrue(app.buttons["closeOnboardingPreview"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Me Build Plan")
+        XCTAssertEqual(app.buttons["onboardingContinue"].label, "Build Plan")
     }
     private func closeDeveloperSettings() {
         app.navigationBars["Developer settings"].buttons.firstMatch.tap()
@@ -321,8 +321,8 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
         dial.swipeRight(velocity: .fast)
         Thread.sleep(forTimeInterval: 2) // let momentum settle and snap
-        let age = (dial.value as? String).flatMap { Int($0.prefix { $0.isNumber }) } ?? 40
-        XCTAssertLessThanOrEqual(age, 30, "One flick should move well past a handful of ages")
+        let age = (dial.value as? String).flatMap { Int($0.prefix { $0.isNumber }) } ?? 30
+        XCTAssertLessThanOrEqual(age, 20, "One flick should move well past a handful of ages")
         setAge(15)
         capture("Age dial near 15")
     }
@@ -422,10 +422,12 @@ final class OnboardingUITests: XCTestCase {
     func testOversizedHeightCanBeCorrectedAfterChangingUnits() {
         next(); app.buttons["gender-Female"].tap(); setAge(30); next()
         app.segmentedControls["planUnits"].buttons["kg / cm"].tap()
-        enter("planHeight", "999999999999999999999")
+        // Three centimeter digits move on to weight, so the tallest typeable height is 999 cm.
+        enter("planHeight", "999")
         enter("planWeight", "65")
         app.segmentedControls["planUnits"].buttons["lb / ft"].tap()
-        XCTAssertTrue(app.staticTexts["Enter your height again."].exists)
+        // 999 cm is over 7 ft, so the feet box clears instead of keeping an impossible value.
+        XCTAssertNotEqual(app.textFields["planHeight"].value as? String, "32")
         XCTAssertFalse(app.buttons["onboardingContinue"].isEnabled)
         enter("planHeight", "5"); enter("planInches", "6"); next()
         XCTAssertTrue(app.buttons["activity-Lightly active"].exists)

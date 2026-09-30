@@ -9,7 +9,7 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var resultBackStep = 4
     @State private var gender: PlanGender?
-    @State private var age = 40
+    @State private var age = 30
     @State private var height = ""
     @State private var inches = ""
     @State private var weight = ""
@@ -29,7 +29,7 @@ struct OnboardingView: View {
     @State private var confirmingSkip = false
     /// "Just start tracking" still asks the tracking step, then finishes without a goal.
     @State private var skippingPlan = false
-    /// How far the welcome intro has played: 1–3 headline lines, 4 the logo, 5 the buttons.
+    /// How far the welcome intro has played: 1 the logo, 2–4 headline lines, 5 the buttons.
     @State private var introStage = 0
     @State private var saving = false
     @State private var error: String?
@@ -73,7 +73,25 @@ struct OnboardingView: View {
     }
     private var title: String {
         if step == 6 && estimate == nil { return "Start your way" }
-        return ["", "Me Info", "Measurements", "Usual Week", "Set Goal", "What do you want to track?", "Your target"][step]
+        return ["", "Me Info", "Measurements", "Usual Week", "Set Goal", "Tracking", "Your target"][step]
+    }
+    /// When the goal weight would be reached at the typed target: the weight left to lose at 7,700 kcal/kg,
+    /// divided by the daily deficit below today's maintenance. A straight line, so it's framed as "could".
+    private var projection: (weight: String, date: String)? {
+        guard intent == .lose, let estimate, let input, let goal = parsedCalorieGoal else { return nil }
+        let deficit = estimate.maintenance - goal, toLose = input.weightKG - input.goalKG
+        guard deficit > 0, toLose > 0 else { return nil }
+        let days = (toLose * 7700 / deficit).rounded(.up)
+        guard days <= 3 * 365, let date = Calendar.current.date(byAdding: .day, value: Int(days), to: .now) else { return nil }
+        return (WeightInput.text(input.goalKG, in: unit), Self.longDate(date))
+    }
+    /// "November 1st, 2026"
+    private static func longDate(_ date: Date) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US"); formatter.dateFormat = "MMMM"
+        let ordinal = NumberFormatter(); ordinal.locale = Locale(identifier: "en_US"); ordinal.numberStyle = .ordinal
+        let calendar = Calendar.current
+        let day = calendar.component(.day, from: date)
+        return "\(formatter.string(from: date)) \(ordinal.string(from: NSNumber(value: day)) ?? String(day)), \(calendar.component(.year, from: date))"
     }
     /// The target shows grouped ("2,050") and is typed on a number pad, so only its digits count;
     /// grouping separators differ by region.
@@ -143,7 +161,7 @@ struct OnboardingView: View {
                 Button("Yes, skip plan") { Haptics.play(.tap); skipPlan() }.hapticFeel(.none)
                 Button("No, me build plan") { Haptics.play(.tap); advance() }.hapticFeel(.none)
             } message: {
-                Text("Cave Cals help you pick daily calorie target to reach your goal. Take less than one minute.")
+                Text("Cave Cals help pick ideal daily calorie target to reach goal. Take under one minute.")
             }
             .onAppear { loadSavedPlan() }
             .onChange(of: unit) { old, new in
@@ -156,7 +174,11 @@ struct OnboardingView: View {
             }
             // Feet and inches only accept real values, and a finished box moves on to the next one.
             .onChange(of: height) { old, new in
-                guard unit == .pounds else { return }
+                guard unit == .pounds else {
+                    // Adult heights in centimeters have three digits, so the third moves on to weight.
+                    if field == "planHeight", new != old, new.count == 3, new.allSatisfy(\.isNumber) { field = "planWeight" }
+                    return
+                }
                 let clean = ImperialHeightInput.feet(new, previous: old)
                 if clean != new { height = clean }
                 if field == "planHeight", !clean.isEmpty, clean != old { field = "planInches" }
@@ -178,19 +200,30 @@ struct OnboardingView: View {
         }
     }
     private static let introDone = 5
-    private var welcome: some View {
-        VStack(spacing: 28) {
+    @ViewBuilder private var welcome: some View {
+        let content = VStack(spacing: 28) {
+            // The logo takes whatever height the words leave, up to a cap; it never pushes them into the buttons.
+            Image("WelcomeLogo").resizable().scaledToFit()
+                .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 0, maxHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 250)
+                .offset(y: introOffset(stage: 1, by: -700)).opacity(introStage >= 1 ? 1 : 0)
+                .accessibilityHidden(true)
             // All three lines share the largest size that fits on one line each; none wraps or truncates.
             ViewThatFits(in: .horizontal) {
                 headline(size: 60); headline(size: 50); headline(size: 42); headline(size: 34, fitted: false)
             }
+            .layoutPriority(1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("You Eat. App Track. Weight Drop.").accessibilityAddTraits(.isHeader)
-            Image("WelcomeLogo").resizable().scaledToFit().frame(height: 190)
-                .offset(y: introOffset(stage: 4, by: 480)).opacity(introStage >= 4 ? 1 : 0)
-                .accessibilityHidden(true)
-        }.padding(.top, 36).frame(maxWidth: .infinity)
-            .task { await playIntro() }
+        }.frame(maxWidth: .infinity).task { await playIntro() }
+        if dynamicTypeSize.isAccessibilitySize {
+            // Large text scrolls with the buttons below, so the welcome keeps its natural height.
+            content.padding(.top, 16)
+        } else {
+            // Fill the space above the fixed buttons (less the page's 24-pt padding) and center in it,
+            // keeping extra room between the last line and the buttons.
+            content.frame(maxHeight: .infinity).padding(.top, 8).padding(.bottom, 40)
+                .containerRelativeFrame(.vertical) { height, _ in max(0, height - 48) }
+        }
     }
     private func headline(size: CGFloat, fitted: Bool = true) -> some View {
         VStack(spacing: 2) {
@@ -198,8 +231,8 @@ struct OnboardingView: View {
                 let text = Text(line).font(.custom("Schoolbell-Regular", size: size, relativeTo: .largeTitle)).lineLimit(1)
                 Group { if fitted { text.fixedSize() } else { text.minimumScaleFactor(0.4) } }
                     // Lines alternate sides: left, right, left.
-                    .offset(x: introOffset(stage: index + 1, by: index == 1 ? 600 : -600))
-                    .opacity(introStage > index ? 1 : 0)
+                    .offset(x: introOffset(stage: index + 2, by: index == 1 ? 600 : -600))
+                    .opacity(introStage >= index + 2 ? 1 : 0)
             }
         }
     }
@@ -207,19 +240,21 @@ struct OnboardingView: View {
     private func introOffset(stage: Int, by distance: CGFloat) -> CGFloat {
         introStage >= stage || reduceMotion ? 0 : distance
     }
-    /// Plays once per setup: the lines slide in, the logo springs up and settles, then the buttons rise.
+    /// Plays once per setup (about 4 s): the logo drops in and settles, each line slides in and holds long
+    /// enough to read before the next, then the buttons rise.
     private func playIntro() async {
         guard introStage < Self.introDone else { return }
         if isRevising || reduceMotion || ProcessInfo.processInfo.arguments.contains("--uitesting") {
             withAnimation(reduceMotion ? .easeOut(duration: 0.35) : nil) { introStage = Self.introDone }
             return
         }
-        let line = Animation.spring(response: 0.5, dampingFraction: 0.86)
+        let line = Animation.spring(response: 0.75, dampingFraction: 0.86)
         let beats: [(delay: Double, animation: Animation)] = [
-            (0.25, line), (0.3, line), (0.3, line),
-            // Overshoots upward a little, then settles down into place.
-            (0.35, .spring(response: 0.6, dampingFraction: 0.62)),
-            (0.45, .spring(response: 0.5, dampingFraction: 0.9)),
+            // Drops in quickly, a little past its spot, then settles back up.
+            (0.4, .spring(response: 0.5, dampingFraction: 0.7)),
+            // The logo and each line land in about 0.5–0.65 s; the rest of each gap is a pause.
+            (1.0, line), (1.15, line), (1.15, line),
+            (1.05, .spring(response: 0.75, dampingFraction: 0.9)),
         ]
         for (index, beat) in beats.enumerated() {
             try? await Task.sleep(for: .seconds(beat.delay))
@@ -235,8 +270,9 @@ struct OnboardingView: View {
                 genderChoices
                 Text("Age").font(.cave(.headline)).padding(.top, 8)
                 AgeDial(age: $age).accessibilityIdentifier("planAge")
-                switchRow("I need a clinician-led plan", isOn: $clinicianSupport, id: "planClinician").font(.cave(.subheadline))
-                Text("Choose this if pregnant, breastfeeding, or managing an eating disorder or medical nutrition needs.")
+                switchRow("Me need doctor plan", isOn: $clinicianSupport, id: "planClinician", spoken: "I need a clinician-led plan")
+                    .font(.cave(.subheadline))
+                Text("Pick this if pregnant, breastfeeding, or doctor help with eating disorder or special food needs.")
                     .font(.cave(.caption)).foregroundStyle(.secondary)
             }
         case 2:
@@ -249,39 +285,56 @@ struct OnboardingView: View {
                 }
             } else { numberField("Height", text: $height, suffix: "cm", id: "planHeight") }
             numberField("Current weight", text: $weight, suffix: unit.rawValue, id: "planWeight", placeholder: weightPlaceholder)
-                Text("Your answers stay on this device.").font(.cave(.footnote)).foregroundStyle(.secondary)
+            VStack(spacing: 8) {
+                Image("MeasureTape").resizable().scaledToFit().frame(height: 96).accessibilityHidden(true)
+                Text("Answers stay on phone.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    .accessibilityLabel("Your answers stay on this device.")
+            }.frame(maxWidth: .infinity).padding(.top, 12)
         case 3:
             ForEach(PlanActivity.allCases) { value in
-                option(value.rawValue, detail: value.detail, selected: activity == value, id: "activity-\(value.id)") { activity = value }
+                option(value.rawValue, detail: value.detail, image: artwork(value), selected: activity == value, id: "activity-\(value.id)") { activity = value }
             }
         case 4:
             if intent == .lose {
                 numberField("Goal weight", text: $goalWeight, suffix: unit.rawValue, id: "planGoalWeight", placeholder: weightPlaceholder, note: currentWeightNote)
                 Text("Rate").font(.cave(.subheadline)).padding(.bottom, -8)
                 ForEach([0.25, 0.5, 0.75], id: \.self) { speed in
-                    option(paceTitle(speed), detail: speed == 0.25 ? "An easier place to start" : speed == 0.5 ? "A moderate pace" : "A larger daily change", selected: pace == speed, id: "pace-\(speed)") { pace = speed }
+                    option(paceTitle(speed), detail: speed == 0.25 ? "An easier place to start" : speed == 0.5 ? "A moderate pace" : "A larger daily change",
+                           image: speed == 0.25 ? "PaceTurtle" : speed == 0.5 ? "PaceDog" : "PaceRabbit",
+                           selected: pace == speed, id: "pace-\(speed)") { pace = speed }
                 }
                 Text("We’ll keep the target within sensible limits. Your actual pace may be slower.").font(.cave(.footnote)).foregroundStyle(.secondary)
             } else { Text("We’ll estimate a target to keep your weight steady.").foregroundStyle(.secondary) }
         case 5:
-            Text("Calories are always included. Pick what else works for you.").foregroundStyle(.secondary)
+            Text("(Calories always tracked)").foregroundStyle(.secondary)
             VStack(spacing: 0) {
-                switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight")
+                switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight") {
+                    Image("TrackWeightScale").resizable().scaledToFit().frame(width: 44, height: 44)
+                }.padding(.vertical, 10)
                 Divider()
-                switchRow("Track macros", isOn: $trackMacros, id: "planTrackMacros")
+                switchRow("Track macros", isOn: $trackMacros, id: "planTrackMacros") {
+                    // The same protein/carbs/fat glyphs as the Home summary.
+                    HStack(spacing: 10) {
+                        ForEach([CaveGlyph.protein, .carbs, .fat], id: \.self) { CaveIcon($0, size: 32) }
+                    }.foregroundStyle(Color.caveOrange)
+                }.padding(.vertical, 10)
             }.padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
             Text("You can change these anytime in About You.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         case 6:
             if let estimate {
-                VStack(spacing: 2) {
-                    Text("Daily calories").foregroundStyle(.secondary)
-                    TextField("Calories", text: $calorieGoal).keyboardType(.numberPad).focused($field, equals: "planCalories")
-                        .font(.custom("Schoolbell-Regular", size: 58, relativeTo: .largeTitle)).multilineTextAlignment(.center)
-                        .accessibilityLabel("Daily calorie target").accessibilityIdentifier("planCalories")
-                        .selectValueOnFocus(identifier: "planCalories")
-                    Text("Tap to adjust").font(.cave(.caption)).foregroundStyle(.secondary)
-                }.padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 14)
+                HStack(spacing: 10) {
+                    Image("TargetArt").resizable().scaledToFit().frame(width: 96, height: 96).accessibilityHidden(true)
+                    VStack(spacing: 2) {
+                        Text("Daily calories").foregroundStyle(.secondary)
+                        TextField("Calories", text: $calorieGoal).keyboardType(.numberPad).focused($field, equals: "planCalories")
+                            .font(.custom("Schoolbell-Regular", size: 58, relativeTo: .largeTitle)).multilineTextAlignment(.center)
+                            .accessibilityLabel("Daily calorie target").accessibilityIdentifier("planCalories")
+                            .selectValueOnFocus(identifier: "planCalories")
+                        Text("Tap to adjust").font(.cave(.caption)).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity)
+                }.padding(.leading, 16).padding(.trailing, 40).padding(.top, 16).padding(.bottom, 14)
                     .frame(maxWidth: .infinity).background(Color.caveOrange.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
                     // The whole card opens the number with it selected, so typing replaces it.
                     .contentShape(RoundedRectangle(cornerRadius: 22))
@@ -289,6 +342,11 @@ struct OnboardingView: View {
                 if !validStep {
                     Text("Enter \(Int(gender?.minimumCalories ?? 1500).formatted())–6,000 calories, or go back to change your plan.")
                         .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planTargetValidation")
+                } else if let projection {
+                    (Text("Based on your current weight and pace, you could weigh \(projection.weight) \(unit.rawValue) by ")
+                        + Text(projection.date).underline().foregroundStyle(Color.caveOrange) + Text("."))
+                        .font(.cave(.title3)).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("planProjection")
                 }
                 if estimate.paceLimited { Text("We eased the pace to keep your starting target higher.").font(.cave(.subheadline)) }
                 Text("An estimate, not a promise. Track for a few weeks and adjust with your progress.").font(.cave(.subheadline)).foregroundStyle(.secondary)
@@ -337,7 +395,9 @@ struct OnboardingView: View {
                 let selected = gender == value
                 Button { gender = value } label: {
                     VStack(spacing: 8) {
-                        Image(artwork(value)).resizable().scaledToFit().frame(height: 76).accessibilityHidden(true)
+                        // The question mark fills its art edge to edge, so it's inset to sit smaller than the people.
+                        Image(artwork(value)).resizable().scaledToFit()
+                            .padding(value == .undisclosed ? 12 : 0).frame(height: 76).accessibilityHidden(true)
                         Text(value.title).foregroundStyle(Color.primary)
                             .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -352,6 +412,7 @@ struct OnboardingView: View {
                     .accessibilityAddTraits(selected ? .isSelected : []).accessibilityIdentifier("gender-\(value.id)")
             }
         }.fixedSize(horizontal: false, vertical: true)
+            .modifier(FlyInFromLeading())
     }
     private func artwork(_ gender: PlanGender) -> String {
         switch gender { case .male: return "SetupMan"; case .female: return "SetupWoman"; default: return "SetupPreferNotToSay" }
@@ -372,14 +433,15 @@ struct OnboardingView: View {
             } else {
                 Button { advance() } label: {
                     HStack(spacing: 10) {
-                        Text(step == 0 ? "Me Build Plan" : step == 6 ? (isRevising ? "Save my plan" : "Let’s go") : skippingPlan ? "Let’s go" : "Continue")
+                        Text(step == 0 ? "Build Plan" : step == 6 ? (isRevising ? "Save my plan" : "Let’s go") : skippingPlan ? "Let’s go" : "Continue")
                             .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         if step == 0 { CaveIcon(.arrowRight, size: 22).accessibilityHidden(true) }
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.hapticButtonStyle(.borderedProminent).hapticFeel(step == 6 || skippingPlan ? .success : .tap).disabled(!validStep || saving).accessibilityIdentifier("onboardingContinue")
                 if step == 0 && !isRevising {
-                    Button("Just start tracking") { confirmingSkip = true }.frame(minHeight: 44).accessibilityIdentifier("skipGoal")
+                    Button("Just start tracking") { confirmingSkip = true }.frame(minHeight: 44).padding(.top, 6)
+                        .accessibilityIdentifier("skipGoal")
                 }
                 if step == 0 && isRevising && weights.caloriePlan != nil {
                     Button("Clear my saved answers", role: .destructive) { confirmingClear = true }
@@ -387,6 +449,8 @@ struct OnboardingView: View {
                 }
             }
         }.font(.cave(.body)).padding(.horizontal, 24).padding(.vertical, 12)
+            // A little more room above the welcome's Build Plan button.
+            .padding(.top, step == 0 ? 8 : 0)
             .frame(maxWidth: 560).frame(maxWidth: .infinity).background(.regularMaterial)
             // The welcome intro brings the buttons and their panel up last.
             .offset(y: step == 0 ? introOffset(stage: Self.introDone, by: 360) : 0)
@@ -405,31 +469,55 @@ struct OnboardingView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(label)
                     Spacer(minLength: 8)
-                    if let note { Text(note).foregroundStyle(Color.caveOrange).accessibilityIdentifier("\(id)Note") }
+                    // Inset to line up with the unit inside the box below.
+                    if let note { Text(note).foregroundStyle(Color.caveOrange).padding(.trailing, 16).accessibilityIdentifier("\(id)Note") }
                 }.font(.cave(.subheadline))
             }
             HStack {
                 TextField(placeholder, text: text).keyboardType(decimal ? .decimalPad : .numberPad).focused($field, equals: id)
                     .font(.cave(.title)).accessibilityLabel(label.isEmpty ? "Height in inches" : label).accessibilityIdentifier(id)
+                    // Tapping a filled box (or being moved into it) selects its value so typing replaces it.
+                    .selectValueOnFocus(identifier: id)
                 Text(suffix).foregroundStyle(.secondary)
             }.padding(16).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         }
     }
     /// Scroll views swallow quick taps on a bare switch, so the whole row flips it.
-    private func switchRow(_ title: String, isOn: Binding<Bool>, id: String) -> some View {
+    /// `spoken` gives VoiceOver plain wording when the visible title is caveman talk.
+    private func switchRow(_ title: String, isOn: Binding<Bool>, id: String, spoken: String? = nil) -> some View {
+        switchRow(title, isOn: isOn, id: id, spoken: spoken) { EmptyView() }
+    }
+    /// `art` sits under the title (decorative; VoiceOver reads only the switch).
+    private func switchRow<Art: View>(_ title: String, isOn: Binding<Bool>, id: String, spoken: String? = nil,
+                                      @ViewBuilder art: () -> Art) -> some View {
         Button { isOn.wrappedValue.toggle() } label: {
             HStack {
-                Text(title).foregroundStyle(Color.primary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).foregroundStyle(Color.primary)
+                    art().accessibilityHidden(true)
+                }
                 Spacer(minLength: 8)
                 Toggle(title, isOn: isOn).labelsHidden().allowsHitTesting(false)
             }.frame(minHeight: 44).contentShape(Rectangle())
         }.hapticButtonStyle(.plain).hapticFeel(.selection)
-            .accessibilityRepresentation { Toggle(title, isOn: isOn) }
+            .accessibilityRepresentation { Toggle(spoken ?? title, isOn: isOn) }
             .accessibilityIdentifier(id)
     }
-    private func option(_ title: String, detail: String? = nil, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+    private func artwork(_ activity: PlanActivity) -> String {
+        switch activity {
+        case .low: return "ActivitySitting"
+        case .light: return "ActivityLight"
+        case .moderate: return "ActivityActive"
+        case .high: return "ActivityVeryActive"
+        }
+    }
+    private func option(_ title: String, detail: String? = nil, image: String? = nil, selected: Bool, id: String,
+                        action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 14) {
+                if let image {
+                    Image(image).resizable().scaledToFit().frame(width: 48, height: 48).accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 3) { Text(title); if let detail { Text(detail).font(.cave(.caption)).foregroundStyle(.secondary) } }
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.caveOrange : .secondary)
@@ -445,6 +533,13 @@ struct OnboardingView: View {
     private func changeStep(_ next: Int) {
         field = nil; error = nil
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = next }
+        // Measurements and Set Goal open with their first box ready for typing (after the step slides in).
+        let first = next == 2 ? "planHeight" : next == 4 && intent == .lose ? "planGoalWeight" : nil
+        guard let first else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            if step == next && field == nil { field = first }
+        }
     }
     private func advance() {
         guard validStep else { return }
@@ -516,7 +611,7 @@ struct OnboardingView: View {
     /// Starts the calculator fresh; the current calorie goal and weigh-ins are untouched.
     private func clearSavedAnswers() {
         guard weights.forgetCaloriePlan() else { error = weights.error; return }
-        gender = nil; age = 40; height = ""; inches = ""; weight = ""; goalWeight = ""
+        gender = nil; age = 30; height = ""; inches = ""; weight = ""; goalWeight = ""
         activity = nil; intent = .lose; pace = 0.25; clinicianSupport = false; calorieGoal = ""
     }
     private func setHeight(_ cm: Double, unit: WeightUnit) {
@@ -535,6 +630,19 @@ struct OnboardingView: View {
             let cm = old == .kilograms ? h : (h * 12 + (WeightUnit.parse(inches) ?? 0)) * 2.54
             setHeight(cm, unit: new)
         }
+    }
+}
+
+/// Slides content in together from the leading side each time it appears; Reduce Motion fades it in.
+private struct FlyInFromLeading: ViewModifier {
+    @State private var shown = ProcessInfo.processInfo.arguments.contains("--uitesting")
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        content.offset(x: shown || reduceMotion ? 0 : -500).opacity(shown ? 1 : 0)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(reduceMotion ? .easeOut(duration: 0.25) : .spring(response: 0.45, dampingFraction: 0.85)) { shown = true }
+            }
     }
 }
 
