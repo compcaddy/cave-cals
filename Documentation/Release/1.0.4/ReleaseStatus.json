@@ -1,0 +1,21 @@
+{
+  "appId": "6809208501",
+  "version": "1.0.4",
+  "buildNumber": "1",
+  "buildId": "c6ae0929-55c7-45af-a63e-3cd6b30b1a44",
+  "uploadedDate": "2026-09-27T09:34:18-07:00",
+  "processingState": "VALID",
+  "internalBuildState": "IN_BETA_TESTING",
+  "expired": false,
+  "usesNonExemptEncryption": false,
+  "groups": [
+    {
+      "id": "0aa5b575-10c4-4ef9-9cc7-4a50257b7816",
+      "name": "Internal Testers",
+      "membership": "explicit"
+    }
+  ],
+  "ownerTesterAccessVerified": true,
+  "appStoreReviewSubmitted": false,
+  "publiclyReleased": false
+}

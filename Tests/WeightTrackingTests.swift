@@ -103,22 +103,14 @@ import XCTest
         XCTAssertFalse(store.save(kilograms: 80, date: date(), now: date()))
         XCTAssertTrue(store.records.isEmpty); XCTAssertNotNil(store.error)
     }
-    func testChartUsesOnlyRecordedDaysAndMonthlyAverages() {
+    func testProgressWeightChartUsesRecordedDaysAndWeeklyAverages() {
         let records = [WeightRecord(date: date(2026, 8, 1), kilograms: 90), WeightRecord(date: date(2026, 9, 16), kilograms: 80), WeightRecord(date: date(), kilograms: 82)]
-        let weekly = WeightChartRange.week.points(records, endingAt: date(), calendar: calendar)
-        XCTAssertEqual(weekly.count, 2)
-        XCTAssertEqual(weekly.map(\.kilograms), [80, 82])
-        // A chart opened earlier today must include a weigh-in saved later today.
-        XCTAssertEqual(WeightChartRange.week.points(records, endingAt: date(2026, 9, 18, 9), calendar: calendar).count, 2)
-        let yearly = WeightChartRange.year.points(records, endingAt: date(), calendar: calendar)
-        XCTAssertEqual(yearly.map(\.kilograms), [90, 81]); XCTAssertEqual(yearly.map(\.count), [1, 2])
-        let previousYear = WeightChartRange.year.interval(endingAt: date(2025, 9, 18), calendar: calendar)
-        let currentYear = WeightChartRange.year.interval(endingAt: date(), calendar: calendar)
-        XCTAssertEqual(previousYear.end, currentYear.start)
-        let lateSeptember = WeightRecord(date: date(2025, 9, 30), kilograms: 85)
-        XCTAssertEqual(WeightChartRange.year.points([lateSeptember], endingAt: date(2025, 9, 18), calendar: calendar).count, 1)
-        let dst = WeightChartRange.week.interval(endingAt: date(2026, 3, 10), calendar: calendar)
-        XCTAssertEqual(calendar.dateComponents([.day], from: dst.start, to: dst.end).day, 7)
+        let data = ProgressData(drafts: [], records: records, now: date(), calendar: calendar)
+        let weekly = data.buckets(.week, containing: date())
+        XCTAssertEqual(weekly.compactMap(\.weight), [80, 82])
+        let yearly = data.buckets(.year, containing: date()).filter { $0.weight != nil }
+        XCTAssertEqual(yearly.compactMap(\.weight), [90, 81])
+        XCTAssertEqual(yearly.map(\.weighIns), [1, 2])
     }
     func testHealthDeniedKeepsLocalLoggingWorking() async {
         let health = FakeWeightHealth(); health.authorized = false

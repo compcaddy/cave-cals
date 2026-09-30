@@ -13,7 +13,7 @@ struct CaptureCancelButton: View {
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.vertical, 4)
         .background(Color.caveSurface)
@@ -59,7 +59,7 @@ struct AIInputSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            HapticList {
                 if result == nil {
                     if mode == .photo {
                         Section { photoControls }
@@ -133,7 +133,7 @@ struct AIInputSheet: View {
                     CaveIcon(.plus, size: 18).rotationEffect(.degrees(45)).foregroundStyle(.white)
                         .frame(width: 36, height: 36).background(.black.opacity(0.65), in: Circle())
                         .frame(width: 44, height: 44)
-                }.buttonStyle(.plain).accessibilityLabel("Remove photo").disabled(working || preparingPhoto)
+                }.hapticButtonStyle(.plain).accessibilityLabel("Remove photo").disabled(working || preparingPhoto)
             } else if let cameraError {
                 VStack(spacing: 16) {
                     CaveIcon(.camera, size: 56)
@@ -161,7 +161,7 @@ struct AIInputSheet: View {
             } label: {
                 Text(capturing ? "Capturing…" : image == nil ? "Capture Meal" : "Scan and Analyze")
                     .frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(.borderedProminent)
+            }.hapticButtonStyle(.borderedProminent)
                 .disabled(preparingPhoto || capturing || (media == nil && !cameraReady))
                 .accessibilityIdentifier("aiAnalyze")
             PhotosPicker(selection: $photo, matching: .images, photoLibrary: .shared()) {
@@ -206,7 +206,7 @@ struct AIInputSheet: View {
                 Text(startingRecording ? "Starting microphone…" : recorder.recording ? "Done Talking" : media != nil ? "Analyze Recording" : "Talk Now")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.borderedProminent)
+            .hapticButtonStyle(.borderedProminent)
             .tint(recorder.recording ? .red : .caveOrange)
             .disabled(startingRecording)
             .accessibilityIdentifier("aiRecord")
@@ -252,8 +252,9 @@ struct AIInputSheet: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .hapticButtonStyle(.borderedProminent)
                     .tint(.caveOrange)
+                    .hapticFeel(.success)
                     .disabled(remainingDrafts.isEmpty || !remainingDrafts.allSatisfy(\.isValid))
                     .accessibilityIdentifier("aiAdd")
                     .accessibilityLabel("Add All")
@@ -268,7 +269,7 @@ struct AIInputSheet: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .buttonStyle(.bordered)
+                    .hapticButtonStyle(.bordered)
                     .tint(.caveOrange)
                     .disabled(drafts.isEmpty || !drafts.allSatisfy(\.isValid))
                     .accessibilityIdentifier("aiSaveMeal")
@@ -299,7 +300,7 @@ struct AIInputSheet: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .hapticButtonStyle(.plain)
             .accessibilityIdentifier("scanDetailsToggle")
             .accessibilityLabel("View Scan Details")
             .accessibilityValue(showScanDetails ? "Expanded" : "Collapsed")

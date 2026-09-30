@@ -185,6 +185,29 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     }
 }
 
+#if DEBUG && targetEnvironment(simulator)
+/// Isolated, delayed API results for the footer/search UI regression tests. Never uses the network.
+struct SearchLayoutFixture: FoodSearchService {
+    static var isEnabled: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitesting") && arguments.contains("--search-layout-fixture")
+    }
+    static var entries: [EntryDraft] {
+        (1...24).map { index in
+            EntryDraft(name: index == 24 ? "Zesty testbowl" : String(format: "Home row %02d", index),
+                       calories: 80, timestamp: Date().addingTimeInterval(Double(index - 24) * 60))
+        }
+    }
+    func search(query: String) async throws -> [FoodResult] {
+        try await Task.sleep(for: .seconds(1))
+        return (1...32).map { index in
+            FoodResult(id: "fatsecret:layout-\(index)", name: String(format: "A Testbowl option %02d", index),
+                       calories: 100, servingDescription: "1 bowl")
+        }.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+}
+#endif
+
 @MainActor @Observable final class FoodSearchState {
     var results: [FoodResult] = []
     var loading = false

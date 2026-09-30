@@ -6,7 +6,7 @@ import CoreData
     @UIApplicationDelegateAdaptor(QuickActionAppDelegate.self) private var appDelegate
     @State private var store: AppStore?
     @State private var failure: String?
-    @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+    @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots") || ProgressPreferences.isPreview)
     @State private var nutritionHealth: NutritionHealthSync
     init() {
         let navFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 20)!)
@@ -25,15 +25,30 @@ import CoreData
             _weights = State(initialValue: preview)
         }
         #endif
-        let nutrition = NutritionHealthSync(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots"))
+        let nutrition = NutritionHealthSync(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots") || ProgressPreferences.isPreview)
         _nutritionHealth = State(initialValue: nutrition)
         do {
             var screenshots = false
             #if DEBUG && targetEnvironment(simulator)
             screenshots = ProcessInfo.processInfo.arguments.contains("--screenshots")
             #endif
-            let store = try Persistence.make(inMemory: screenshots || ProcessInfo.processInfo.arguments.contains("--uitesting"))
+            let store = try Persistence.make(inMemory: screenshots || ProcessInfo.processInfo.arguments.contains("--uitesting") || ProgressPreferences.isPreview)
             #if DEBUG && targetEnvironment(simulator)
+            if SearchLayoutFixture.isEnabled {
+                SearchLayoutFixture.entries.forEach { store.context.insert(CalorieEntry(draft: $0)) }
+                store.context.insert(SavedMeal(name: "Testbowl meal", items: [EntryDraft(name: "Rice", calories: 200)]))
+                store.commit()
+            }
+            if ProcessInfo.processInfo.arguments.contains("--progress-preview") {
+                store.saveGoal(2100)
+                ProgressPreview.drafts().forEach { draft in
+                    // As if each was logged when eaten, so reminder learning has a history too.
+                    let entry = CalorieEntry(draft: draft); entry.createdAt = draft.timestamp
+                    store.context.insert(entry)
+                }
+                store.commit()
+                _weights = State(initialValue: ProgressPreview.weights())
+            }
             if screenshots {
                 store.saveGoal(2100)
                 for (name, calories, minutes) in [("Scrambled eggs", 180.0, 150), ("Sourdough toast", 160.0, 148), ("Greek yogurt", 130.0, 45), ("Blueberries", 85.0, 43)] {
@@ -59,7 +74,7 @@ import CoreData
                let goal = Double(arguments[index + 1]) { store.saveGoal(goal) }
             #endif
             Persistence.shared = store
-            store.entriesDidChange = { nutrition.entriesChanged($0) }
+            store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0) }
             _store = State(initialValue: store)
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
@@ -70,6 +85,8 @@ import CoreData
             if let store {
                 RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights).environment(nutritionHealth)
                     .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
+                    // Every button taps back; explicit styles use `.hapticButtonStyle(_:)` to keep it.
+                    .hapticButtonStyle(.automatic)
                     .onAppear { appearance.apply() }
                     .onChange(of: appearance) { _, value in value.apply() }
                     .onOpenURL { LoggingActionRouter.shared.open(url: $0) }
@@ -81,6 +98,7 @@ import CoreData
 }
 
 struct RootView: View {
+    @State private var showingOnboardingPaywall = false
     @Environment(AppStore.self) private var store
     @Environment(\.scenePhase) private var phase
     @Environment(WeightStore.self) private var weights
@@ -88,14 +106,21 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.profile == nil { OnboardingView() } else { MainView() }
+            if showingOnboardingPaywall {
+                OnboardingUpgradeView { showingOnboardingPaywall = false }
+            } else if store.profile == nil {
+                OnboardingView(onCompleted: { showingOnboardingPaywall = true })
+            } else {
+                MainView()
+            }
         }
         .alert("Couldn’t save changes", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-            Button("OK") { store.error = nil }
+            Button("OK") { Haptics.play(.tap); store.error = nil }.hapticFeel(.none)
         } message: { Text(store.error ?? "") }
         .task { await store.checkCloud(); await weights.syncHealth(); await nutritionHealth.sync(store.entries) }
         .task { await AISubscriptions.listenForPurchases() }
-        .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth() } } }
+        .task { LogReminders.shared.entriesChanged(store.entries); await LogReminders.shared.refreshAuthorization() }
+        .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth(); await LogReminders.shared.refreshAuthorization() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSPersistentCloudKitContainer.eventChangedNotification)) { store.cloudEvent($0) }
@@ -108,11 +133,13 @@ struct SetupView: View {
     @State private var goal: String
     @FocusState private var editingGoal: Bool
     let isAdjustingGoal: Bool
+    var saveAction: ((Double?) -> Bool)?
     var onSaved: (() -> Void)?
     @ScaledMetric(relativeTo: .title) private var goalFontSize = 76.0
-    init(goal: Double? = 2100, isAdjustingGoal: Bool = false, onSaved: (() -> Void)? = nil) {
+    init(goal: Double? = 2100, isAdjustingGoal: Bool = false, saveAction: ((Double?) -> Bool)? = nil, onSaved: (() -> Void)? = nil) {
         _goal = State(initialValue: goal.map(Self.formattedGoal) ?? "")
         self.isAdjustingGoal = isAdjustingGoal
+        self.saveAction = saveAction
         self.onSaved = onSaved
     }
     var body: some View {
@@ -167,7 +194,7 @@ struct SetupView: View {
                                     CaveIcon(.arrowRight, size: 22).accessibilityHidden(true)
                                 }
                             }.font(.cave(.title3).weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 14)
-                        }.buttonStyle(.borderedProminent)
+                        }.hapticButtonStyle(.borderedProminent).hapticFeel(.success)
                         Button("Me have no calorie goal") { saveGoal(nil) }
                             .font(.cave(.footnote)).frame(minHeight: 44)
                             .accessibilityIdentifier("skipGoal")
@@ -184,7 +211,7 @@ struct SetupView: View {
                 }
                 .toolbar {
                     if isAdjustingGoal {
-                        ToolbarItem(placement: .cancellationAction) { Button("Me Go Back") { dismiss() } }
+                        ToolbarItem(placement: .cancellationAction) { Button("Me Go Back") { dismiss() }.hapticButtonStyle(.automatic) }
                     }
                 }
         }
@@ -212,7 +239,7 @@ struct SetupView: View {
     }
 
     private func saveGoal(_ value: Double?) {
-        if store.saveGoal(value) {
+        if saveAction?(value) ?? store.saveGoal(value) {
             if isAdjustingGoal { dismiss() }
             onSaved?()
         }

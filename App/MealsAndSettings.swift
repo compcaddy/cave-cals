@@ -7,20 +7,55 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var adjustingGoal = false
     @State private var planningCalories = false
-    @State private var forgettingPlan = false
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
     private var planTitle: String { weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan" }
 
+    /// Under the goal: the saved weight goal (pencil reruns the calculator), or "Help me decide" for a hand-set goal.
+    @ViewBuilder private var goalFooter: some View {
+        if store.profile?.dailyGoal != nil {
+            if let plan = weights.caloriePlan {
+                Button { planningCalories = true } label: {
+                    HStack(spacing: 6) {
+                        Text(planSummary(plan)).foregroundStyle(Color.primary)
+                        CaveIcon(.pencil, size: 18).foregroundStyle(Color.caveOrange)
+                    }.frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .hapticButtonStyle(.plain).font(.cave(.subheadline))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(planSummary(plan))
+                .accessibilityHint("Recalculates your daily calorie goal")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("caloriePlan")
+            } else {
+                Button("Help me decide") { planningCalories = true }
+                    .hapticButtonStyle(.plain).font(.cave(.subheadline)).foregroundStyle(Color.caveOrange)
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                    .accessibilityIdentifier("caloriePlan")
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+    private func planSummary(_ plan: SavedCaloriePlan) -> String {
+        let unit = weights.unit
+        let goal = unit.display(plan.input.goalKG).formatted(.number.precision(.fractionLength(0)))
+        if plan.input.intent == .maintain { return "Goal: stay around \(goal) \(unit.rawValue)" }
+        // Same rounding as the calculator's pace choices.
+        let pace = unit.display(plan.input.weeklyLossKG).formatted(.number.precision(.fractionLength(0...(unit == .kilograms ? 2 : 1))))
+        return "Goal: \(goal) \(unit.rawValue), about \(pace) \(unit.rawValue)/week"
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
+                // With no goal yet, the calculator leads About You. Once a goal exists it lives under the goal.
+                if store.profile?.dailyGoal == nil {
                 Section {
                     Button { planningCalories = true } label: {
                         HStack(spacing: 12) {
                             CaveIcon(.meals, size: 26).foregroundStyle(Color.caveOrange)
-                            Text(planTitle).foregroundStyle(Color.primary)
+                            Text(planTitle).foregroundStyle(Color.caveOrange)
                             Spacer(minLength: 8)
                             CaveIcon(.chevronRight, size: 16).foregroundStyle(Color.secondary)
                         }.contentShape(Rectangle())
@@ -29,28 +64,28 @@ struct ProfileView: View {
                     .accessibilityLabel(planTitle)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("caloriePlan")
-                    if weights.caloriePlan != nil {
-                        Button("Forget plan details", role: .destructive) { forgettingPlan = true }
-                            .foregroundStyle(.red).accessibilityIdentifier("forgetCaloriePlan")
-                    }
+                }
                 }
                 Section {
                     Button { adjustingGoal = true } label: {
                         HStack(spacing: 12) {
                             Text("Daily calorie goal").foregroundStyle(Color.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
-                            Text(store.profile?.dailyGoal?.calorieText ?? "Not set")
-                                .font(.cave(.title3))
-                                .foregroundStyle(Color.primary)
-                                .fixedSize(horizontal: true, vertical: false)
+                            HStack(spacing: 6) {
+                                CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                                Text(store.profile?.dailyGoal?.calorieText ?? "Set")
+                                    .font(.cave(.title3))
+                                    .foregroundStyle(Color.caveOrange)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            .padding(.trailing, 8)
                         }.contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("adjustGoal")
                     .accessibilityLabel("Daily calorie goal")
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
-                }
+                } footer: { goalFooter }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor)
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
@@ -58,17 +93,11 @@ struct ProfileView: View {
             // Every row, whether a button, switch or link, shares one height; whole rows are the tap targets.
             .environment(\.defaultMinListRowHeight, 60)
             .navigationTitle("About You").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) } }
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
             }
             .fullScreenCover(isPresented: $planningCalories) { OnboardingView(isRevising: true) }
-            .alert("Forget plan details?", isPresented: $forgettingPlan) {
-                Button("Cancel", role: .cancel) { }
-                Button("Forget details", role: .destructive) { weights.forgetCaloriePlan() }
-            } message: {
-                Text("Removes your saved age, gender, height, and plan answers. Your calorie goal and weigh-ins stay.")
-            }
             .sheet(item: $weightEditor) { route in
                 WeightEditorSheet(record: route.record, unit: weights.unit)
             }
@@ -88,28 +117,41 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAdd = true
+    @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDay = true
+    @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
 
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
                 if AIConfiguration.developerSettingsAvailable {
-                    Section { NavigationLink("Developer settings") { AIDeveloperSettings() } }
+                    Section { NavigationLink("Developer settings") { AIDeveloperSettings().hapticOnPush() } }
                 }
                 Section("Appearance") {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .hapticSelection(on: appearance)
                     .accessibilityIdentifier("appearancePicker")
                 }
                 Section {
-                    Toggle("Show Quick Add at day start", isOn: $showsHomeQuickAdd)
-                        .accessibilityIdentifier("showHomeQuickAdd")
-                } header: { Text("Home") } footer: {
-                    Text("Shows your top Quick Add foods on Home until you log another way that day.").font(.cave(.caption2))
+                    Toggle("Haptic feedback", isOn: $hapticsEnabled)
+                        .accessibilityIdentifier("hapticFeedback")
+                } footer: {
+                    Text("Taps as you use the app, and a rumble as calories count up after you log food.").font(.cave(.caption2))
                 }
+                Section {
+                    Toggle("Show Quick Start on new days", isOn: $showsHomeQuickAdd)
+                        .accessibilityIdentifier("showHomeQuickAdd")
+                    Toggle("Show “Done eating” button", isOn: $showsFinishDay)
+                        .accessibilityIdentifier("showFinishDay")
+                } header: { Text("Home") } footer: {
+                    Text("Quick Start shows your usual first foods until you log another way that day. “Done eating for today” appears from 6 pm or at 90% of your goal; a day marked done counts as complete in Progress.").font(.cave(.caption2))
+                }
+                LogReminderSettingsSection()
                 AppleHealthSection()
+                SavedNutritionSettingsSection()
                 let hidden = store.activeHiddenQuickAddFoods()
                 if !hidden.isEmpty {
                     Section {
@@ -122,7 +164,7 @@ struct SettingsView: View {
                                 }
                                 Spacer(minLength: 8)
                                 Button("Unhide") { store.unhideQuickAdd(food.id) }
-                                    .buttonStyle(.bordered).tint(.caveOrange)
+                                    .hapticButtonStyle(.bordered).tint(.caveOrange)
                                     .accessibilityLabel("Unhide \(food.name)")
                             }
                         }
@@ -136,6 +178,7 @@ struct SettingsView: View {
                     Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
                     Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device. Food and weigh-ins can optionally be shared to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
+                TellTheTribeSection()
                 Section("About") {
                     Text(appVersionLabel)
                     Link("Powered by fatsecret Platform API", destination: URL(string: "https://platform.fatsecret.com")!)
@@ -147,7 +190,7 @@ struct SettingsView: View {
                 legalLinks
             }.caveScreenBackground()
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) } }
             .navigationDestination(isPresented: $showingPaywall) {
                 AIUpgradePaywall(subscriptions: aiSubscriptions, onDismissRequested: { showingPaywall = false })
             }
@@ -177,6 +220,55 @@ struct SettingsView: View {
     }
 }
 
+/// Rate, share, and feedback links. Rating opens the App Store's write-review page directly (the system
+/// `requestReview` prompt may not appear when someone asks for it).
+private struct TellTheTribeSection: View {
+    var body: some View {
+        Section("Tell the tribe") {
+            Link("Rate Cave Cals", destination: CaveCalsLinks.rate)
+                .accessibilityIdentifier("rateApp")
+            ShareLink(item: CaveCalsLinks.share, subject: Text("Cave Cals"), message: Text("You eat. App track. Weight drop. Try Cave Cals:")) {
+                Text("Share Cave Cals")
+            }
+            .accessibilityIdentifier("shareApp")
+            Link("Send feedback", destination: CaveCalsLinks.feedback)
+                .accessibilityIdentifier("sendFeedback")
+        }
+    }
+}
+
+private struct SavedNutritionSettingsSection: View {
+    @Environment(AppStore.self) private var store
+    @State private var confirmingReset = false
+    @State private var didReset = false
+
+    var body: some View {
+        Section {
+            Button("Reset Saved Nutrition", role: .destructive) { confirmingReset = true }
+                .disabled(store.commonFoodDefaults.isEmpty)
+                .accessibilityIdentifier("resetSavedNutrition")
+        } header: {
+            Text("Saved food nutrition")
+        } footer: {
+            Text(store.commonFoodDefaults.isEmpty
+                 ? (didReset ? "Saved nutrition reset. Your daily logs are unchanged." : "No custom food defaults saved.")
+                 : "Restore built-in calories, serving sizes, and macros for foods you customized with Save as default.")
+                .font(.cave(.caption2))
+        }
+        .alert("Reset saved nutrition?", isPresented: $confirmingReset) {
+            // Alert buttons may skip the haptic button style, so they play their own feel.
+            Button("Cancel", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)
+            Button("Reset", role: .destructive) {
+                Haptics.play(.warning)
+                store.resetSavedNutrition()
+                didReset = true
+            }.hapticFeel(.none)
+        } message: {
+            Text("Removes the custom calories, serving sizes, and macros saved with Save as default on this device. Those foods will use their built-in nutrition for future adds.\n\nYour daily logs, saved meals, barcode foods, goals, and weigh-ins stay unchanged. This cannot be undone.")
+        }
+    }
+}
+
 struct MealRoute: Identifiable {
     let id = UUID()
     var meal: SavedMeal?
@@ -196,13 +288,7 @@ struct MealRoute: Identifiable {
 
     /// A time-of-day name ("Lunch", "Lunch 2") so a new meal can be saved without typing.
     static func suggestedName(existing: [String], at date: Date = Date()) -> String {
-        let base: String
-        switch Calendar.current.component(.hour, from: date) {
-        case 4..<11: base = "Breakfast"
-        case 11..<16: base = "Lunch"
-        case 16..<21: base = "Dinner"
-        default: base = "Snack"
-        }
+        let base = Day.mealName(at: date)
         let taken = Set(existing.map { normalizedFoodName($0) })
         guard taken.contains(normalizedFoodName(base)) else { return base }
         return (2...).lazy.map { "\(base) \($0)" }.first { !taken.contains(normalizedFoodName($0)) }!
@@ -265,7 +351,7 @@ struct NewMealStartSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .combine)
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.55)
         .accessibilityIdentifier(id)
@@ -284,7 +370,7 @@ struct MealEditorSheet: View {
     @State private var initialized = false
     var body: some View {
         NavigationStack {
-            List {
+            HapticList {
                 Section("Meal name") {
                     TextField(suggestedName, text: $name).accessibilityIdentifier("mealName")
                 }
@@ -301,7 +387,7 @@ struct MealEditorSheet: View {
                                     Text(entry.name.isEmpty ? "\(entry.totalCalories.calorieText) calories" : entry.name).foregroundStyle(.primary)
                                     Spacer(); Text(entry.totalCalories.calorieText).foregroundStyle(.secondary)
                                 }.padding(.vertical, 5).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                            }.hapticButtonStyle(.plain).hapticFeel(.selection)
                             .accessibilityLabel("Select \(entry.name.isEmpty ? entry.totalCalories.calorieText + " calories" : entry.name)")
                             .accessibilityAddTraits(selection.contains(entry.id) ? .isSelected : [])
                         }
@@ -313,7 +399,7 @@ struct MealEditorSheet: View {
                                 let all = entries.allSatisfy { selection.contains($0.id) }
                                 Button(all ? "Clear" : "Select All") {
                                     selection = all ? [] : Set(entries.map(\.id))
-                                }
+                                }.hapticFeel(.selection)
                                 .font(.cave(.caption).bold()).foregroundStyle(Color.caveOrange).textCase(nil)
                                 .accessibilityIdentifier("mealSelectAll")
                             }
@@ -349,7 +435,7 @@ struct MealEditorSheet: View {
             }.caveScreenBackground()
             .navigationTitle(route.meal == nil ? "New Meal" : "Edit Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if store.saveMeal(route.meal, name: savedName, items: chosenItems) { dismiss() }
@@ -358,7 +444,7 @@ struct MealEditorSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.caveOrange)
+                    .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success)
                     .disabled(chosenItems.isEmpty)
                 }
             }
@@ -405,7 +491,7 @@ struct MealLinkImportSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 Section {
                     HStack(spacing: 10) {
                         TextField("example.com/recipe", text: $link)
@@ -439,7 +525,7 @@ struct MealLinkImportSheet: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .hapticButtonStyle(.borderedProminent)
                     .disabled(validURL == nil || working)
                     .accessibilityIdentifier("importMeal")
                 }
@@ -459,7 +545,7 @@ struct MealLinkImportSheet: View {
             }
             .navigationTitle("Import Meal")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) } }
             .navigationDestination(isPresented: $showPaywall) {
                 AIUpgradePaywall(
                     subscriptions: subscriptions,
@@ -542,13 +628,13 @@ struct MealFoodPicker: View {
     @State private var addedCount = 0
     var body: some View {
         NavigationStack {
-            List {
+            HapticList {
                 Button { editor = EntryDraft(name: Double(query) == nil ? query : "", calories: Double(query) ?? 0) } label: {
                     Label { Text("Create manual item") } icon: { CaveIcon(.pencil, size: 18) }
                         .foregroundStyle(Color.caveOrange)
                 }
                 Section("Your foods") {
-                    ForEach(FoodHistory.search(query, entries: store.entries)) { food in row(food.draft) }
+                    ForEach(FoodHistory.search(query, entries: store.entries)) { food in row(store.applyingCommonDefault(to: food.draft)) }
                 }
                 Section("Food search") {
                     ForEach(search.results) { food in row(food.draft, detail: food.searchDetail) }
@@ -565,7 +651,7 @@ struct MealFoodPicker: View {
             .toolbar {
                 // The picker stays open so a whole meal can be added in one visit.
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.fontWeight(.semibold).accessibilityIdentifier("mealPickerDone")
+                    Button("Done") { dismiss() }.hapticButtonStyle(.automatic).fontWeight(.semibold).accessibilityIdentifier("mealPickerDone")
                 }
             }
             .task(id: query) { await search.search(query) }
@@ -597,7 +683,7 @@ struct MealAddSheet: View {
     private var meal: SavedMeal? { store.meals.first { $0.id == mealID } }
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 if let meal {
                     Section { ServingControl(value: $factor) }
                     Section("Foods") {
@@ -621,7 +707,7 @@ struct MealAddSheet: View {
             }.caveScreenBackground()
             .navigationTitle(meal?.name ?? "Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if let meal, store.addMeal(meal, factor: factor, date: date) { dismiss() }
@@ -630,7 +716,7 @@ struct MealAddSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.caveOrange)
+                    .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success)
                     .disabled(factor <= 0 || !factor.isFinite || meal == nil)
                 }
             }

@@ -7,8 +7,17 @@ struct AIDeveloperSettings: View {
     @State private var testKey = KeychainValue.read("ai.test.key") ?? ""
     @State private var message: String?
     @State private var busy = false
+    @State private var onboardingPreview: OnboardingPreviewSession?
     var body: some View {
-        Form {
+        HapticForm {
+            Section {
+                Button("Preview onboarding") {
+                    do { onboardingPreview = try OnboardingPreviewSession() }
+                    catch { message = "Couldn’t open the onboarding preview. Please try again." }
+                }.accessibilityIdentifier("previewOnboarding")
+            } header: { Text("Onboarding") } footer: {
+                Text("Try the new-user setup with temporary answers. Your food history, weigh-ins, goals, and settings stay unchanged.")
+            }
             Section {
                 SecureField("DEV_API_TOKEN (optional)", text: $token)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -53,6 +62,12 @@ struct AIDeveloperSettings: View {
             if busy { ProgressView("Loading…") }
             if let message { Section { Text(message).font(.cave(.footnote)) } }
         }.caveScreenBackground().navigationTitle("Developer settings")
+            .fullScreenCover(item: $onboardingPreview) { preview in
+                OnboardingView(isPreview: true)
+                    .environment(preview.store)
+                    .environment(preview.weights)
+                    .modelContainer(preview.store.container)
+            }
     }
     private func saveConnection() {
         do {
@@ -77,5 +92,19 @@ struct AIDeveloperSettings: View {
                 message = "\(mode): \(account.active ? "upgraded access" : "free access"). Connected to \(AIConfiguration.baseURL?.host ?? "backend")."
             } catch { message = error.localizedDescription }
         }
+    }
+}
+
+/// A fresh session per presentation. Never replaces Persistence.shared or the live stores.
+@MainActor final class OnboardingPreviewSession: Identifiable {
+    let id = UUID()
+    let store: AppStore
+    let weights: WeightStore
+
+    init() throws {
+        // In-memory persistence disables CloudKit, widget publication, usage writes,
+        // and saved-food defaults. No Health sync callback is attached to this store.
+        store = try Persistence.make(inMemory: true)
+        weights = WeightStore(inMemory: true)
     }
 }

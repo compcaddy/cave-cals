@@ -103,7 +103,10 @@ private struct WeightFile: Codable {
         return true
     }
 
-    func setTracking(_ enabled: Bool) { var next = data; next.tracking = enabled; _ = persist(next) }
+    @discardableResult func setTracking(_ enabled: Bool) -> Bool {
+        var next = data; next.tracking = enabled
+        return persist(next)
+    }
     func setUnit(_ unit: WeightUnit) { var next = data; next.unit = unit; _ = persist(next) }
     @discardableResult func forgetCaloriePlan() -> Bool {
         var next = data; next.caloriePlan = nil
@@ -204,43 +207,6 @@ private struct WeightFile: Codable {
             return false
         }
     }
-}
-
-enum WeightChartRange: String, CaseIterable, Identifiable {
-    case week = "Week", month = "Month", year = "Year"
-    var id: String { rawValue }
-    func interval(endingAt date: Date, calendar: Calendar = .current) -> DateInterval {
-        let today = calendar.startOfDay(for: date)
-        var end = calendar.date(byAdding: .day, value: 1, to: today)!
-        let start: Date
-        switch self {
-        case .week: start = calendar.date(byAdding: .day, value: -6, to: today)!
-        case .month: start = calendar.date(byAdding: .day, value: -29, to: today)!
-        case .year:
-            let month = calendar.dateInterval(of: .month, for: today)!
-            start = calendar.date(byAdding: .month, value: -11, to: month.start)!
-            // Browsing years must include the entire final month, without gaps between periods.
-            end = month.end
-        }
-        return DateInterval(start: start, end: end)
-    }
-    func points(_ records: [WeightRecord], endingAt date: Date, calendar: Calendar = .current) -> [WeightChartPoint] {
-        let range = interval(endingAt: date, calendar: calendar)
-        let values = records.filter { !$0.deleted && $0.date >= range.start && $0.date < range.end }
-        let groups = Dictionary(grouping: values) {
-            self == .year ? calendar.dateInterval(of: .month, for: $0.date)!.start : calendar.startOfDay(for: $0.date)
-        }
-        return groups.map { day, entries in
-            WeightChartPoint(date: day, kilograms: entries.reduce(0) { $0 + $1.kilograms } / Double(entries.count), count: entries.count)
-        }.sorted { $0.date < $1.date }
-    }
-}
-
-struct WeightChartPoint: Identifiable {
-    var id: Date { date }
-    let date: Date
-    let kilograms: Double
-    let count: Int
 }
 
 // Calendar arithmetic keeps the Sunday–Saturday picker aligned across DST and year boundaries.

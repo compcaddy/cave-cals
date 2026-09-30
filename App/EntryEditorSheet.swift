@@ -20,7 +20,7 @@ struct EntryEditorSheet: View {
     private let servingSizes = ["1 serving", "1 piece", "1 cup", "1/2 cup", "1 tbsp", "1 tsp", "1 oz", "100 g"]
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 Section {
                     Group {
                     VStack(alignment: .leading, spacing: 8) {
@@ -43,7 +43,7 @@ struct EntryEditorSheet: View {
                                         Spacer()
                                         CaveIcon(.arrowUpLeft, size: 22).foregroundStyle(.secondary)
                                     }.padding(.vertical, 12)
-                                }.buttonStyle(.borderless).accessibilityLabel("Use name \(name)")
+                                }.hapticButtonStyle(.borderless).accessibilityLabel("Use name \(name)")
                             }
                         }
                     }
@@ -70,7 +70,7 @@ struct EntryEditorSheet: View {
                                             servingSizeFocused = false
                                         } label: {
                                             Text(size).frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
-                                        }.buttonStyle(.borderless)
+                                        }.hapticButtonStyle(.borderless)
                                     }
                                 }
                             }.frame(height: 176).padding(.top, 8)
@@ -97,7 +97,7 @@ struct EntryEditorSheet: View {
                                 } label: {
                                     Text(draft.timestamp, format: .dateTime.hour().minute())
                                         .foregroundStyle(.primary).frame(minHeight: 32)
-                                }.buttonStyle(.plain).accessibilityLabel("Time").accessibilityValue(draft.timestamp.formatted(date: .omitted, time: .shortened))
+                                }.hapticButtonStyle(.plain).accessibilityLabel("Time").accessibilityValue(draft.timestamp.formatted(date: .omitted, time: .shortened))
                             }
                         }
                         if let food = changedCommonFood, onSaveComponent == nil {
@@ -134,14 +134,14 @@ struct EntryEditorSheet: View {
                     DatePicker("Time", selection: timeOfDay, in: ...Date(), displayedComponents: [.hourAndMinute])
                         .datePickerStyle(.wheel).labelsHidden().padding(.horizontal)
                         .navigationTitle("Time").navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTime = false } } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTime = false }.hapticButtonStyle(.automatic) } }
                 }.presentationDetents([.height(300)]).presentationDragIndicator(.visible)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         if let onCancel { onCancel() } else { dismiss() }
-                    }
+                    }.hapticButtonStyle(.automatic)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) {
@@ -149,11 +149,11 @@ struct EntryEditorSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.caveOrange)
+                    .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success)
                     .fontWeight(.semibold).disabled(!draft.isValid)
                     .accessibilityIdentifier("saveEntry")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }.hapticButtonStyle(.automatic) }
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
             .onChange(of: changedCommonFood?.id) { _, _ in saveAsCommonDefault = false }
@@ -332,7 +332,7 @@ struct ServingControl: View {
                         } label: {
                             Text(preset.formatted(.number.precision(.fractionLength(0...2))))
                                 .frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
-                        }.buttonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
+                        }.hapticButtonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
                     }
                 }
             }.caveScreenBackground().frame(height: 176).padding(.top, 8)

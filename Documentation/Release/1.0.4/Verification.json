@@ -1,0 +1,28 @@
+{
+  "version": "1.0.4",
+  "build": "1",
+  "verifiedAt": "2026-09-27",
+  "testResult": "Passed",
+  "passedTests": 120,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "device": {
+    "architecture": "arm64",
+    "deviceId": "25719689-017E-47E7-A375-7CFD49C82CCA",
+    "deviceName": "iPhone 17",
+    "modelName": "iPhone 17",
+    "osBuildNumber": "23A8464",
+    "osVersion": "26.0.1",
+    "platform": "iOS Simulator"
+  },
+  "resultBundle": "/Users/phil/Library/Developer/XcodeBuildMCP/workspaces/CaveCals-581a17f8623d/result-bundles/test_sim_2026-09-27T16-21-52-927Z_pid61538_e4f76708.xcresult",
+  "visualReview": [
+    "Weekly Recap cards on iPhone",
+    "One-page Weekly Recap PDF with Six-Week Trends"
+  ],
+  "pdfPages": 1,
+  "limits": [
+    "No further iPad testing, at owner request",
+    "Physical printer output, camera, App Attest, CloudKit production sync, Health export and purchases not verified by this simulator run"
+  ]
+}

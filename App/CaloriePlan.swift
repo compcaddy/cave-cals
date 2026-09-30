@@ -6,7 +6,11 @@ enum PlanGender: String, Codable, CaseIterable, Identifiable {
     case female = "Female", male = "Male", another = "Another option", undisclosed = "Prefer not to say"
     var id: String { rawValue }
     /// Shown in setup. `another` stays decodable so previously saved plans still load.
-    static let choices: [PlanGender] = [.female, .male, .undisclosed]
+    static let choices: [PlanGender] = [.male, .female, .undisclosed]
+    /// Setup's wording; raw values stay unchanged because saved plans store them.
+    var title: String {
+        switch self { case .female: return "Woman"; case .male: return "Man"; case .undisclosed: return "No Say"; case .another: return rawValue }
+    }
     var coefficient: Double? {
         switch self { case .female: return -161; case .male: return 5; default: return nil }
     }
@@ -33,6 +37,8 @@ enum PlanActivity: String, Codable, CaseIterable, Identifiable {
 enum PlanIntent: String, Codable, CaseIterable, Identifiable {
     case lose = "Lose weight", maintain = "Maintain weight"
     var id: String { rawValue }
+    /// Setup's short labels; raw values stay unchanged because saved plans store them.
+    var title: String { self == .lose ? "Lose" : "Maintain" }
 }
 
 struct CaloriePlanInput: Codable, Equatable {

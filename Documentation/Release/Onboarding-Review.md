@@ -8,7 +8,7 @@ Prepared September 22, 2026. This document accompanies source work; no new archi
 2. Confirm the daily goal is applied and the initial weigh-in appears only if Track my weight was enabled and today was empty.
 3. In You, open Update calorie plan, change an answer, then Cancel. The accepted goal should stay unchanged.
 4. Try Forget plan details. Cancel once, then confirm. The active calorie goal and weight history should remain; opening the planner should ask for fresh answers.
-5. On another fresh setup, use Set my own goal or Just start tracking. Confirm both reach manual logging without a subscription.
+5. On another fresh setup, use Set my own goal or Just start tracking (confirm **Yes, skip plan**, then choose tracking). Confirm both reach manual logging without a subscription, and that **No, me build plan** starts the plan instead.
 6. Try a minor age, an unspecified gender/reference option, or the clinician-led choice. These should offer manual/no-goal routes without calculating a target.
 
 ## Release work still separate

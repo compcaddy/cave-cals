@@ -13,6 +13,12 @@ final class LoggingActionUITests: XCTestCase {
 
     private func completeSetup() {
         app.buttons["skipGoal"].tap()
+        XCTAssertTrue(app.alerts.buttons["Yes, skip plan"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Yes, skip plan"].tap()
+        XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 5))
+        app.buttons["onboardingContinue"].tap()
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        app.buttons["skipOnboardingPaywall"].tap()
     }
 
     func testPendingLinkSurvivesSetup() {

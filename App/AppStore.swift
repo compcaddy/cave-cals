@@ -13,27 +13,36 @@ import WidgetKit
     private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
     private static let hiddenQuickAddKey = "hiddenQuickAddFoods.v1"
     private static let homeQuickAddKey = "homeQuickAddDay.v1"
-    /// Settings → "Show Quick Add at day start" (on by default).
+    private static let commonFoodDefaultsKey = "commonFoodDefaults.v1"
+    private static let resetCommonFoodIDsKey = "resetCommonFoodIDs.v1"
+    /// Settings → "Show Quick Start on new days" (on by default).
     static let showsHomeQuickAddKey = "showsHomeQuickAdd.v1"
+    private static let finishedDaysKey = "finishedEatingDays.v1"
+    private static let finishPromptHiddenKey = "finishDayPromptHidden.v1"
+    /// Settings → "Show “Done eating” button" (on by default).
+    static let showsFinishDayKey = "showsFinishDay.v1"
     /// Hiding is a snooze: long enough for the food's recency weight to fade, short enough not to be forgotten.
     static let quickAddHideDuration: TimeInterval = 14 * 86_400
     let container: ModelContainer
     let context: ModelContext
     let cloudEnabled: Bool
     private let publishesWidget: Bool
+    private let persistsFoodDefaults: Bool
     @ObservationIgnored private let preferences: UserDefaults
     var profiles: [UserProfile] = []
     var entries: [CalorieEntry] = []
     var goals: [DailyGoal] = []
     var meals: [SavedMeal] = []
     var barcodes: [BarcodeFood] = []
-    private(set) var commonFoodDefaults: [String: CommonFoodDefault] =
-        UserDefaults.standard.data(forKey: "commonFoodDefaults.v1")
-            .flatMap { try? JSONDecoder().decode([String: CommonFoodDefault].self, from: $0) } ?? [:]
+    private(set) var commonFoodDefaults: [String: CommonFoodDefault]
+    private var resetCommonFoodIDs: Set<String>
     private(set) var pinnedFoodIDs: [String]
     private(set) var pinnedMealIDs: [String]
     private(set) var hiddenQuickAddFoods: [HiddenQuickAddFood]
     private(set) var homeQuickAdd: HomeQuickAddDay?
+    /// Day key → when that day was marked done eating. Local to this iPhone.
+    private(set) var finishedDays: [String: Date]
+    private(set) var finishPromptHiddenDay: String?
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
@@ -44,15 +53,22 @@ import WidgetKit
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
 
-    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true, persistsUsage: Bool = true, preferences: UserDefaults = .standard) {
+    init(container: ModelContainer, cloudEnabled: Bool = false, publishesWidget: Bool = true, persistsUsage: Bool = true, preferences: UserDefaults = .standard, persistsFoodDefaults: Bool = true) {
         self.preferences = preferences
         self.persistsUsage = persistsUsage
+        self.persistsFoodDefaults = persistsFoodDefaults
+        commonFoodDefaults = persistsFoodDefaults ? preferences.data(forKey: Self.commonFoodDefaultsKey)
+            .flatMap { try? JSONDecoder().decode([String: CommonFoodDefault].self, from: $0) } ?? [:] : [:]
+        resetCommonFoodIDs = persistsFoodDefaults ? Set(preferences.stringArray(forKey: Self.resetCommonFoodIDsKey) ?? []) : []
         pinnedFoodIDs = preferences.stringArray(forKey: Self.pinnedFoodIDsKey) ?? []
         pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
         hiddenQuickAddFoods = preferences.data(forKey: Self.hiddenQuickAddKey)
             .flatMap { try? JSONDecoder().decode([HiddenQuickAddFood].self, from: $0) } ?? []
         homeQuickAdd = persistsUsage ? preferences.data(forKey: Self.homeQuickAddKey)
             .flatMap { try? JSONDecoder().decode(HomeQuickAddDay.self, from: $0) } : nil
+        finishedDays = persistsUsage ? preferences.data(forKey: Self.finishedDaysKey)
+            .flatMap { try? JSONDecoder().decode([String: Date].self, from: $0) } ?? [:] : [:]
+        finishPromptHiddenDay = persistsUsage ? preferences.string(forKey: Self.finishPromptHiddenKey) : nil
         self.publishesWidget = publishesWidget
         self.container = container; context = container.mainContext
         self.cloudEnabled = cloudEnabled; context.autosaveEnabled = false
@@ -96,17 +112,32 @@ import WidgetKit
     func applyingCommonDefault(to draft: EntryDraft) -> EntryDraft {
         guard let food = CommonFoods.matching(draft.name),
               draft.barcode == nil,
-              draft.externalID == nil || draft.externalID == "common:\(food.id)",
-              let saved = commonFoodDefaults[food.id] else { return draft }
-        return saved.applying(to: draft)
+              draft.externalID == nil || draft.externalID == "common:\(food.id)" else { return draft }
+        if let saved = commonFoodDefaults[food.id] { return saved.applying(to: draft) }
+        // History keeps its original values. Reusing a reset food must not resurrect
+        // its old custom nutrition from those diary snapshots.
+        if resetCommonFoodIDs.contains(food.id) { return CommonFoodDefault(food.draft).applying(to: draft) }
+        return draft
     }
     func saveCommonDefault(_ draft: EntryDraft, for food: CommonFood) {
         guard draft.isValid else { return }
         var updated = commonFoodDefaults
         updated[food.id] = CommonFoodDefault(draft)
         guard let data = try? JSONEncoder().encode(updated) else { return }
-        UserDefaults.standard.set(data, forKey: "commonFoodDefaults.v1")
+        if persistsFoodDefaults { preferences.set(data, forKey: Self.commonFoodDefaultsKey) }
         commonFoodDefaults = updated
+        resetCommonFoodIDs.remove(food.id)
+        if persistsFoodDefaults { preferences.set(Array(resetCommonFoodIDs).sorted(), forKey: Self.resetCommonFoodIDsKey) }
+    }
+    /// Removes only explicitly saved common-food overrides. Never edits diary or meal snapshots.
+    func resetSavedNutrition() {
+        guard !commonFoodDefaults.isEmpty else { return }
+        resetCommonFoodIDs.formUnion(commonFoodDefaults.keys)
+        if persistsFoodDefaults {
+            preferences.set(Array(resetCommonFoodIDs).sorted(), forKey: Self.resetCommonFoodIDsKey)
+            preferences.removeObject(forKey: Self.commonFoodDefaultsKey)
+        }
+        commonFoodDefaults = [:]
     }
     func isPinned(_ foodID: String) -> Bool { pinnedFoodIDs.contains(foodID) }
     func setPinned(_ pinned: Bool, foodID: String) {
@@ -176,6 +207,39 @@ import WidgetKit
         homeQuickAdd = state
         if persistsUsage { preferences.set(try? JSONEncoder().encode(state), forKey: Self.homeQuickAddKey) }
     }
+    /// "Done eating" closes a day's logging. Logging anything more that same day reopens it; edits, deletes,
+    /// and later backfills don't, so a settled day stays complete for Progress.
+    func isFinished(_ date: Date) -> Bool {
+        guard let finishedAt = finishedDays[Day.key(date)] else { return false }
+        return !dayEntries(date).contains { reopens($0, finishedAt: finishedAt) }
+    }
+    /// Start of each day that is still marked done, for Progress.
+    func finishedDates(calendar: Calendar = .current) -> Set<Date> {
+        var closed: [Date: Date] = [:]
+        for finishedAt in finishedDays.values { closed[calendar.startOfDay(for: finishedAt)] = finishedAt }
+        for entry in entries {
+            let day = calendar.startOfDay(for: entry.timestamp)
+            if let finishedAt = closed[day], reopens(entry, finishedAt: finishedAt, calendar: calendar) { closed[day] = nil }
+        }
+        return Set(closed.keys)
+    }
+    private func reopens(_ entry: CalorieEntry, finishedAt: Date, calendar: Calendar = .current) -> Bool {
+        entry.createdAt > finishedAt && calendar.isDate(entry.createdAt, inSameDayAs: finishedAt)
+    }
+    func finishDay(_ now: Date = Date()) { saveFinishedDays { $0[Day.key(now)] = now } }
+    func reopenDay(_ date: Date = Date()) { saveFinishedDays { $0[Day.key(date)] = nil } }
+    private func saveFinishedDays(_ change: (inout [String: Date]) -> Void) {
+        var updated = finishedDays
+        change(&updated)
+        guard updated != finishedDays else { return }
+        finishedDays = updated
+        if persistsUsage { preferences.set(try? JSONEncoder().encode(updated), forKey: Self.finishedDaysKey) }
+    }
+    func finishPromptHidden(on date: Date) -> Bool { finishPromptHiddenDay == Day.key(date) }
+    func hideFinishPrompt(on date: Date) {
+        finishPromptHiddenDay = Day.key(date)
+        if persistsUsage { preferences.set(finishPromptHiddenDay, forKey: Self.finishPromptHiddenKey) }
+    }
     func isMealPinned(_ mealID: UUID) -> Bool { pinnedMealIDs.contains(mealID.uuidString) }
     func setMealPinned(_ pinned: Bool, mealID: UUID) {
         let id = mealID.uuidString
@@ -225,13 +289,19 @@ import WidgetKit
         record.macroGoalsData = macroGoals(date).encoded
         context.insert(record); goals.append(record)
     }
-    @discardableResult func saveGoal(_ value: Double?) -> Bool {
+    @discardableResult func saveGoal(_ value: Double?, tracksMacros: Bool? = nil) -> Bool {
         if let value, !value.isFinite || value < 1 || value > 9999 { return false }
         let storedValue = value ?? 0
         // Retain yesterday even if it had no entries, before changing today's default.
         if profile != nil, let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) { retainGoal(yesterday) }
-        if let profile { profile.currentDailyGoal = storedValue; profile.updatedAt = Date() }
-        else { context.insert(UserProfile(goal: storedValue)) }
+        if let profile {
+            profile.currentDailyGoal = storedValue; profile.updatedAt = Date()
+            if let tracksMacros { profile.tracksMacros = tracksMacros }
+        } else {
+            let profile = UserProfile(goal: storedValue)
+            if let tracksMacros { profile.tracksMacros = tracksMacros }
+            context.insert(profile)
+        }
         let today = Day.key(Date())
         if let record = goals.filter({ $0.day == today }).max(by: { $0.updatedAt < $1.updatedAt }) {
             record.calorieGoal = storedValue; record.updatedAt = Date()
@@ -347,11 +417,11 @@ enum Persistence {
     }
     @MainActor private static func makeConfigured(inMemory: Bool, cloud: Bool) throws -> AppStore {
         let config = ModelConfiguration("CaveCals", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
-        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory, persistsUsage: !inMemory) }
+        do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory, persistsUsage: !inMemory, persistsFoodDefaults: !inMemory) }
         catch {
             guard cloud else { throw error }
             let local = ModelConfiguration("CaveCals", schema: schema, cloudKitDatabase: .none)
-            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]), publishesWidget: !inMemory, persistsUsage: !inMemory)
+            let store = AppStore(container: try ModelContainer(for: schema, configurations: [local]), publishesWidget: !inMemory, persistsUsage: !inMemory, persistsFoodDefaults: !inMemory)
             store.syncStatus = "iCloud unavailable · saved locally"
             return store
         }

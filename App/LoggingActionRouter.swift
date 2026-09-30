@@ -1,33 +1,15 @@
 import SwiftUI
+import UserNotifications
 import UIKit
 import AppIntents
 
-@MainActor @Observable final class LoggingActionRouter {
-    static let shared = LoggingActionRouter()
-    struct Request: Equatable {
-        let id = UUID()
-        let action: LoggingAction
-    }
-    private(set) var pending: Request?
-
-    func open(_ action: LoggingAction) { pending = Request(action: action) }
-    @discardableResult func open(url: URL) -> Bool {
-        guard let action = LoggingAction(url: url) else { return false }
-        open(action)
-        return true
-    }
-    @discardableResult func open(shortcut: UIApplicationShortcutItem) -> Bool {
-        guard let action = LoggingAction(shortcutType: shortcut.type) else { return false }
-        open(action)
-        return true
-    }
-    func consume() -> LoggingAction? {
-        defer { pending = nil }
-        return pending?.action
-    }
-}
-
 final class QuickActionAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Set before launch finishes so tapping a reminder can cold-launch into search.
+        UNUserNotificationCenter.current().delegate = LogReminderNotificationDelegate.shared
+        return true
+    }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         // Capture a cold-launch shortcut before SwiftUI creates the root view.

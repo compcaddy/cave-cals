@@ -1,3 +1,151 @@
+# Welcome intro animation — September 30, 2026 (local)
+
+- The welcome drops the app icon and starts blank, then slides in “You Eat.” (left), “App Track.” (right), “Weight Drop.” (left), springs the Cave Cals logo up from the bottom (slight overshoot, then settles), and slides the button panel up, about 1.6 s in all. Reduce Motion fades in place; revisions, returning to the welcome, and UI tests skip the intro.
+- Verification: simulator build passed; the intro was captured frame by frame on iPhone 17 Pro and the final screen inspected; the largest-text welcome was inspected (same-size lines, no wrapping). Three focused onboarding UI tests passed on iPhone 17 Pro Max (`/tmp/cavecals-intro.xcresult`). Motion feel should be judged on a device.
+- Local source only; no build uploaded.
+
+---
+
+# New launch logo — September 30, 2026 (local)
+
+- The launch screen now shows the user-supplied Cave Cals logo (portrait caveman with phone above CAVE CALS lettering) instead of the square caveman artwork. The asset is renamed `LaunchLogo`; the image is flattened onto the launch cream and sized 850×1062, since the transparent 1122×1402 original produced a blank launch snapshot. The storyboard frame now follows the logo's portrait proportions at 72% width.
+- Verification: simulator build passed; on iPhone 17 Pro the launch snapshot and the launch-to-welcome transition were captured and inspected after restarting the simulator. Before the restart the simulator kept drawing the previous launch image (and then a blank one) from a stale launch-screen cache. Physical iPhones may also keep an old launch screen until the app is updated or the phone restarts; not checked on hardware.
+- Local source only; not in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Me Info copy, age dial flick, and Quick Add removal label — September 29, 2026 (local)
+
+- Follow-ups the same afternoon: step 2 is **Measurements** (weights keep one decimal, placeholder “0.0”), step 3 is **Usual Week**, **Set Goal** puts Lose/Maintain on the title row with “Current:” beside goal weight and a **Rate** label, and the welcome headline is much larger (fits on three lines even at the largest text size). Activity, pace, target, and splash art are still pending as files.
+
+- Setup step 1 is **Me Info** with **Type** / **Age** headers; the third card reads **No Say** (VoiceOver: “Prefer not to say”). Dial numbers can no longer truncate (e.g. “1…” for 15), and a flick now carries across many ages before snapping instead of stopping after about one screenful. Quick Add's long-press **Hide for 2 weeks** now reads **Remove, No Add Often** (same 2-week snooze).
+
+---
+
+# Onboarding step redesign — September 29, 2026 (local)
+
+- **Me info**: **Me type** picture cards (Man / Woman / Prefer not to say, user-supplied art resized into `SetupMan`/`SetupWoman`/`SetupPreferNotToSay`; stored raw values unchanged) and a swipeable **Me age** dial (13–100, default 40, top-center caret, selection haptics, VoiceOver adjustable). The reference-values note is gone. **You start**: imperial height accepts feet 3–7 and inches 0–11 only, jumping feet → inches → weight once a value is finished (a lone 1 inch waits for 10/11). **Usual Day** drops its subheader. **Set Goal** uses Lose / Maintain and shows the current weight beside the goal-weight label. **Your target** drops the starting-weight note, shows a grouped number, selects it on any tap of the card, and has tighter padding.
+- Pending: art for the activity rows, pace rows, and target card (received only as chat previews, not files).
+- Verification: simulator build passed. 22 focused checks passed on iPhone 17 Pro Max (all 18 onboarding UI tests, including both largest-text routes and a new feet/inches jump test; the three no-goal setup paths in other suites; and a new `ImperialHeightInput` unit test). Screenshots of each changed step were inspected; an early dial build opened off-center and then with hidden neighbors, and both were fixed and re-inspected. Results: `/tmp/cavecals-onboarding-steps-iphone.xcresult`. No iPad compatibility or physical-device check was run.
+- Local source only; not included in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Onboarding skip confirmation and tracking step — September 29, 2026 (local)
+
+- **What do you want to track?** moved off the welcome screen to its own step just before the calorie target (after goal/pace; manual-only results also pass through it). The per-switch explanations were removed. Plan revisions skip the step. The welcome now shows only the artwork, headline, **Me Build Plan**, and **Just start tracking**.
+- **Just start tracking** now asks **Skip plan?** (“Cave Cals help you pick daily calorie target to reach your goal. Take less than one minute.”). **No, me build plan** starts the plan; **Yes, skip plan** shows the tracking step (no progress bar, **Let’s go**, back returns to the welcome) and then finishes without a goal.
+- Verification: simulator build passed. 20 focused iPhone 17 Pro Max UI checks passed: all 17 onboarding tests plus the no-goal setup paths in the weight-tracking, logging-link, and settings-goal suites. The alert, welcome, and both tracking-step screenshots were inspected; the alert's default-action emphasis was dropped because it rendered orange text on a blue fill, then the confirmation test passed again. Results: `/tmp/cavecals-skip-plan-iphone.xcresult`, `/tmp/cavecals-skip-plan-alert.xcresult`. No iPad compatibility or physical-device check was run for this change.
+- Local source only; not included in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Annual trial and optional onboarding offer — September 29, 2026
+
+- **Live store configuration:** ASC CLI created and read back 175 introductory offers for yearly subscription `6809209211` / `com.philstarkovich.cavecals.ai.yearly`: `FREE_TRIAL`, `ONE_WEEK`, one period, start September 29, 2026, no end date. Creation reported 175 successful, zero failed. Only the subscription's existing territories were used; prices and availability were not changed. U.S. yearly price remains $29.99. Monthly's existing 3-day trial remains. Both subscription review notes now describe the yearly trial accurately.
+- **Live RevenueCat configuration:** published “Cave Cals+ — Smarter logging”, paywall `wf1b822385543c4708`, default offering, project `783afc8e`. Introductory CTA is `Try for {{ product.offer_price_with_zero }}`; annual introductory copy shows the offer period free, then the full yearly price. The default preview retains standard annual/monthly pricing and **Continue**. Editor preview prices are samples, not the live App Store prices. The Published listing confirms September 29's edit. Older SDKs fall back to “Try for free”; SDK 5.90.0 supports localized zero amounts.
+- **Local app:** new-user calculated, manual-target, and no-goal completion save setup, then show the optional RevenueCat offer. **Skip for now** remains available during loading and service failures; Close/Skip and successful purchase/restore enter Home. Confirmed active members bypass it. Existing profiles, revisions, and developer previews do not trigger it. RevenueCat/RevenueCatUI is pinned and resolved to 5.90.0; purchases still require backend verification.
+- Verification: simulator build passed. Seven focused iPhone checks passed, including the dismissal gate, all three setup routes, existing profiles, preview isolation, and closing an unavailable offer before logging food. UI tests use fresh ad-hoc signatures and isolate live App Attest/StoreKit; they do not validate a real trial purchase. The iPhone unavailable-state screenshot was inspected. Three matching checks also passed on iPad Air 11-inch (M3) in iPhone compatibility mode (manual setup, no-goal setup, and closing an unavailable offer then logging). Results: `/tmp/cavecals-onboarding-trial-iphone.xcresult` and `/tmp/cavecals-onboarding-trial-ipad.xcresult`.
+- The App Store offer and RevenueCat configuration are published; the onboarding implementation and SDK upgrade are **local source only**, not in TestFlight **1.0.4 (1)**. No app build uploaded. A signed-device sandbox check of eligibility, purchase, restore, and the actual remote paywall remains necessary before release. Updated local App Store description copy has not been submitted.
+
+---
+
+# Footer placement and search order — September 28, 2026 (local)
+
+- The logging footer now occupies its own fixed-height row below a clipped list, keeping food rows above the reminders and search/capture controls. Keyboard avoidance remains enabled. Each changed search query recreates only the list so results start at the top; subsequent API responses preserve the current scroll position. History matches resolve synchronously and precede saved meals, built-in foods, and API matches.
+- Verification: simulator build passed. Six focused iPhone checks passed across the initial run and a corrected search-fixture rerun: footer geometry across scrolling/keyboard/reminder/sheet transitions, search scroll reset and history-first ordering, Done eating/Reopen, unified search restoration, search-add/Undo, and brief background tab preservation. The initial search test used a broad term whose built-in matches pushed its API fixture outside the visible list; a unique fixture term corrected the test setup. All three footer/search/Done eating checks also passed on iPad Air 11-inch (M3) in iPhone compatibility mode. UI tests used fresh ad-hoc signatures and isolated diary/API fixtures.
+- Results: `/tmp/cavecals-footer-search-iphone.xcresult`, `/tmp/cavecals-footer-search-iphone-rerun.xcresult`, and `/tmp/cavecals-footer-search-ipad.xcresult`. The intermittent physical-iPhone trigger was not reproduced on hardware. No camera, App Attest, production CloudKit, or subscription checks were performed for this layout change.
+- Local source only; not included in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Developer onboarding preview — September 27, 2026 (local)
+
+- Added Settings → Developer settings → **Preview onboarding**. Reuses the new-user screens with blank answers and fresh in-memory diary/weight stores. **Close Preview** exits; calculated-plan, manual-target, and no-goal completion return to Developer settings. Real history, goals, macros, saved plan, weights, widgets, iCloud, and Health state are not changed.
+- Verification: simulator build passed; one native isolation check and two iPhone UI walkthroughs passed, covering existing diary/weight/goal preservation, cancellation, fresh repeat sessions, and all completion routes. The manual-target replay also passed in iPad iPhone compatibility mode. Early iPad attempts hit test setup issues (home-transition timing and scrolling to Developer settings); unsigned incremental runs reused an old runner. The refreshed, ad-hoc-signed runner passed with the updated navigation helper.
+- Results: `/tmp/cavecals-onboarding-preview-tests.xcresult` (3 passed) and `/tmp/cavecals-onboarding-preview-ipad-signed.xcresult` (1 passed). No physical-device or subscription verification was performed for this local preview change.
+- Local source only; not yet in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Onboarding tracking choices — September 27, 2026 (local)
+
+- Welcome now asks **What do you want to track?** with explanatory **Track my weight** and **Track macros** switches, both enabled for new users. Calculated plans, manual targets, and no-goal setup all save the choices; later calorie-goal edits retain existing macro preferences. Calculated plans only add the starting weigh-in when weight tracking is selected.
+- Verification: simulator build passed; 8 focused iPhone checks passed (2 persistence checks and 6 onboarding UI checks, including default-on, opt-out, calculated/manual/no-goal completion, and largest text). The iPhone welcome screenshot was inspected. Both iPad compatibility checks pass across the initial run and focused rerun: the initial opt-out test tapped the fixed footer while its switch was below it; the test now scrolls controls above the footer before tapping.
+- Results: `/tmp/cavecals-onboarding-tests.xcresult`, `/tmp/cavecals-onboarding-ipad-tests.xcresult`, and `/tmp/cavecals-onboarding-ipad-rerun.xcresult`. No new subscription, Health, or physical-device verification was performed for this onboarding change.
+- Local source only; not included in TestFlight **1.0.4 (1)**. No build uploaded.
+
+---
+
+# Weekly Recap chart labels — September 27, 2026 (local)
+
+- Both metric cards now prefix their numeric ranges with **Range:**. Mini charts have compact weekday labels, a right-side value scale, and subtle axes/gridlines. More horizontal space separates the metric details from the narrower plots; calorie bars are slimmer and weight lines use smooth monotone curves through the recorded points, preserving missing-day gaps.
+- Verification: iPhone build and the existing current-week navigation/PDF and largest-text UI checks passed (2/2). The normal-size screenshot was inspected; a follow-up centered day labels under their points/bars and passed the current-week check again (1/1). No new tests or iPad runs.
+- Results: `test_sim_2026-09-27T17-07-38-772Z_pid86754_25b3a218.xcresult`, then `test_sim_2026-09-27T17-09-07-004Z_pid86754_9a7398b8.xcresult`. The initial test command used the wrong target name and was corrected before testing.
+- Local source only; not yet included in TestFlight **1.0.4 (1)**.
+
+---
+
+# Current-week recap — September 27, 2026 (local)
+
+- Weekly Recap now opens on the current calendar week, labeled **In progress**. The back arrow selects prior weeks. Export uses the selected week instead of silently substituting the last completed week, and labels current-week PDFs **In progress**.
+- Weight averages/ranges remain independent of previous-week comparisons and calorie completeness. Verified the reported September 21–27 example: 7 weigh-ins average **193.3 lb**, min **192.0**, max **194.8**, with **No comparison yet** when there are no earlier weights. Today’s food remains excluded from completed calorie averages under the existing rule.
+- Verification: 12 Progress calculation/PDF tests and the current-week/back/forward/PDF iPhone UI test pass across the initial run and focused rerun. An initial PDF assertion expected duplicate spaces that PDFKit normalizes; assertions now verify the actual min/max content. The current-week PDF was rendered and visually checked as one page.
+- Results: `test_sim_2026-09-27T16-56-00-663Z_pid86754_8b77f62c.xcresult` (12 passed plus the PDF whitespace assertion failure); `test_sim_2026-09-27T16-57-24-331Z_pid86754_efa51b5c.xcresult` (first-week average/range/PDF regression passed). No new iPad testing.
+- Local source only; not included in TestFlight **1.0.4 (1)**. No new upload or print job was sent.
+
+---
+
+# UI refinements — September 27, 2026 (local)
+
+- Right-aligned the orange Help me decide link beneath the daily calorie goal in About You.
+- About You now groups Track weight, Weight unit, and Today’s weight in one section, with Today’s weight at the bottom. Conditional visibility and editing behavior are unchanged.
+- Made the Progress glyph's decline more gradual; the right endpoint is about halfway up the plot height. Preserved the hand-drawn axes, stroke weight, and template rendering.
+- SVG preview inspected and iPhone simulator build passed. Cosmetic asset change only; no new behavioral tests. Not yet uploaded to TestFlight.
+
+---
+
+# Reset saved food nutrition — September 27, 2026 (local)
+
+- Added Settings → Saved food nutrition → **Reset Saved Nutrition**, with a Cancel/Reset confirmation and a clear explanation of the scope. Removes custom calories, portions, and macros saved with **Save as default** on this device; affected foods return to current catalog nutrition for future adds.
+- Local reset markers prevent Quick Add/search/Siri and new meal-picker selections from restoring removed defaults from older diary snapshots. Existing diary records, saved meals, barcode foods, goals, weights, pins, usage counters, and Health records are retained. No SwiftData schema or backend change is required. Test/preview food defaults are now isolated in memory.
+- Verification: the iPhone confirmation/cancel/reset walkthrough passed and demonstrated an unchanged 250-calorie original log followed by a 110-calorie catalog add. All existing native tests passed. The new preference-isolation test initially expected an absent key instead of the pre-existing empty array; its assertion was corrected, and all three new reset tests passed on the focused rerun. Across these runs, all 123 selected tests pass. Confirmation screenshot reviewed on iPhone 17, iOS 26.0.1.
+- Result bundles: `test_sim_2026-09-27T16-43-01-788Z_pid61538_0806e106.xcresult` (122 passed plus the assertion failure above); `test_sim_2026-09-27T16-44-50-752Z_pid61538_445e4875.xcresult` (3/3 reset tests passed). No additional iPad tests were run.
+- Local source only. **TestFlight 1.0.4 (1) does not include this reset action**; no new build was uploaded for this change.
+
+---
+
+# Weekly Recap refinements — September 27, 2026 (TestFlight available)
+
+- **1.0.4 (1)** is verified **VALID / IN_BETA_TESTING**, explicitly assigned to Internal Testers with the owner’s tester access confirmed. Build ID: `c6ae0929-55c7-45af-a63e-3cd6b30b1a44`. App/widget/project-generator versions match. The signed archive and App Store export succeeded; nothing was submitted for App Store review or publicly released.
+- Weekly Recap now has individual weight/calorie cards, mini weekly charts, bold prior-week changes, and number-only ranges. Daily breakdown starts collapsed and resets when changing weeks; no incomplete-day count is displayed.
+- The one-page PDF is titled **Weekly Recap**, shows full completed-week dates, highlights weight versus the previous week and average daily calories versus the current goal, and separates **Six-Week Trends** with a horizontal rule. The table includes small signed prior-week changes beside each average, with the latest row highlighted tan. Calculation/footer notes are removed.
+- Verification: **120 tests passed, zero failures** on iPhone 17, iOS 26.0.1 (native suite plus the Progress UI walkthrough). The recap cards and rendered PDF were visually reviewed; PDFKit confirms one page. Test result: `test_sim_2026-09-27T16-21-52-927Z_pid61538_e4f76708.xcresult`.
+- Strict recursive IPA signature verification passed. Production App Attest/CloudKit/push, HealthKit, App Groups, the production backend, and `get-task-allow=false` were verified in the exported package. Evidence and TestFlight notes are in [1.0.4](1.0.4/).
+- A new additional distribution identity and matching app/widget profiles were created because this Mac lacked an existing distribution private key. No certificates were revoked. The private key is in the login Keychain; repository signing settings remain Automatic.
+- No further iPad testing was run, at the owner's request. Physical printing, camera/microphone, App Attest, CloudKit production sync, Health export, and purchases are not established by the simulator results. No print job or App Store review submission was sent.
+
+---
+
+# Progress charts and trainer report — September 27, 2026 (local)
+
+- Added the Progress header icon between About You and Settings; moved weight graphs/history here. Calendar week/month/year calorie charts support stacked approximate macros, calories only, and individual grams. Year views average complete calorie days by calendar week. Week start is locally configurable.
+- The review defaults to the last completed week and emphasizes weight/calorie changes vs the prior week, with min/max, daily details, and independent coverage. Past calorie days below 60% of the preceding 28-day completed-day average are incomplete; missing/today/incomplete calorie data do not skew completed averages. See [Progress](../Progress.md) for exact rules.
+- One-page four-week PDF preview, native AirPrint options, and PDF sharing are implemented. Synthetic PDF rendering was inspected and populated/empty reports are verified as one page.
+- Verification: 10 new Progress calculation/PDF tests and the updated weight aggregation test passed. The iPhone chart/history/print-options walkthrough passed on iPhone 17, iOS 26 (`test_sim_2026-09-27T15-51-32-628Z_pid61538_c576171c.xcresult`). Week-start selection, large-text entry/print preview, and weight add/edit/delete and graph-refresh flows passed across focused iPhone runs. Visual review corrected zero-width bars; tap selection allows vertical page scrolling. Final simulator build passed and the isolated sample Progress page is open on iPhone 17.
+- iPad verification is incomplete: an initial runtime-selection/compatibility test-gesture issue was investigated, and the final iOS 26 run was stopped at the owner's request. Do not claim an iPad pass. Physical printer discovery/output is unverified. No print job was sent. No TestFlight/App Store build was uploaded.
+
+---
+
+# Widget action routing — September 26, 2026 (local)
+
+- Both widget sizes now use foreground App Intent buttons for the four logging actions. Search/Add opens today’s add mode with the search field focused; an existing sheet is dismissed before keyboard focus is applied. Widget background/summary/gaps use an explicit `cavecals://home` link to open today’s Home without a keyboard or capture sheet.
+- The shared pending router retains widget requests through cold launch/onboarding. Existing logging URLs and Home Screen quick actions remain supported.
+- Verification: app and widget simulator build passed; four focused routing/intent unit tests and two UI regressions passed on iPhone 17 Pro (iOS 26). Both UI regressions also passed on iPad Air 11-inch (M3), iOS 26, in iPhone compatibility mode. Tests cover cold search launch with usable keyboard, search replacing About You, and the background URL returning to Home. Physical Home Screen widget taps still need a signed-device check; these tests exercise the intent handler and app URL routing, not SpringBoard hit testing.
+- Local source only. No TestFlight/App Store build was uploaded.
+
+---
+
 # Backward-compatible carbohydrate API — September 25, 2026
 
 - Production backend now serves both macro shapes. Food search, photo/voice analysis, recipe import, and text macro estimates return `totalCarbs` and `fiber` for the upcoming app plus a derived `netCarbs` for released apps through 1.0.3. Unknown fiber still yields no net carbs (a known zero-carb food stays zero); results stored by the previous backend pass through unchanged. The OpenAI schema and stored data are unchanged.

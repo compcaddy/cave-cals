@@ -11,35 +11,30 @@ struct WeightProfileSections: View {
     @Binding var editor: WeightEditorRoute?
     var body: some View {
         Group {
-            if weights.tracking {
-                Section {
+            Section {
+                Toggle("Track weight", isOn: Binding(get: { weights.tracking }, set: { weights.setTracking($0) }))
+                    .accessibilityIdentifier("trackWeight")
+                if weights.tracking {
+                    Picker("Weight unit", selection: Binding(get: { weights.unit }, set: { Haptics.play(.selection); weights.setUnit($0) })) {
+                        Text("Pounds (lb)").tag(WeightUnit.pounds)
+                        Text("Kilograms (kg)").tag(WeightUnit.kilograms)
+                    }.accessibilityIdentifier("weightUnit")
                     Button { editor = WeightEditorRoute(record: weights.record(on: Date())) } label: {
                         HStack(spacing: 12) {
                             // A concrete color: `.primary` inside a list button resolves to the orange tint.
                             Text("Today’s weight").foregroundStyle(Color.primary)
                             Spacer(minLength: 8)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
-                            Text(weights.record(on: Date()).map { weights.unit.text($0.kilograms) } ?? "Not logged yet")
-                                .font(.cave(.title3)).foregroundStyle(Color.primary)
-                                .fixedSize(horizontal: true, vertical: false)
+                            HStack(spacing: 6) {
+                                CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                                Text(weights.record(on: Date()).map { weights.unit.text($0.kilograms) } ?? "Log")
+                                    .font(.cave(.title3))
+                                    .foregroundStyle(weights.record(on: Date()) == nil ? Color.caveOrange : Color.primary)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            .padding(.trailing, 8)
                         }.contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("todayWeight")
-                }
-                Section("Weight history") {
-                    WeightChartView()
-                    NavigationLink("All weigh-ins") { WeightHistoryView() }
-                        .accessibilityIdentifier("weightHistory")
-                }
-            }
-            Section {
-                Toggle("Track weight", isOn: Binding(get: { weights.tracking }, set: { weights.setTracking($0) }))
-                    .accessibilityIdentifier("trackWeight")
-                if weights.tracking {
-                    Picker("Weight unit", selection: Binding(get: { weights.unit }, set: { weights.setUnit($0) })) {
-                        Text("Pounds (lb)").tag(WeightUnit.pounds)
-                        Text("Kilograms (kg)").tag(WeightUnit.kilograms)
-                    }.accessibilityIdentifier("weightUnit")
                 }
             }
             if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
@@ -108,7 +103,7 @@ struct WeightEditorSheet: View {
     private var valid: Bool { kilograms.map(WeightStore.valid) == true && date <= Date() }
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 Section {
                     WeightWeekPicker(date: date, unit: unit, select: selectDay)
                 }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
@@ -134,33 +129,37 @@ struct WeightEditorSheet: View {
             .navigationTitle("Weigh-in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if saveSelectedDay() { dismiss() }
                     } label: { Label("Save", systemImage: "checkmark").foregroundStyle(.white) }
-                    .buttonStyle(.borderedProminent).tint(.caveOrange).disabled(!valid)
+                    .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success).disabled(!valid)
                     .accessibilityIdentifier("saveWeight")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focused = false } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focused = false }.hapticButtonStyle(.automatic) }
             }
             .confirmationDialog("Delete this weigh-in?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                // Dialog buttons may skip the haptic button style, so they play their own feel.
                 Button("Delete weigh-in", role: .destructive) {
+                    Haptics.play(.warning)
                     if let record = selectedRecord, weights.delete(record.id) { dismiss() }
-                }
+                }.hapticFeel(.none)
             } message: {
                 Text(weights.healthSharing ? "It will also be removed from Apple Health when sharing completes." : "If previously shared, its Apple Health copy will be removed when you resume sharing.")
             }
             .confirmationDialog("Save changes?", isPresented: $confirmingDayChange, titleVisibility: .visible) {
                 Button("Save and switch") {
+                    Haptics.play(.success)
                     if saveSelectedDay(), let pendingDate { loadDay(pendingDate) }
                     pendingDate = nil
-                }.disabled(!valid)
+                }.disabled(!valid).hapticFeel(.none)
                 Button("Discard changes", role: .destructive) {
+                    Haptics.play(.warning)
                     if let pendingDate { loadDay(pendingDate) }
                     pendingDate = nil
-                }
-                Button("Cancel", role: .cancel) { pendingDate = nil }
+                }.hapticFeel(.none)
+                Button("Cancel", role: .cancel) { Haptics.play(.tap); pendingDate = nil }.hapticFeel(.none)
             }
             .task {
                 guard record == nil else { return }
@@ -208,7 +207,7 @@ private struct WeightWeekPicker: View {
                 Button { move(1) } label: { CaveIcon(.chevronRight, size: 18).frame(width: 44, height: 44) }
                     .disabled(nextWeek > today)
                     .accessibilityLabel("Next week").accessibilityIdentifier("nextWeightWeek")
-            }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+            }.hapticButtonStyle(.plain).hapticFeel(.selection).foregroundStyle(Color.accentColor)
             ViewThatFits(in: .horizontal) {
                 dayButtons
                 ScrollView(.horizontal) { dayButtons }.scrollIndicators(.hidden)
@@ -233,7 +232,7 @@ private struct WeightWeekPicker: View {
                     .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5) }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).disabled(day > today)
+                .hapticButtonStyle(.plain).hapticFeel(.selection).disabled(day > today)
                 .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                 .accessibilityValue(record.map { unit.text($0.kilograms) } ?? "No weigh-in")
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -252,7 +251,7 @@ struct WeightHistoryView: View {
     @Environment(WeightStore.self) private var weights
     @State private var editor: WeightEditorRoute?
     var body: some View {
-        List {
+        HapticList {
             if weights.records.isEmpty { Text("Your weigh-ins will appear here.").foregroundStyle(.secondary) }
             ForEach(weights.records) { record in
                 Button { editor = WeightEditorRoute(record: record) } label: {
@@ -267,96 +266,8 @@ struct WeightHistoryView: View {
         }.caveScreenBackground()
         .navigationTitle("Weigh-ins")
         .toolbar { ToolbarItem(placement: .primaryAction) {
-            Button("Add weigh-in") { editor = WeightEditorRoute() }.accessibilityIdentifier("addHistoricalWeight")
+            Button("Add weigh-in") { editor = WeightEditorRoute() }.hapticButtonStyle(.automatic).accessibilityIdentifier("addHistoricalWeight")
         } }
         .sheet(item: $editor) { route in WeightEditorSheet(record: route.record, unit: weights.unit) }
-    }
-}
-
-struct WeightChartView: View {
-    @Environment(WeightStore.self) private var weights
-    @State private var range = WeightChartRange.month
-    @State private var selectedDate: Date?
-    @State private var endDate = Date()
-    private var interval: DateInterval { range.interval(endingAt: endDate) }
-    private var points: [WeightChartPoint] { range.points(weights.records, endingAt: endDate) }
-    private var selected: WeightChartPoint? {
-        guard let selectedDate else { return nil }
-        return points.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
-    }
-    private var domain: ClosedRange<Double> {
-        let values = points.map { weights.unit.display($0.kilograms) }
-        let low = values.min() ?? 0, high = values.max() ?? 1
-        let padding = max(weights.unit == .pounds ? 2 : 1, (high - low) * 0.2)
-        return max(0, low - padding)...(high + padding)
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Picker("Chart period", selection: $range) {
-                ForEach(WeightChartRange.allCases) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.segmented).accessibilityIdentifier("weightChartRange")
-            HStack {
-                Button { move(-1) } label: { CaveIcon(.chevronLeft, size: 16).frame(width: 44, height: 44) }
-                    .accessibilityLabel("Previous weight period")
-                Spacer(minLength: 0)
-                Text(periodLabel).font(.cave(.caption)).multilineTextAlignment(.center)
-                Spacer(minLength: 0)
-                Button { move(1) } label: { CaveIcon(.chevronRight, size: 16).frame(width: 44, height: 44) }
-                    .disabled(Calendar.current.isDate(endDate, inSameDayAs: Date()))
-                    .accessibilityLabel("Next weight period")
-            }.buttonStyle(.borderless)
-            if points.isEmpty {
-                VStack(spacing: 8) {
-                    Text("No weigh-ins in this period").font(.cave(.headline))
-                    Text("Log a weight to start your graph.").font(.cave(.subheadline)).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity).frame(height: 170)
-            } else {
-                Chart {
-                    ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
-                        LineMark(x: .value("Date", point.date), y: .value("Weight", weights.unit.display(point.kilograms)), series: .value("Recorded period", segment(at: index)))
-                            .foregroundStyle(Color.accentColor)
-                        PointMark(x: .value("Date", point.date), y: .value("Weight", weights.unit.display(point.kilograms)))
-                            .foregroundStyle(Color.accentColor)
-                            .accessibilityLabel(point.date.formatted(date: .abbreviated, time: .omitted))
-                            .accessibilityValue(weights.unit.text(point.kilograms))
-                    }
-                    if let selected {
-                        RuleMark(x: .value("Selected date", selected.date)).foregroundStyle(.secondary.opacity(0.4))
-                    }
-                }
-                .chartXScale(domain: interval.start...interval.end)
-                .chartYScale(domain: domain)
-                .chartXAxis { AxisMarks(values: .automatic(desiredCount: range == .week ? 4 : 3)) }
-                .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) }
-                .chartXSelection(value: $selectedDate)
-                .chartLegend(.hidden)
-                .frame(height: 170).accessibilityIdentifier("weightChart")
-                if let point = selected ?? points.last {
-                    Text("\(weights.unit.text(point.kilograms)) · \(point.date.formatted(range == .year ? .dateTime.month(.wide).year() : .dateTime.month(.abbreviated).day()))\(range == .year ? " · \(point.count) weigh-ins" : "")")
-                        .font(.cave(.subheadline)).accessibilityIdentifier("weightChartValue")
-                }
-            }
-            Text(range == .year ? "Monthly averages · \(weights.unit.rawValue). Only recorded days contribute." : "Daily weigh-ins · \(weights.unit.rawValue). Gaps are days without a weigh-in.")
-                .font(.cave(.caption)).foregroundStyle(.secondary)
-        }
-        .onChange(of: range) { _, _ in selectedDate = nil; endDate = Date() }
-    }
-    private var periodLabel: String {
-        let lastDay = Calendar.current.date(byAdding: .day, value: -1, to: interval.end)!
-        return interval.start.formatted(.dateTime.month(.abbreviated).day()) + " – " + lastDay.formatted(.dateTime.month(.abbreviated).day().year())
-    }
-    private func move(_ direction: Int) {
-        let component: Calendar.Component = range == .year ? .year : .day
-        let count = range == .year ? 1 : (range == .week ? 7 : 30)
-        endDate = min(Date(), Calendar.current.date(byAdding: component, value: direction * count, to: endDate)!)
-        selectedDate = nil
-    }
-    // Separate line segments avoid implying measurements across missing days/months.
-    private func segment(at index: Int) -> Int {
-        guard index > 0 else { return 0 }
-        let component: Calendar.Component = range == .year ? .month : .day
-        return (1...index).reduce(0) { total, offset in
-            total + ((Calendar.current.dateComponents([component], from: points[offset - 1].date, to: points[offset].date).value(for: component) ?? 0) > 1 ? 1 : 0)
-        }
     }
 }

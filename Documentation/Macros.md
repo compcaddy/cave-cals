@@ -12,6 +12,14 @@ Macro tracking is on by default and can be hidden in You → Track macros. Optio
 - Photo, voice, and website meal imports request full-portion grams, then divide by the normalized serving count once. Their values are marked estimated. Existing photo/voice allowance and paid website-import rules stay intact.
 - Manual/common/older foods can request **Estimate values using AI**. Only that entry’s name, portion and calories are sent; populated nutrient fields are preserved. Edits to the food/portion during the request prevent a stale estimate from being applied. Nothing automatically backfills historical entries or invents macros for a calorie-only shortcut.
 
+## Resetting saved food nutrition
+
+Settings → **Saved food nutrition** → **Reset Saved Nutrition** removes the custom calories, serving sizes, and macros explicitly saved with **Save as default** on this device. A confirmation explains the scope and offers Cancel or Reset; the action is disabled when there are no saved overrides.
+
+Affected foods use the current bundled catalog for future search, Quick Add, Siri, and meal-picker adds. Reset food IDs are retained locally so old diary snapshots cannot silently restore the removed values. Saving a new explicit default replaces that reset marker.
+
+Existing diary entries (including their calories and macros), saved meals, barcode foods, goals, weigh-ins, and pins remain unchanged. The reset performs no SwiftData writes or Apple Health updates and does not sync to other devices. Tests and previews isolate these defaults in memory.
+
 ## Backend
 
 `POST /api/v1/food/macros` requires the same signed device authentication as other private endpoints. Input: name, calories (whole amount), servingSize, servings. Output: protein/totalCarbs/fiber/fat, each a required number or null. No subscription is required and no successful-scan counter is incremented. The endpoint consumes existing account/day/month and global AI budgets, plus `MACRO_ESTIMATE_DAILY_LIMIT` (default 10 per account/day). Invalid requests fail before AI reservation. This limits free AI cost without changing the ten-scan introductory allowance.

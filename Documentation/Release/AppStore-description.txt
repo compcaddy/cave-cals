@@ -17,7 +17,7 @@ Voice log: describe what you ate and how much, then review the foods and estimat
 
 Only meal scanning and voice logging require a subscription. Both plans include up to 30 analyses per day and 300 per calendar month. All other features remain free.
 
-Choose a monthly or yearly subscription. The monthly plan offers a 3-day free trial to eligible new subscribers; the yearly plan has no free trial. Local prices and billing periods are shown before purchase. Subscriptions renew automatically unless cancelled in your Apple Account settings at least 24 hours before the current period ends.
+Choose a monthly or yearly subscription. The monthly plan offers a 3-day free trial to eligible new subscribers; the yearly plan offers a 7-day free trial to eligible new subscribers. Local prices and billing periods are shown before purchase. Subscriptions renew automatically unless cancelled in your Apple Account settings at least 24 hours before the current period ends.
 
 AI estimates can be inaccurate, especially for portion sizes and hidden ingredients. Review and correct each result before saving. Cave Cals is a food diary, not medical advice.
 

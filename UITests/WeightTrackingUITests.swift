@@ -7,6 +7,14 @@ final class WeightTrackingUITests: XCTestCase {
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
         XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
         app.buttons["skipGoal"].tap()
+        XCTAssertTrue(app.alerts.buttons["Yes, skip plan"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Yes, skip plan"].tap()
+        // These tests exercise enabling weight tracking later from About You.
+        XCTAssertTrue(app.switches["planTrackWeight"].waitForExistence(timeout: 5))
+        app.switches["planTrackWeight"].tap()
+        app.buttons["onboardingContinue"].tap()
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        app.buttons["skipOnboardingPaywall"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
     private func openProfile() {
@@ -15,6 +23,12 @@ final class WeightTrackingUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         profile.tap()
         XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
+    }
+    private func openWeightProgress() {
+        app.buttons["progress"].tap()
+        let picker = app.segmentedControls["weightChartRange"]
+        for _ in 0..<8 where !picker.isHittable { app.swipeUp() }
+        XCTAssertTrue(picker.isHittable)
     }
     private func toggleTracking() {
         let toggle = app.switches["trackWeight"].firstMatch
@@ -54,10 +68,12 @@ final class WeightTrackingUITests: XCTestCase {
         app.buttons["saveWeight"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
-        openProfile()
+        openWeightProgress()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 5))
         for range in ["Week", "Year", "Month"] { app.segmentedControls["weightChartRange"].buttons[range].tap() }
-        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Personal area with weight graph"; screenshot.lifetime = .keepAlways; add(screenshot)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Progress with weight graph"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.navigationBars["Progress"].buttons["Done"].tap()
+        openProfile()
         app.buttons["todayWeight"].tap()
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap()
@@ -126,10 +142,12 @@ final class WeightTrackingUITests: XCTestCase {
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap(); amount.typeText("180.5")
         app.buttons["saveWeight"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
+        openWeightProgress()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 5))
-        app.buttons["Previous weight period"].tap()
+        app.buttons["weightChartRangePrevious"].tap()
         XCTAssertTrue(app.staticTexts["No weigh-ins in this period"].waitForExistence(timeout: 3))
-        app.buttons["Next weight period"].tap()
+        app.buttons["weightChartRangeNext"].tap()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 3))
     }
 }

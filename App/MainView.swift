@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 enum HomeListMode: String, CaseIterable {
@@ -17,7 +18,7 @@ struct FatSecretAttribution: View {
 
 enum MainSheet: Identifiable {
     case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, profile, barcode(Date), meal(UUID, Date), photo, voice, calendar
-    case weighIn
+    case weighIn, progress
     case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport
     var id: String {
         switch self {
@@ -27,6 +28,7 @@ enum MainSheet: Identifiable {
         case .quickEntry(let draft): "quick-entry-\(draft.id)"
         case .settings: "settings"
         case .profile: "profile"
+        case .progress: "progress"
         case .weighIn: "weigh-in"
         case .barcode: "barcode"
         case .meal(let id, _): "meal-\(id)"
@@ -57,6 +59,8 @@ struct MainView: View {
     @Environment(WeightStore.self) private var weights
     @Environment(LoggingActionRouter.self) private var actionRouter
     @Environment(\.scenePhase) private var phase
+    @Environment(\.requestReview) private var requestReview
+    @Environment(\.openURL) private var openURL
     @State private var selected = Date()
     @State private var today = Date()
     @State private var query = ""
@@ -69,16 +73,35 @@ struct MainView: View {
     @State private var searchPrimedOnHome = false
     /// A Home Quick Add pick that was just added stays until its confirmation animation finishes.
     @State private var settlingHomeQuickAddID: String?
+    /// Kept here (not in the card) so totals logged from add mode count up when Home comes back.
+    @State private var summaryFigures: SummaryFigures?
     @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAddSetting = true
+    @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDaySetting = true
+    @ScaledMetric(relativeTo: .subheadline) private var quickStartRowHeight: CGFloat = 44
     @State private var suggestedFoods: [HistoricalFood] = []
-    @State private var localSearchFoods: [HistoricalFood] = []
-    @State private var search = FoodSearchState()
+    @State private var search: FoodSearchState = {
+        #if DEBUG && targetEnvironment(simulator)
+        if SearchLayoutFixture.isEnabled {
+            return FoodSearchState(provider: SearchLayoutFixture(), persistCache: false)
+        }
+        #endif
+        return FoodSearchState()
+    }()
     @State private var sheet: MainSheet?
     @State private var openedInitially = false
+    @State private var focusSearchAfterDismiss = false
     @State private var backgroundedAt: Date?
+    /// A fifth food on one day, or Done eating: ask how it's going once Home is idle.
+    @State private var reviewMomentPending = false
+    @State private var askingHowItsGoing = false
+    @State private var offeringFeedback = false
+    /// iOS's notification prompt already interrupted this session; don't follow it with another question.
+    @State private var askedForRemindersThisSession = false
     @FocusState private var searching: Bool
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    // Resolve history for the current query synchronously, before any remote response or cache hit.
+    private var localSearchFoods: [HistoricalFood] { FoodHistory.search(cleanQuery, entries: store.entries) }
     private var showsFatSecretAttribution: Bool {
         if !cleanQuery.isEmpty {
             return !search.results.isEmpty
@@ -100,7 +123,7 @@ struct MainView: View {
                     addModeHeader
                 }
             ScrollViewReader { proxy in
-                List {
+                HapticList {
                     Group {
                     if !cleanQuery.isEmpty {
                         searchSection
@@ -117,8 +140,14 @@ struct MainView: View {
                         FatSecretAttribution().listRowSeparator(.hidden)
                     }
                     }.listRowBackground(Color.clear)
-                }.caveScreenBackground()
+                }
+                .scrollContentBackground(.hidden)
+                .background(Color.caveBackground)
                 .listStyle(.plain).scrollDismissesKeyboard(.interactively)
+                // A new query starts at the top, even when its matching rows have the same IDs.
+                // Keep the search field and ScrollViewReader outside this identity change.
+                .id(cleanQuery)
+                .accessibilityIdentifier("foodList")
                 .onChange(of: store.lastAddedID) { _, value in
                     guard let value else { return }
                     let source = store.entries.first(where: { $0.id == value })?.sourceType
@@ -139,20 +168,35 @@ struct MainView: View {
                     }
                 }
             }
+            .clipped()
+            // The list owns only the space above the footer; rows cannot draw below it.
+            bottomBar
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("loggingFooter")
             }
             .background(Color.caveBackground)
             .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
-            .sheet(isPresented: drawerPresented) {
+            .sheet(isPresented: drawerPresented, onDismiss: {
+                if focusSearchAfterDismiss {
+                    focusSearchAfterDismiss = false
+                    if addMode { searching = true }
+                }
+            }) {
                 drawerContent
             }
             .task(id: cleanQuery) {
-                localSearchFoods = FoodHistory.search(cleanQuery, entries: store.entries)
                 await search.search(cleanQuery)
             }
             .task {
                 guard !openedInitially else { return }
                 openedInitially = true
+                #if DEBUG && targetEnvironment(simulator)
+                if ProgressPreferences.isPreview && ProcessInfo.processInfo.arguments.contains("--progress-open") {
+                    sheet = .progress
+                    return
+                }
+                #endif
                 if !openPendingAction() { openSearch() }
             }
             .onChange(of: selected) { _, _ in
@@ -202,6 +246,24 @@ struct MainView: View {
                     if !addMode { refreshSuggestions() }
                 }
             }
+            .task(id: readyToAskForReminders) { if readyToAskForReminders { await askForRemindersWhenIdle() } }
+            .onChange(of: store.lastAddedID) { _, id in
+                guard let id, let entry = store.entries.first(where: { $0.id == id }),
+                      ReviewPrompt.isMoment(entriesThatDay: store.dayEntries(entry.timestamp).count) else { return }
+                if ReviewPrompt.isDueNow { reviewMomentPending = true }
+            }
+            .task(id: readyToAskHowItsGoing) { if readyToAskHowItsGoing { await askHowItsGoingWhenIdle() } }
+            .alert("Cave Cals good?", isPresented: $askingHowItsGoing) {
+                // Alert buttons may skip the haptic button style, so they play their own feel.
+                Button("Not really") { Haptics.play(.tap); afterAlert { offeringFeedback = true } }.hapticFeel(.none)
+                Button("Yes! Me like") { Haptics.play(.tap); afterAlert { requestReview() } }.hapticFeel(.none)
+            }
+            .alert("Help fix cave?", isPresented: $offeringFeedback) {
+                Button("Not now", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)
+                Button("Send Feedback") { Haptics.play(.tap); openURL(CaveCalsLinks.feedback) }.hapticFeel(.none)
+            } message: {
+                Text("We want Cave Cals to get better. Tell us what’s not working.")
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in resetToday() }
             .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { now in
                 if !Calendar.current.isDate(now, inSameDayAs: today) { resetToday() }
@@ -216,15 +278,19 @@ struct MainView: View {
             Button { sheet = .profile } label: {
                 CaveIcon(.person, size: 26).frame(width: 44, height: 44)
             }.accessibilityLabel("About You").accessibilityIdentifier("profile")
+            Button { sheet = .progress } label: {
+                Image("CaveProgress").renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 25, height: 25).frame(width: 44, height: 44)
+            }.accessibilityLabel("Progress").accessibilityIdentifier("progress")
             Button { sheet = .settings } label: {
                 CaveIcon(.gear, size: 26).frame(width: 44, height: 44)
             }.accessibilityLabel("Settings").accessibilityIdentifier("appSettings")
         }
         .frame(height: 44)
         .padding(.horizontal, 20).padding(.top, 8)
-        DailySummaryCard(calories: store.total(selected), calorieGoal: store.goal(selected),
+        DailySummaryCard(day: selected, calories: store.total(selected), calorieGoal: store.goal(selected),
                          macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
-                         macroGoals: store.macroGoals(selected))
+                         macroGoals: store.macroGoals(selected), isVisible: sheet == nil, shown: $summaryFigures)
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
         if !store.dayEntries(selected).isEmpty {
             Text(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected))
@@ -242,7 +308,7 @@ struct MainView: View {
             Button { exitAddMode() } label: {
                 CaveIcon(.chevronLeft, size: 20).foregroundStyle(Color.caveOrange)
                     .frame(width: 36, height: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain)
+            }.hapticButtonStyle(.plain)
                 .accessibilityLabel("Back").accessibilityIdentifier("addModeBack")
             foodListPicker
         }
@@ -295,20 +361,24 @@ struct MainView: View {
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(.plain)
         .accessibilityLabel(mode == .logged ? "Logged, \(title)" : title)
         .accessibilityIdentifier(mode == .logged ? "Logged" : title)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .hapticFeel(.selection)
     }
     @discardableResult private func openPendingAction() -> Bool {
-        guard let action = actionRouter.consume() else { return false }
+        guard let request = actionRouter.consume() else { return false }
         openedInitially = true
+        focusSearchAfterDismiss = false
         // External logging always starts today, even if a past day was selected.
         selected = Date()
         today = selected
         searching = false
         query = ""
-        switch action {
+        // Starting to log from a widget or shortcut means today isn't done after all.
+        if request.action != nil { store.reopenDay(today) }
+        switch request.action {
         case .barcode:
             revealNextAddedEntry = true
             sheet = .barcode(loggingDate)
@@ -319,8 +389,14 @@ struct MainView: View {
             revealNextAddedEntry = true
             sheet = .photo
         case .add:
-            enterAddMode()
-            searching = true
+            let dismissingSheet = sheet != nil
+            openSearch(autofocus: true)
+            if dismissingSheet {
+                searching = false
+                focusSearchAfterDismiss = true
+            }
+        case nil:
+            openSearch()
         }
         return true
     }
@@ -339,6 +415,7 @@ struct MainView: View {
             EntryEditorSheet(draft: draft, focusNameOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
         case .settings: SettingsView()
         case .profile: ProfileView()
+        case .progress: ProgressScreen()
         case .weighIn: WeightEditorSheet(record: weights.record(on: Date()), unit: weights.unit)
         case .barcode(let date): BarcodeSheet(date: date)
         case .meal(let id, let date): MealAddSheet(mealID: id, date: date)
@@ -370,6 +447,7 @@ struct MainView: View {
                 .environment(\.defaultMinListRowHeight, 16)
             }
             let local = localSearchFoods
+            // History always leads, followed by saved meals, built-in foods, then API matches.
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription,
@@ -413,10 +491,12 @@ struct MainView: View {
         }
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
+    /// The day's log sits back a little so the totals above lead.
+    private static let homeLogOpacity = 0.8
     @ViewBuilder private var loggedRows: some View {
             if store.dayEntries(selected).isEmpty {
                 Text(Calendar.current.isDateInToday(selected)
-                     ? "You haven't logged anything yet today."
+                     ? "No log yet."
                      : "No food logged for this day.")
                     .font(.cave(.body)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -439,10 +519,11 @@ struct MainView: View {
                                 .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
                                 .accessibilityHidden(true)
                         }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
+                        .opacity(Self.homeLogOpacity)
                     }
-                    .buttonStyle(.plain).id(entry.id)
+                    .hapticButtonStyle(.plain).id(entry.id)
                     .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
-                    .caveCardRow()
+                    .caveCardRow(opacity: Self.homeLogOpacity)
                     .accessibilityIdentifier("entry-\(entry.id)")
                     .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
                     .contextMenu {
@@ -456,7 +537,7 @@ struct MainView: View {
                             duplicate(entry)
                         } label: {
                             Label("Duplicate", systemImage: "plus.square.on.square")
-                        }
+                        }.hapticFeel(.success)
                         Button(role: .destructive) {
                             store.delete(entry)
                         } label: {
@@ -468,11 +549,12 @@ struct MainView: View {
                         Button("Delete", role: .destructive) { store.delete(entry) }
                             .tint(.red)
                         Button("Duplicate") { duplicate(entry) }
-                            .tint(.gray)
+                            .tint(.gray).hapticFeel(.success)
                     }
                 }
             }.listSectionSeparator(.hidden)
-            if showsHomeQuickAddSetting, Calendar.current.isDate(selected, inSameDayAs: today), store.showsHomeQuickAdd(on: today) {
+            if showsHomeQuickAddSetting, Calendar.current.isDate(selected, inSameDayAs: today), store.showsHomeQuickAdd(on: today),
+               !store.isFinished(today) {
                 homeQuickAddRows
             }
     }
@@ -483,7 +565,12 @@ struct MainView: View {
         return Array(suggestedFoods.filter { food in
             food.id == settlingHomeQuickAddID || !logged.contains(food.id)
                 || FoodHistory.expectsAnotherToday(foodID: food.id, entries: store.entries, date: Date())
-        }.prefix(3))
+        }.prefix(10))
+    }
+    /// Quick Start shows three rows; half of a fading fourth invites scrolling through the rest.
+    private func quickStartHeight(rows count: Int) -> CGFloat {
+        let rows = min(Double(count), 3.5)
+        return CGFloat(rows) * quickStartRowHeight + 6 * CGFloat(max(0, Int(rows.rounded(.up)) - 1))
     }
     @ViewBuilder private var homeQuickAddRows: some View {
         let picks = homeQuickAddPicks
@@ -491,7 +578,7 @@ struct MainView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 6) {
                     CaveIcon(.lightning, size: 15)
-                    Text("Quick Add")
+                    Text("Quick Start")
                 }
                 .font(.cave(.subheadline).bold()).foregroundStyle(Color.caveOrange)
                 .accessibilityElement(children: .combine)
@@ -501,23 +588,40 @@ struct MainView: View {
                 // Lines up with the rows' + buttons; closes the picks for the rest of today.
                 Button { withAnimation { store.dismissHomeQuickAdd(on: today) } } label: {
                     CaveIcon(.plus, size: 15).rotationEffect(.degrees(45)).frame(width: 44, height: 36)
-                }.buttonStyle(.borderless).foregroundStyle(.secondary)
-                    .accessibilityLabel("Hide Quick Add for today").accessibilityIdentifier("dismissHomeQuickAdd")
+                }.hapticButtonStyle(.borderless).foregroundStyle(.secondary)
+                    .accessibilityLabel("Hide Quick Start for today").accessibilityIdentifier("dismissHomeQuickAdd")
             }
             .padding(.top, 12)
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
+            .listRowInsets(EdgeInsets(top: 0, leading: 34, bottom: 0, trailing: 32))
             .listRowSeparator(.hidden)
-            ForEach(picks) { food in
-                let draft = store.applyingCommonDefault(to: food.draft)
-                FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: store.isPinned(food.id),
-                        add: { addHomeQuickAdd(draft, foodID: food.id) },
-                        edit: {
-                            store.markHomeQuickAddUsed(on: today)
-                            edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: true)
-                        })
-                    .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
-                    .caveCardRow()
+            ScrollView(.vertical) {
+                VStack(spacing: 6) {
+                    ForEach(picks) { food in
+                        let draft = store.applyingCommonDefault(to: food.draft)
+                        FoodRow(name: draft.name, calories: draft.calories, suggestionLayout: true, pinned: store.isPinned(food.id),
+                                compact: true,
+                                add: { addHomeQuickAdd(draft, foodID: food.id) },
+                                edit: {
+                                    store.markHomeQuickAddUsed(on: today)
+                                    edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: true)
+                                })
+                            .padding(.leading, 14).padding(.trailing, 4)
+                            .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: quickStartHeight(rows: picks.count))
+            // Fade the peeking row instead of slicing through its text.
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0),
+                                       .init(color: .black, location: picks.count > 3 ? 0.84 : 1),
+                                       .init(color: picks.count > 3 ? .clear : .black, location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .listRowInsets(EdgeInsets(top: 4, leading: 28, bottom: 0, trailing: 28))
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier("homeQuickStartList")
         }
     }
     /// Add mode's Today list: log something from today again, or edit a copy before adding it.
@@ -573,7 +677,7 @@ struct MainView: View {
                                 add(draft, source: "suggestion")
                             } label: {
                                 Label("Add", systemImage: "plus")
-                            }
+                            }.hapticFeel(.success)
                             Button {
                                 store.setPinned(!pinned, foodID: food.id)
                             } label: {
@@ -582,7 +686,7 @@ struct MainView: View {
                             Button {
                                 store.hideFromQuickAdd(foodID: food.id, name: draft.name)
                             } label: {
-                                Label("Hide for 2 weeks", systemImage: "eye.slash")
+                                Label("Remove, No Add Often", systemImage: "eye.slash")
                             }
                         }
                         .swipeActions(edge: .trailing) {
@@ -606,7 +710,7 @@ struct MainView: View {
             .padding(.horizontal, 18)
             .frame(minHeight: 38)
         }
-        .buttonStyle(.borderedProminent)
+        .hapticButtonStyle(.borderedProminent)
         .tint(.caveOrange)
         .frame(maxWidth: .infinity)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
@@ -676,6 +780,10 @@ struct MainView: View {
                !addMode, !searching, cleanQuery.isEmpty {
                 weighInReminder
             }
+            // Re-checked each minute so the card turns up at 6 pm without other activity.
+            TimelineView(.everyMinute) { context in
+                if offersFinishDay(at: context.date) { finishDayReminder }
+            }
             VStack(spacing: 0) {
                 if let toast = store.toast {
                     HStack {
@@ -686,6 +794,9 @@ struct MainView: View {
                     }.padding(.horizontal, 20).background(Color.accentColor.opacity(0.1))
                         .accessibilityIdentifier("searchUndoBanner")
                 }
+                if todayIsDone {
+                    dayDoneFooter.padding(.horizontal, 16).padding(.vertical, 12)
+                } else {
                 // The typed-entry action sits directly above the search field, aligned with its magnifier.
                 if !cleanQuery.isEmpty {
                     Group {
@@ -730,7 +841,7 @@ struct MainView: View {
                                 Text(clearing ? "Clear" : "Cancel")
                                     .font(.cave(.subheadline)).foregroundStyle(.red)
                                     .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                            }.hapticButtonStyle(.plain)
                             .accessibilityIdentifier(clearing ? "clearSearch" : "cancelAddMode")
                         }
                     }.padding(.horizontal, 12).frame(minHeight: 48)
@@ -741,31 +852,111 @@ struct MainView: View {
                 }
                 .padding(.horizontal, 16).padding(.top, cleanQuery.isEmpty ? 12 : 4).padding(.bottom, 12)
                 .animation(.easeInOut(duration: 0.22), value: searchExpanded)
+                }
             }.background(Color.caveSurface)
         }
     }
-    /// Sits on the page above the footer as its own outlined card; the chevron marks it as something to tap.
     private var weighInReminder: some View {
+        reminderCard(glyph: .person, title: "Log today’s weight", navigates: true,
+                     identifier: "weighInReminder", hint: "Opens today’s weigh-in", action: { sheet = .weighIn },
+                     dismissLabel: "Hide weigh-in reminder for today", dismissIdentifier: "dismissWeighIn",
+                     dismiss: { weights.dismissToday() })
+    }
+    /// Today is marked done eating: search and capture give way to `dayDoneFooter` until Reopen or another log.
+    private var todayIsDone: Bool {
+        Calendar.current.isDate(selected, inSameDayAs: today) && store.isFinished(today)
+    }
+    /// "Done eating for today" shows on Today from 6 pm, or earlier once the day reaches 90% of its calorie goal.
+    private func offersFinishDay(at now: Date) -> Bool {
+        guard showsFinishDaySetting, Calendar.current.isDate(selected, inSameDayAs: today),
+              !addMode, !searching, cleanQuery.isEmpty, !store.dayEntries(today).isEmpty,
+              !store.isFinished(today), !store.finishPromptHidden(on: today) else { return false }
+        let nearGoal = store.goal(today).map { store.total(today) >= 0.9 * $0 } ?? false
+        return Calendar.current.component(.hour, from: now) >= 18 || nearGoal
+    }
+    private var finishDayReminder: some View {
+        reminderCard(glyph: .check, title: "Done eating for today", navigates: false,
+                     identifier: "finishDay", hint: "Closes today’s log until you reopen it", feel: .success,
+                     action: {
+                         withAnimation(.easeInOut(duration: 0.22)) { store.finishDay() }
+                         if ReviewPrompt.isDueNow { reviewMomentPending = true }
+                     },
+                     dismissLabel: "Hide done eating button for today", dismissIdentifier: "dismissFinishDay",
+                     dismiss: { store.hideFinishPrompt(on: today) })
+    }
+    /// After a few days of logging, iOS's notification prompt appears on its own while Home is idle; reminders
+    /// then start on (Settings → Reminders turns them off). There's no Home card for it.
+    private var readyToAskForReminders: Bool {
+        sheet == nil && !addMode && !searching && cleanQuery.isEmpty
+            && !ProcessInfo.processInfo.arguments.contains { $0 == "--uitesting" || $0 == "--screenshots" }
+            && LogReminders.shared.shouldOffer(entries: store.entries)
+    }
+    private func askForRemindersWhenIdle() async {
+        // Let a count-up or sheet dismissal settle first.
+        try? await Task.sleep(for: .seconds(1.5))
+        guard readyToAskForReminders else { return }
+        askedForRemindersThisSession = true
+        await LogReminders.shared.requestPermission()
+    }
+    /// "Cave Cals good?" waits for the same idle Home as the reminder prompt, and never shares a
+    /// session with it.
+    private var readyToAskHowItsGoing: Bool {
+        reviewMomentPending && ReviewPrompt.isAllowed && !askedForRemindersThisSession && !readyToAskForReminders
+            && sheet == nil && !addMode && !searching && cleanQuery.isEmpty
+    }
+    private func askHowItsGoingWhenIdle() async {
+        try? await Task.sleep(for: .seconds(1.5))
+        guard !Task.isCancelled, readyToAskHowItsGoing, ReviewPrompt.isDueNow else { return }
+        reviewMomentPending = false
+        ReviewPrompt.recordAsked()
+        askingHowItsGoing = true
+    }
+    /// Lets the alert finish closing before the next one (or Apple's rating prompt) appears.
+    private func afterAlert(_ action: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            action()
+        }
+    }
+    private var dayDoneFooter: some View {
+        HStack(spacing: 10) {
+            CaveIcon(.check, size: 20).foregroundStyle(Color.caveOrange).accessibilityHidden(true)
+            Text("Day done. Cave closed.").font(.cave(.body))
+                .accessibilityLabel("Done eating for today")
+            Spacer(minLength: 8)
+            Button { withAnimation(.easeInOut(duration: 0.22)) { store.reopenDay(today) } } label: {
+                Text("Reopen").font(.cave(.subheadline)).foregroundStyle(Color.caveOrange)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+            }.hapticButtonStyle(.plain)
+                .accessibilityLabel("Resume logging today").accessibilityIdentifier("reopenDay")
+        }
+        .padding(.leading, 12).padding(.trailing, 4).frame(minHeight: 48)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("dayDone")
+    }
+    /// Sits on the page above the footer as its own outlined card; a chevron marks one that opens something.
+    private func reminderCard(glyph: CaveGlyph, title: String, navigates: Bool, identifier: String, hint: String,
+                              feel: HapticFeel = .tap, action: @escaping () -> Void, dismissLabel: String, dismissIdentifier: String,
+                              dismiss: @escaping () -> Void) -> some View {
         HStack(spacing: 2) {
-            Button { sheet = .weighIn } label: {
+            Button(action: action) {
                 HStack(spacing: 10) {
-                    CaveIcon(.person, size: 20)
-                    Text("Log today’s weight").font(.cave(.subheadline).weight(.semibold))
+                    CaveIcon(glyph, size: 20)
+                    Text(title).font(.cave(.subheadline).weight(.semibold))
                     Spacer(minLength: 8)
-                    CaveIcon(.chevronRight, size: 16)
+                    if navigates { CaveIcon(.chevronRight, size: 16) }
                 }
                 .foregroundStyle(Color.caveOrange)
                 .padding(.horizontal, 14).frame(minHeight: 48)
                 .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.caveOrange.opacity(0.55), lineWidth: 1.5))
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }.buttonStyle(.plain)
-                .accessibilityIdentifier("weighInReminder")
-                .accessibilityHint("Opens today’s weigh-in")
-            Button { weights.dismissToday() } label: {
+            }.hapticButtonStyle(.plain).hapticFeel(feel)
+                .accessibilityIdentifier(identifier)
+                .accessibilityHint(hint)
+            Button(action: dismiss) {
                 CaveIcon(.plus, size: 15).rotationEffect(.degrees(45)).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
-                .accessibilityLabel("Hide weigh-in reminder for today").accessibilityIdentifier("dismissWeighIn")
+            }.hapticButtonStyle(.plain).foregroundStyle(.secondary)
+                .accessibilityLabel(dismissLabel).accessibilityIdentifier(dismissIdentifier)
         }
         .padding(.leading, 16).padding(.trailing, 6).padding(.top, 6).padding(.bottom, 8)
         .background(Color.caveBackground)
@@ -817,7 +1008,7 @@ struct MainView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(.plain)
         .accessibilityLabel("Add \"\(cleanQuery)\", enter calories")
         .accessibilityIdentifier("manualSearchEntry")
     }
@@ -837,7 +1028,9 @@ struct MainView: View {
         guard Calendar.current.isDate(selected, inSameDayAs: today) else { return }
         store.dismissHomeQuickAdd(on: today)
     }
+    /// Only reached by tapping the search field, which feels like a button.
     private func enterAddMode() {
+        Haptics.play(.tap)
         addMode = true
         listMode = .quickAdd
         refreshSuggestions()
@@ -920,8 +1113,11 @@ struct FoodRow: View {
     var pinned = false
     var added = false
     var keepsAddedState = false
+    /// Home's Quick Start: smaller one-line text and + circle, still with 44-point taps.
+    var compact = false
     let add: () -> Void
     let edit: () -> Void
+    private var rowHeight: CGFloat { compact ? 44 : suggestionLayout ? 52 : 48 }
     private var actionName: String { calories == nil && name.hasPrefix("Add ") ? String(name.dropFirst(4)) : name }
     private var subtitle: String {
         var parts = [detail ?? ""].filter { !$0.isEmpty }
@@ -945,7 +1141,8 @@ struct FoodRow: View {
                                     .foregroundStyle(.secondary)
                                     .accessibilityHidden(true)
                             }
-                            Text(name).font(.cave(.subheadline).weight(confirming ? .bold : .regular)).foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(2)
+                            Text(name).font((compact ? Font.custom("Schoolbell-Regular", size: 16, relativeTo: .subheadline) : Font.cave(.subheadline)).weight(confirming ? .bold : .regular))
+                                .foregroundStyle(confirming ? Color.accentColor : Color.primary).lineLimit(compact ? 1 : 2)
                         }
                         if !subtitle.isEmpty {
                             Text(subtitle).font(.cave(.caption)).foregroundStyle(.secondary)
@@ -954,32 +1151,33 @@ struct FoodRow: View {
                         if suggestionLayout, store.tracksMacros, let macros { MacroLine(summary: macros) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     // Wrapped names grow the card instead of touching its edges; one-line rows keep the 52-pt height.
-                    .padding(.vertical, suggestionLayout ? 12 : 0)
+                    .padding(.vertical, compact ? 8 : suggestionLayout ? 12 : 0)
                     if suggestionLayout, let calories {
-                        Text(calories.calorieText).font(.cave(.body).weight(.semibold)).monospacedDigit()
+                        Text(calories.calorieText).font((compact ? Font.custom("Schoolbell-Regular", size: 17, relativeTo: .body) : Font.cave(.body)).weight(.semibold)).monospacedDigit()
                             .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
                             .padding(.trailing, 6)
                     }
-                }.frame(maxWidth: .infinity, minHeight: suggestionLayout ? 52 : 48, alignment: .leading)
+                }.frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .leading)
                     .contentShape(Rectangle())
-            }.buttonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "Edit \(actionName)")
+            }.hapticButtonStyle(.plain).foregroundStyle(.primary).accessibilityLabel(added ? "Added \(actionName)" : "Edit \(actionName)")
                 .accessibilityIdentifier("foodDetails-\(actionName)")
                 .accessibilityValue(rowValue)
                 .disabled(added)
-            Button(action: edit) { CaveIcon(.pencil, size: 22).frame(width: 44, height: suggestionLayout ? 52 : 48) }
-                .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")
+            Button(action: edit) { CaveIcon(.pencil, size: compact ? 19 : 22).frame(width: 44, height: rowHeight) }
+                .hapticButtonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Edit \(actionName)")
                 .disabled(added)
             Button(action: addWithFeedback) {
                 if added {
                     Image(systemName: "checkmark")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                        .frame(width: 44, height: suggestionLayout ? 52 : 48)
+                        .frame(width: 44, height: rowHeight)
                 } else {
-                    FlipAddIcon(angle: rotation, showCheckWithoutMotion: reduceMotion && confirming)
-                        .frame(width: 44, height: suggestionLayout ? 52 : 48)
+                    FlipAddIcon(angle: rotation, showCheckWithoutMotion: reduceMotion && confirming, diameter: compact ? 29 : 34)
+                        .frame(width: 44, height: rowHeight)
                 }
-            }.buttonStyle(.borderless).accessibilityLabel(added ? "Added \(actionName)" : "Add \(actionName)")
+            }.hapticButtonStyle(.borderless).hapticFeel(.none)
+                .accessibilityLabel(added ? "Added \(actionName)" : "Add \(actionName)")
                 .accessibilityValue(rowValue)
                 .disabled(added)
         }
@@ -1008,6 +1206,7 @@ struct FoodRow: View {
         let previous = store.lastAddedID
         add()
         guard store.lastAddedID != previous else { return }
+        Haptics.play(.success)
         guard !keepsAddedState else { return }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
             confirming = true
@@ -1019,6 +1218,7 @@ struct FoodRow: View {
 private struct FlipAddIcon: View, Animatable {
     var angle: Double
     var showCheckWithoutMotion: Bool
+    var diameter: CGFloat = 34
     var animatableData: Double {
         get { angle }
         set { angle = newValue }
@@ -1026,14 +1226,14 @@ private struct FlipAddIcon: View, Animatable {
     var body: some View {
         let showsCheck = showCheckWithoutMotion || (angle >= 90 && angle < 270)
         ZStack {
-            CaveIcon(.plus, size: 17).opacity(showsCheck ? 0 : 1)
+            CaveIcon(.plus, size: diameter / 2).opacity(showsCheck ? 0 : 1)
             Image(systemName: "checkmark")
                 .font(.system(size: 20, weight: .semibold))
                 .rotation3DEffect(.degrees(showCheckWithoutMotion ? 0 : 180), axis: (x: 0, y: 1, z: 0))
                 .opacity(showsCheck ? 1 : 0)
         }
         .foregroundStyle(showsCheck ? Color.primary : Color.white)
-        .frame(width: 34, height: 34).background(showsCheck ? Color.clear : Color.accentColor, in: Circle())
+        .frame(width: diameter, height: diameter).background(showsCheck ? Color.clear : Color.accentColor, in: Circle())
         .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
     }
 }
@@ -1071,7 +1271,7 @@ struct DaySelector: View {
         HStack(spacing: 0) {
             Button { move(-1) } label: {
                 CaveIcon(.chevronLeft, size: 22).frame(width: 44, height: 44)
-            }.buttonStyle(.borderless).accessibilityLabel("Previous day")
+            }.hapticButtonStyle(.borderless).hapticFeel(.selection).accessibilityLabel("Previous day")
             Button(action: openCalendar) {
                 HStack(alignment: .firstTextBaseline, spacing: relativeDayName == nil ? 6 : 12) {
                     Text(relativeDayName ?? fullDateLabel)
@@ -1087,11 +1287,11 @@ struct DaySelector: View {
                 .padding(.horizontal, relativeDayName == nil ? 12 : 2).frame(minHeight: 44)
                 .contentShape(Rectangle())
                 .accessibilityElement(children: .combine)
-            }.buttonStyle(.plain).accessibilityIdentifier("selectedDate")
+            }.hapticButtonStyle(.plain).accessibilityIdentifier("selectedDate")
                 .accessibilityHint("Open calorie calendar")
             Button { move(1) } label: {
                 CaveIcon(.chevronRight, size: 22).frame(width: 44, height: 44)
-            }.buttonStyle(.borderless).accessibilityLabel("Next day")
+            }.hapticButtonStyle(.borderless).hapticFeel(.selection).accessibilityLabel("Next day")
                 .disabled(Calendar.current.startOfDay(for: selected) >= Calendar.current.startOfDay(for: today))
         }
     }
@@ -1148,9 +1348,9 @@ private struct CalorieCalendarSheet: View {
                 .task { proxy.scrollTo(monthStart(selected), anchor: .top) }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Today") { withAnimation { proxy.scrollTo(monthStart(today), anchor: .top) } }
+                        Button("Today") { withAnimation { proxy.scrollTo(monthStart(today), anchor: .top) } }.hapticButtonStyle(.automatic)
                     }
-                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) }
                 }
             }
             .navigationTitle("Calendar").navigationBarTitleDisplayMode(.inline)
@@ -1192,7 +1392,7 @@ private struct CalorieCalendarSheet: View {
                             }
                             .opacity(future ? 0.3 : 1)
                             .contentShape(Rectangle())
-                    }.buttonStyle(.plain).disabled(future)
+                    }.hapticButtonStyle(.plain).hapticFeel(.selection).disabled(future)
                         .accessibilityLabel("\(date.formatted(date: .complete, time: .omitted)), \(total.calorieText) calories")
                         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
                 }

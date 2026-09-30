@@ -173,6 +173,54 @@ struct AIUpgradePaywall: View {
     }
 }
 
+/// Setup is already saved. The optional offer must never block access to the diary.
+struct OnboardingUpgradeView: View {
+    @Environment(AppStore.self) private var store
+    @State private var subscriptions = AISubscriptions()
+    @State private var loading = true
+    @State private var dismissalGate = PaywallDismissalGate()
+    let onComplete: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading {
+                    ProgressView("Loading Cave Cals+…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    AIUpgradePaywall(subscriptions: subscriptions, onDismissRequested: finish)
+                }
+            }
+            .caveScreenBackground()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Button("Skip for now", action: finish)
+                    .font(.cave(.body))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.vertical, 8)
+                    .background(Color.caveBackground)
+                    .hapticButtonStyle(.plain)
+                    .accessibilityIdentifier("skipOnboardingPaywall")
+            }
+            .task {
+                #if DEBUG
+                // Keep onboarding UI tests independent of App Attest and the storefront.
+                if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+                    loading = false
+                    return
+                }
+                #endif
+                await subscriptions.refresh(regularLogCount: store.regularLogCount)
+                guard !Task.isCancelled else { return }
+                if subscriptions.account?.active == true { finish() }
+                loading = false
+            }
+        }
+        .accessibilityIdentifier("onboardingPaywall")
+    }
+
+    private func finish() { dismissalGate.request(onComplete) }
+}
+
 struct AISubscriptionSection: View {
     @Environment(AppStore.self) private var store
     let subscriptions: AISubscriptions
@@ -207,7 +255,7 @@ struct AISubscriptionSection: View {
                         Button("Try Again") {
                             Task { await subscriptions.refresh(regularLogCount: store.regularLogCount) }
                         }
-                        .buttonStyle(.bordered)
+                        .hapticButtonStyle(.bordered)
                         .frame(minHeight: 44)
                         .disabled(subscriptions.busy)
                         .accessibilityIdentifier("retryAIConnection")
@@ -269,7 +317,7 @@ struct AISubscriptionSection: View {
                 }
                     .frame(maxWidth: .infinity, minHeight: 34)
             }
-            .buttonStyle(.borderedProminent)
+            .hapticButtonStyle(.borderedProminent)
             .disabled(subscriptions.offering == nil)
             .accessibilityIdentifier("aiPaywall")
         }
@@ -291,7 +339,7 @@ struct AISubscriptionSection: View {
 
     private var restoreButton: some View {
         Button("Restore purchases") { Task { await subscriptions.restore() } }
-            .buttonStyle(.plain)
+            .hapticButtonStyle(.plain)
             .foregroundStyle(Color.accentColor)
             .disabled(subscriptions.busy || subscriptions.account == nil)
     }

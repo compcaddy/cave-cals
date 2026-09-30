@@ -1,8 +1,125 @@
 import XCTest
+import SwiftUI
 import SwiftData
 @testable import CaveCals
 
 @MainActor final class ECCTests: XCTestCase {
+    func testReviewPromptAsksOnTheFifthFoodOfADayAndWaits120DaysToAskAgain() {
+        XCTAssertFalse(ReviewPrompt.isMoment(entriesThatDay: 4))
+        XCTAssertTrue(ReviewPrompt.isMoment(entriesThatDay: 5))
+        XCTAssertTrue(ReviewPrompt.isMoment(entriesThatDay: 6))
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let asked = calendar.date(from: DateComponents(year: 2026, month: 9, day: 29, hour: 12))!
+        func later(days: Int, hours: Int = 0) -> Date {
+            calendar.date(byAdding: DateComponents(day: days, hour: hours), to: asked)!
+        }
+        // Never asked (the first day of use included) is due right away.
+        XCTAssertTrue(ReviewPrompt.isDue(lastAsked: nil, now: asked, calendar: calendar))
+        XCTAssertFalse(ReviewPrompt.isDue(lastAsked: asked, now: later(days: 1), calendar: calendar))
+        XCTAssertFalse(ReviewPrompt.isDue(lastAsked: asked, now: later(days: 119, hours: 23), calendar: calendar))
+        XCTAssertTrue(ReviewPrompt.isDue(lastAsked: asked, now: later(days: 120), calendar: calendar))
+    }
+    func testLogReminderLearnsAnHourAfterTheUsualFirstLogAndIgnoresBackfills() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour, minute: minute))!
+        }
+        func log(_ day: Int, _ hour: Int, _ minute: Int = 0) -> LogReminderPlan.Log { .init(timestamp: at(day, hour, minute), createdAt: at(day, hour, minute)) }
+        let now = at(28, 7)  // Monday morning
+        // Weekday first logs 7:50, 8:05, 8:10, 8:20 and one late 9:45: an hour after the 8:10 median is 9:10.
+        let week = [log(21, 7, 50), log(21, 12), log(22, 8, 5), log(23, 8, 10), log(24, 8, 20), log(25, 9, 45)]
+        let plan = LogReminderPlan(logs: week, now: now, calendar: calendar)
+        XCTAssertEqual(plan.weekday, 9 * 60 + 10)
+        XCTAssertEqual(plan.weekend, plan.weekday)
+        // Filling in yesterday tonight isn't a first log, so four real days are still "learning" (10:00).
+        let backfilled = Array(week.dropLast()) + [LogReminderPlan.Log(timestamp: at(25, 9), createdAt: at(26, 21))]
+        let learning = LogReminderPlan(logs: backfilled, now: now, calendar: calendar)
+        XCTAssertTrue(learning.isLearning)
+        XCTAssertEqual(learning.minutes(on: now, calendar: calendar), LogReminderPlan.defaultMinutes)
+        // Weekends learn separately when they really start later.
+        let split = LogReminderPlan(logs: (14...18).map { log($0, 8) } + [12, 13, 19, 20].map { log($0, 10, 30) }, now: now, calendar: calendar)
+        XCTAssertEqual(split.weekday, 9 * 60)
+        XCTAssertEqual(split.weekend, 11 * 60 + 30)
+        XCTAssertEqual(split.minutes(on: at(27, 7), calendar: calendar), 11 * 60 + 30)
+        // Never earlier than most recent days, and kept to 6 AM–9 PM.
+        XCTAssertEqual(LogReminderPlan.reminderMinutes([480, 480, 480, 600, 610]), 600)
+        XCTAssertEqual(LogReminderPlan.reminderMinutes([240, 250, 260, 270, 280]), LogReminderPlan.earliest)
+        XCTAssertEqual(LogReminderPlan.reminderMinutes([1320, 1320, 1330, 1340, 1350]), LogReminderPlan.latest)
+    }
+    func testLogRemindersSkipLoggedDaysAndPauseAfterThreeIdleDays() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour, minute: minute))!
+        }
+        func log(_ day: Int, _ hour: Int) -> LogReminderPlan.Log { .init(timestamp: at(day, hour), createdAt: at(day, hour)) }
+        let history = (14...18).map { log($0, 8) } + (21...25).map { log($0, 8) }  // weekdays at 8:00, reminder at 9:00
+        func dates(_ logs: [LogReminderPlan.Log], now: Date, mode: LogReminderMode = .learned) -> [Date] {
+            LogReminderPlan.reminderDates(logs: logs, mode: mode, fixedMinutes: 7 * 60 + 30, now: now, calendar: calendar)
+        }
+        // Friday before 9:00 with nothing logged: today plus the next three days (weekend uses the combined time).
+        XCTAssertEqual(dates(Array(history.dropLast()), now: at(25, 7)), [at(25, 9), at(26, 9), at(27, 9), at(28, 9)])
+        // Something logged today: no reminder today, and one a day after that.
+        XCTAssertEqual(dates(history, now: at(25, 8, 30)), [at(26, 9), at(27, 9), at(28, 9)])
+        // Past today's time: nothing more today.
+        XCTAssertEqual(dates(Array(history.dropLast()), now: at(25, 9, 5)).first, at(26, 9))
+        // Three days in a row without logging pauses reminders until the next log.
+        XCTAssertEqual(dates(history, now: at(28, 7)).first, at(28, 9))
+        XCTAssertTrue(dates(history, now: at(29, 7)).isEmpty)
+        // A set time ignores the learned one.
+        XCTAssertEqual(dates(history, now: at(25, 8, 30), mode: .fixed).first, at(26, 7, 30))
+        XCTAssertEqual(Day.mealName(at: at(25, 9), calendar: calendar), "Breakfast")
+        XCTAssertEqual(Day.mealName(at: at(25, 13), calendar: calendar), "Lunch")
+    }
+    func testCountUpRumbleTicksFollowTheCountAndLandOnTheFinalNumber() {
+        let curve = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
+        for calories in [5.0, 110, 184, 650, 1900] {
+            let (ticks, landing) = Haptics.countUpTimes(by: calories, curve: curve, duration: 0.9)
+            XCTAssertGreaterThan(landing, 0.2, "\(calories)")
+            XCTAssertLessThanOrEqual(landing, 0.9, "\(calories)")
+            XCTAssertFalse(ticks.isEmpty, "\(calories)")
+            XCTAssertLessThan(ticks.last!, landing - 0.034, "\(calories)")
+            for (earlier, later) in zip(ticks, ticks.dropFirst()) { XCTAssertGreaterThanOrEqual(later - earlier, 0.0349) }
+        }
+        // Ticks crowd the fast start and thin out as the digits settle.
+        let (ticks, _) = Haptics.countUpTimes(by: 650, curve: curve, duration: 0.9)
+        XCTAssertLessThan(ticks[1] - ticks[0], ticks.last! - ticks[ticks.count - 2])
+        let reduced = Haptics.countUpTimes(by: 650, curve: curve, duration: 0)
+        XCTAssertTrue(reduced.ticks.isEmpty)
+        XCTAssertEqual(reduced.landing, 0)
+    }
+    func testDoneEatingClosesDayUntilMoreFoodIsLoggedThatDay() throws {
+        let suite = "finish-day-tests-\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let store = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        let today = Calendar.current.startOfDay(for: Date())
+        XCTAssertTrue(store.add([EntryDraft(calories: 500)]))
+        store.finishDay()
+        XCTAssertTrue(store.isFinished(Date()))
+        XCTAssertEqual(store.finishedDates(), [today])
+        var edited = EntryDraft(store.entries[0]); edited.calories = 450
+        XCTAssertTrue(store.update(edited))
+        XCTAssertTrue(store.isFinished(Date()), "Edits keep the day closed")
+        XCTAssertTrue(AppStore(container: container, publishesWidget: false, preferences: preferences).isFinished(Date()))
+        XCTAssertTrue(store.add([EntryDraft(calories: 200)]))
+        XCTAssertFalse(store.isFinished(Date()), "Logging more reopens the day")
+        XCTAssertTrue(store.finishedDates().isEmpty)
+        store.undo()
+        XCTAssertTrue(store.isFinished(Date()))
+        store.reopenDay()
+        XCTAssertFalse(store.isFinished(Date()))
+        store.hideFinishPrompt(on: Date())
+        XCTAssertTrue(AppStore(container: container, publishesWidget: false, preferences: preferences).finishPromptHidden(on: Date()))
+        // A later backfill doesn't reopen a settled day.
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        store.finishDay(yesterday.addingTimeInterval(21 * 3600))
+        XCTAssertTrue(store.add([EntryDraft(calories: 300, timestamp: yesterday.addingTimeInterval(12 * 3600))]))
+        XCTAssertTrue(store.isFinished(yesterday))
+        XCTAssertEqual(store.finishedDates(), [yesterday])
+        let memoryOnly = AppStore(container: container, publishesWidget: false, persistsUsage: false, preferences: preferences)
+        XCTAssertTrue(memoryOnly.finishedDays.isEmpty, "In-memory stores never read or write the local marks")
+    }
     func testRegularLogAllowanceCountPersistsAndExcludesScans() throws {
         let suite = "scan-allowance-tests-\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suite)!
@@ -41,19 +158,166 @@ import SwiftData
         let router = LoggingActionRouter()
         for (choice, action) in [(CalorieLoggingChoice.voice, LoggingAction.voice), (.meal, .image), (.barcode, .barcode)] {
             choice.open(using: router)
-            XCTAssertEqual(router.consume(), action)
+            XCTAssertEqual(router.consume()?.action, action)
             XCTAssertNil(router.pending)
         }
         router.open(.add)
         let firstID = router.pending?.id
         router.open(.add)
         XCTAssertNotEqual(router.pending?.id, firstID)
-        XCTAssertEqual(router.consume(), .add)
+        XCTAssertEqual(router.consume()?.action, .add)
         XCTAssertNil(router.pending)
     }
 
     func makeStore() throws -> AppStore { try Persistence.make(inMemory: true) }
     func yesterday() -> Date { Calendar.current.date(byAdding: .day, value: -1, to: Date())! }
+
+    func testResetSavedNutritionRestoresCatalogWithoutChangingDiary() throws {
+        let suite = "nutrition-reset-\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let store = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        let banana = try XCTUnwrap(CommonFoods.matching("Banana"))
+        var old = banana.draft
+        old.changePerServing(250); old.servingDescription = "My old serving"
+        old.macrosPerServing = nil; old.timestamp = yesterday()
+        store.saveCommonDefault(old, for: banana)
+        XCTAssertTrue(store.saveGoal(2100))
+        XCTAssertTrue(store.saveMacroGoals(MacroNutrients(protein: 120)))
+        XCTAssertTrue(store.add([old]))
+        XCTAssertTrue(store.saveMeal(nil, name: "Keep this meal", items: [old]))
+        var barcode = old; barcode.barcode = "12345678"
+        XCTAssertTrue(store.add([barcode]))
+        store.setPinned(true, foodID: "external:common:banana")
+        let entry = try XCTUnwrap(store.entries.first)
+        let updatedAt = entry.updatedAt
+        let mealData = store.meals[0].componentsData, barcodeData = store.barcodes[0].payload
+        let goalIDs = store.goals.map(\.id), goalDates = store.goals.map(\.updatedAt)
+        let logCount = store.regularLogCount
+        var diaryNotifications = 0
+        store.entriesDidChange = { _ in diaryNotifications += 1 }
+
+        store.resetSavedNutrition()
+
+        XCTAssertTrue(store.commonFoodDefaults.isEmpty)
+        XCTAssertNil(preferences.data(forKey: "commonFoodDefaults.v1"))
+        XCTAssertFalse(store.context.hasChanges)
+        XCTAssertEqual(diaryNotifications, 0, "A template reset must not trigger diary/Health updates")
+        XCTAssertEqual(store.entries.count, 2)
+        XCTAssertEqual(store.total(yesterday()), 500)
+        XCTAssertEqual(entry.updatedAt, updatedAt)
+        XCTAssertEqual(entry.servingDescription, "My old serving")
+        XCTAssertNil(entry.macrosPerServingData)
+        XCTAssertEqual(store.meals[0].componentsData, mealData)
+        XCTAssertEqual(store.barcodes[0].payload, barcodeData)
+        XCTAssertEqual(store.goals.map(\.id), goalIDs)
+        XCTAssertEqual(store.goals.map(\.updatedAt), goalDates)
+        XCTAssertEqual(store.goal(Date()), 2100)
+        XCTAssertEqual(store.macroGoals.protein, 120)
+        XCTAssertEqual(store.regularLogCount, logCount)
+        XCTAssertTrue(store.isPinned("external:common:banana"))
+
+        let reopened = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        let history = try XCTUnwrap(FoodHistory.search("Banana", entries: reopened.entries).first)
+        var historical = history.draft; historical.barcode = nil
+        let restored = reopened.applyingCommonDefault(to: historical)
+        XCTAssertEqual(CommonFoodDefault(restored), CommonFoodDefault(banana.draft))
+        XCTAssertEqual(restored.timestamp, historical.timestamp)
+        XCTAssertEqual(restored.name, historical.name)
+        reopened.resetSavedNutrition() // Empty resets preserve the catalog fallback.
+        XCTAssertEqual(CommonFoodDefault(reopened.applyingCommonDefault(to: historical)), CommonFoodDefault(banana.draft))
+    }
+
+    func testResetSavedNutritionHonorsNewDefaultsAndProtectsProviderFoods() throws {
+        let store = try makeStore()
+        let banana = try XCTUnwrap(CommonFoods.matching("Banana"))
+        var customized = banana.draft; customized.changePerServing(250)
+        customized.macrosPerServing = MacroNutrients(protein: 20)
+        store.saveCommonDefault(customized, for: banana)
+        store.resetSavedNutrition()
+        var provider = customized; provider.externalID = "fatsecret:banana"
+        XCTAssertEqual(store.applyingCommonDefault(to: provider), provider)
+        var barcode = customized; barcode.externalID = nil; barcode.barcode = "1234"
+        XCTAssertEqual(store.applyingCommonDefault(to: barcode), barcode)
+        let unrelated = EntryDraft(name: "My custom snack", calories: 175)
+        XCTAssertEqual(store.applyingCommonDefault(to: unrelated), unrelated)
+        var manualHistory = customized; manualHistory.externalID = nil
+        XCTAssertEqual(CommonFoodDefault(store.applyingCommonDefault(to: manualHistory)), CommonFoodDefault(banana.draft))
+        store.saveCommonDefault(customized, for: banana)
+        XCTAssertEqual(store.commonFoodDefaults.count, 1)
+        XCTAssertEqual(CommonFoodDefault(store.applyingCommonDefault(to: banana.draft)), CommonFoodDefault(customized))
+    }
+
+    func testInMemoryNutritionResetLeavesPersistedDefaultsAlone() throws {
+        let suite = "nutrition-reset-isolation-\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let banana = try XCTUnwrap(CommonFoods.matching("Banana"))
+        let persistent = AppStore(container: container, publishesWidget: false, preferences: preferences)
+        var original = banana.draft; original.changePerServing(250)
+        persistent.saveCommonDefault(original, for: banana)
+        let saved = preferences.data(forKey: "commonFoodDefaults.v1")
+        let resetIDs = preferences.stringArray(forKey: "resetCommonFoodIDs.v1")
+        let preview = AppStore(container: container, publishesWidget: false, preferences: preferences, persistsFoodDefaults: false)
+        XCTAssertTrue(preview.commonFoodDefaults.isEmpty)
+        preview.saveCommonDefault(banana.draft, for: banana)
+        preview.resetSavedNutrition()
+        XCTAssertEqual(preferences.data(forKey: "commonFoodDefaults.v1"), saved)
+        XCTAssertEqual(preferences.stringArray(forKey: "resetCommonFoodIDs.v1"), resetIDs)
+        XCTAssertEqual(persistent.commonDefault(for: banana), CommonFoodDefault(original))
+    }
+
+    func testOnboardingMacroChoicePersistsAndGoalChangesPreserveIt() throws {
+        let store = try makeStore()
+        XCTAssertTrue(store.saveGoal(nil, tracksMacros: false))
+        XCTAssertFalse(store.tracksMacros)
+        store.refresh()
+        XCTAssertFalse(store.tracksMacros)
+        XCTAssertTrue(store.saveGoal(2100))
+        XCTAssertFalse(store.tracksMacros)
+        XCTAssertTrue(store.setTracksMacros(true))
+        XCTAssertTrue(store.saveGoal(nil))
+        XCTAssertTrue(store.tracksMacros)
+    }
+
+    func testOnboardingPreviewUsesFreshStoresAndKeepsExistingData() throws {
+        let store = try makeStore()
+        XCTAssertTrue(store.saveGoal(2100, tracksMacros: false))
+        XCTAssertTrue(store.add([EntryDraft(name: "Existing food", calories: 325)]))
+        let weightURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("weights.json")
+        defer { try? FileManager.default.removeItem(at: weightURL.deletingLastPathComponent()) }
+        let weights = WeightStore(fileURL: weightURL)
+        XCTAssertTrue(weights.setTracking(true))
+        XCTAssertTrue(weights.save(kilograms: 80, date: Date()))
+        let savedWeightData = try Data(contentsOf: weightURL)
+        let sharedBefore = Persistence.shared
+
+        let preview = try OnboardingPreviewSession()
+        XCTAssertNil(preview.store.profile)
+        XCTAssertTrue(preview.store.entries.isEmpty)
+        XCTAssertFalse(preview.store.cloudEnabled)
+        XCTAssertTrue(preview.weights.records.isEmpty)
+        XCTAssertNil(preview.weights.caloriePlan)
+        XCTAssertFalse(preview.weights.healthSharing)
+        let input = CaloriePlanInput(gender: .male, age: 35, heightCM: 180, weightKG: 100,
+                                     goalKG: 80, activity: .light, intent: .lose, weeklyLossKG: 0.5)
+        XCTAssertTrue(preview.weights.saveCaloriePlan(SavedCaloriePlan(input: input, calorieGoal: 2200),
+                                                     unit: .kilograms, trackWeight: true))
+        XCTAssertTrue(preview.store.saveGoal(2200, tracksMacros: true))
+
+        XCTAssertEqual(store.goal(Date()), 2100)
+        XCTAssertFalse(store.tracksMacros)
+        XCTAssertEqual(store.total(Date()), 325)
+        XCTAssertEqual(try Data(contentsOf: weightURL), savedWeightData)
+        XCTAssertTrue(Persistence.shared === sharedBefore)
+        let nextPreview = try OnboardingPreviewSession()
+        XCTAssertNil(nextPreview.store.profile)
+        XCTAssertTrue(nextPreview.weights.records.isEmpty)
+        XCTAssertNil(nextPreview.weights.caloriePlan)
+    }
 
     func testOnboardingWithoutNameOrGoalAllowsLogging() throws {
         let store = try makeStore()
@@ -609,6 +873,42 @@ import SwiftData
         let reopened = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]))
         XCTAssertEqual(reopened.profile?.dailyGoal, 2100)
         XCTAssertEqual(reopened.total(Date()), 120)
+    }
+    func testImperialHeightTypingKeepsRealValues() {
+        typealias H = ImperialHeightInput
+        // Feet: one digit from 3 to 7; a new digit replaces the old one, others are ignored.
+        XCTAssertEqual(H.feet("5", previous: ""), "5")
+        XCTAssertEqual(H.feet("8", previous: ""), "")
+        XCTAssertEqual(H.feet("2", previous: ""), "")
+        XCTAssertEqual(H.feet("56", previous: "5"), "6")
+        XCTAssertEqual(H.feet("59", previous: "5"), "5")
+        XCTAssertEqual(H.feet("", previous: "5"), "")
+        // A converted height outside 3–7 ft is cleared rather than kept.
+        XCTAssertEqual(H.feet("8", previous: "250"), "")
+        // Inches: 0 to 11; only "1" waits for a second digit.
+        for value in ["0", "2", "7", "9", "10", "11"] {
+            XCTAssertEqual(H.inches(value, previous: String(value.dropLast())), value)
+            XCTAssertTrue(H.inchesComplete(value), value)
+        }
+        XCTAssertEqual(H.inches("1", previous: ""), "1")
+        XCTAssertFalse(H.inchesComplete("1"))
+        XCTAssertEqual(H.inches("12", previous: "1"), "1")
+        XCTAssertEqual(H.inches("15", previous: "1"), "1")
+        XCTAssertEqual(H.inches("67", previous: "6"), "7")
+        XCTAssertEqual(H.inches("113", previous: "11"), "3")
+        XCTAssertEqual(H.inches("05", previous: "0"), "5")
+        XCTAssertFalse(H.inchesComplete(""))
+    }
+    func testSetupWeightsKeepOneDecimalPlace() {
+        XCTAssertEqual(WeightInput.oneDecimal("190.55", separator: "."), "190.5")
+        XCTAssertEqual(WeightInput.oneDecimal("190.5", separator: "."), "190.5")
+        XCTAssertEqual(WeightInput.oneDecimal("190.", separator: "."), "190.")
+        XCTAssertEqual(WeightInput.oneDecimal("190", separator: "."), "190")
+        XCTAssertEqual(WeightInput.oneDecimal("82,75", separator: ","), "82,7")
+        // 200 lb round-trips through kilograms without picking up extra decimals.
+        let kg = WeightUnit.pounds.kilograms(200)
+        XCTAssertEqual(WeightInput.text(kg, in: .kilograms), (90.7).formatted(.number.grouping(.never).precision(.fractionLength(0...1))))
+        XCTAssertEqual(WeightInput.text(WeightUnit.kilograms.kilograms(90.7), in: .pounds), "200")
     }
 }
 

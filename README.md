@@ -19,7 +19,8 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 
 ## Features
 
-- Short optional onboarding estimates an editable calorie goal from body details, activity, and preferred pace. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
+- Short optional onboarding lets users choose weight and macro tracking (both on by default), and estimates an editable calorie goal from body details, activity, and preferred pace. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
+- Progress page with calendar-based calorie/macro and weight charts, weekly comparisons, configurable week starts, and a one-page Weekly Recap PDF with six-week trends, AirPrint, and sharing. See [progress and reports](Documentation/Progress.md).
 - Daily date navigation, disabled future dates, day status, and historical editing.
 - Calorie total and chronological entries; target/remaining amounts appear only when a goal is set. Goals can be enabled or removed in Settings without changing historical targets.
 - unified Logged / Quick Add screen, calorie shortcuts, barcode scanning, meal scanning and voice logging.
@@ -71,13 +72,15 @@ Source files are grouped by feature under `App/`. Tests are under `Tests/` and `
 
 Optional Apple Health sharing lives in Settings: **Calories & macros** writes each logged food's Dietary Energy, protein, carbs, fat and fiber (from the day it's turned on, updated on edit/delete), and **Weigh-ins** shares weight. Cave Cals never reads Health data.
 
-Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, editable history, Week/Month/Year graphs, a dismissible daily reminder, and opt-in Apple Health export. Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
+Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, a dismissible daily reminder, and opt-in Apple Health export. Graphs and editable weigh-in history live in **Progress** (the chart icon between the person and cog). Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 
 Optional protein, total-carbohydrate, and fat tracking is on by default; goals and estimates are available. Food editors also store fiber and display calculated net carbs. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
 
 ## Widget calorie total
 
 The Quick Log widget shows today's total and goal beside its title (for example `500/2100`), or `500 cal` when no goal is set. The app publishes a small local snapshot after saved changes and imported iCloud updates. Widget timelines include a midnight reset; iOS controls the precise timing of widget refreshes.
+
+The four orange widget tiles use foreground App Intents in both small and medium sizes. Search/Add opens today’s add mode with the search field focused and keyboard visible, including when a sheet was previously open. Tapping the widget’s surrounding area or calorie summary opens today’s Home without the keyboard or a capture screen. The background uses `cavecals://home`; existing `cavecals://log/<action>` links continue to work.
 
 For signed device builds, enable **App Groups** for both the app and QuickLogWidget targets and register/select `group.com.philstarkovich.cavecals` with the same Apple Developer team. Both entitlement files already include this group. Open the updated app once to populate the widget's shared data. The widget does not contact the backend or OpenAI.
 
