@@ -27,7 +27,15 @@ final class WeightTrackingUITests: XCTestCase {
     private func openWeightProgress() {
         app.buttons["progress"].tap()
         let picker = app.segmentedControls["weightChartRange"]
-        for _ in 0..<8 where !picker.isHittable { app.swipeUp() }
+        // Short drags: a full swipe on a small iPhone carries the picker past the screen and under the bar.
+        let window = app.windows.firstMatch
+        for _ in 0..<16 where !picker.isHittable {
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+        }
+        if !picker.isHittable {
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Weight range picker not reachable"; shot.lifetime = .keepAlways; add(shot)
+        }
         XCTAssertTrue(picker.isHittable)
     }
     private func toggleTracking() {
@@ -56,6 +64,35 @@ final class WeightTrackingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["todayWeight"].exists)
         app.navigationBars["About You"].buttons["Done"].tap()
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
+    }
+    func testFirstWeighInOffersAppleHealth() {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--health-offer"]
+        app.launch()
+        // Skip the plan with weight tracking left on.
+        XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
+        app.buttons["skipGoal"].tap()
+        app.alerts.buttons["Yes, skip plan"].tap()
+        XCTAssertTrue(app.switches["planTrackWeight"].waitForExistence(timeout: 5))
+        app.buttons["onboardingContinue"].tap()
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        app.buttons["skipOnboardingPaywall"].tap()
+        XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Sync with Apple Health"].exists)
+        app.buttons["weighInReminder"].tap()
+        let amount = app.textFields["weightAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText("180.5")
+        app.buttons["saveWeight"].tap()
+        XCTAssertTrue(app.staticTexts["Sync with Apple Health"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.switches["offerShareNutritionHealth"].exists)
+        XCTAssertTrue(app.switches["offerShareWeightHealth"].exists)
+        Thread.sleep(forTimeInterval: 0.8) // let the drawer finish sliding up before the screenshot
+        XCTAssertTrue(app.buttons["closeHealthOffer"].isHittable, "The whole drawer fits without scrolling")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Apple Health offer"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["closeHealthOffer"].tap()
+        XCTAssertFalse(app.staticTexts["Sync with Apple Health"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.textFields["foodSearch"].exists)
     }
     func testWeighInEditChartAndDelete() {
         enableWeight()

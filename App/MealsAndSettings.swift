@@ -433,6 +433,7 @@ struct MealEditorSheet: View {
                     Section { FatSecretAttribution() }
                 }
             }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .navigationTitle(route.meal == nil ? "New Meal" : "Edit Meal").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) }
@@ -509,6 +510,8 @@ struct MealLinkImportSheet: View {
                         .buttonBorderShape(.capsule)
                         .tint(.caveOrange)
                     }
+                    // Paste belongs to the link field, so it keeps the keyboard up.
+                    .keyboardInputArea()
                 } header: {
                     Text("Recipe or meal link")
                 } footer: {
@@ -534,6 +537,7 @@ struct MealLinkImportSheet: View {
                     Section { Text(error).foregroundStyle(.red) }
                 }
             }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .task {
                 // Importing is a Cave Cals+ feature: show the paywall before the user pastes anything.
                 guard !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }

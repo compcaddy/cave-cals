@@ -18,7 +18,7 @@ struct FatSecretAttribution: View {
 
 enum MainSheet: Identifiable {
     case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, profile, barcode(Date), meal(UUID, Date), photo, voice, calendar
-    case weighIn, progress
+    case weighIn, progress, appleHealth
     case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport
     var id: String {
         switch self {
@@ -30,6 +30,7 @@ enum MainSheet: Identifiable {
         case .profile: "profile"
         case .progress: "progress"
         case .weighIn: "weigh-in"
+        case .appleHealth: "apple-health"
         case .barcode: "barcode"
         case .meal(let id, _): "meal-\(id)"
         case .photo: "photo"
@@ -57,6 +58,7 @@ func monthDayLabel(_ date: Date) -> String {
 struct MainView: View {
     @Environment(AppStore.self) private var store
     @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutrition
     @Environment(LoggingActionRouter.self) private var actionRouter
     @Environment(\.scenePhase) private var phase
     @Environment(\.requestReview) private var requestReview
@@ -91,17 +93,28 @@ struct MainView: View {
     @State private var openedInitially = false
     @State private var focusSearchAfterDismiss = false
     @State private var backgroundedAt: Date?
+    /// Home makes room for the keyboard only while its search field has it. Once the field lets go and the
+    /// keyboard has gone, Home ignores the keyboard's safe area: iOS sometimes leaves a stale keyboard inset
+    /// behind, which floated the footer above blank space.
+    @State private var footerFollowsKeyboard = false
     /// A fifth food on one day, or Done eating: ask how it's going once Home is idle.
     @State private var reviewMomentPending = false
     @State private var askingHowItsGoing = false
     @State private var offeringFeedback = false
     /// iOS's notification prompt already interrupted this session; don't follow it with another question.
     @State private var askedForRemindersThisSession = false
+    /// A weigh-in, Done eating, or a second day of logging: offer Apple Health once Home is idle.
+    @State private var healthMomentPending = false
+    @State private var offeredHealthThisSession = false
     @FocusState private var searching: Bool
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     // Resolve history for the current query synchronously, before any remote response or cache hit.
-    private var localSearchFoods: [HistoricalFood] { FoodHistory.search(cleanQuery, entries: store.entries) }
+    @State private var localSearch = LocalFoodSearch()
+    private var localMatches: LocalFoodSearch.Matches {
+        localSearch.matches(for: cleanQuery, entries: store.entries, revision: store.entriesRevision)
+    }
+    private var localSearchFoods: [HistoricalFood] { localMatches.history }
     private var showsFatSecretAttribution: Bool {
         if !cleanQuery.isEmpty {
             return !search.results.isEmpty
@@ -115,6 +128,22 @@ struct MainView: View {
         return false
     }
     var body: some View {
+        // Kept separate so the long Home modifier chain stays within what the type checker can handle.
+        home
+            .task(id: readyToOfferHealth) { if readyToOfferHealth { await offerHealthWhenIdle() } }
+            .task { noteHealthMomentIfSecondDay() }
+            .onChange(of: today) { _, _ in noteHealthMomentIfSecondDay() }
+            .onChange(of: weights.records.count) { old, new in
+                if new > old { noteHealthMoment() }
+            }
+            .task(id: store.entriesRevision) {
+                // Build the search index while Home is idle, so the first letter typed doesn't pay for it.
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                localSearch.prepare(entries: store.entries, revision: store.entriesRevision)
+            }
+    }
+    private var home: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !addMode {
@@ -175,6 +204,7 @@ struct MainView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("loggingFooter")
             }
+            .ignoresSafeArea(footerFollowsKeyboard ? [] : .keyboard, edges: .bottom)
             .background(Color.caveBackground)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: drawerPresented, onDismiss: {
@@ -225,8 +255,22 @@ struct MainView: View {
                 if ["photo", "voice", "barcode"].contains(id) { retireHomeQuickAdd() }
             }
             .onChange(of: searching) { _, focused in
+                if focused { footerFollowsKeyboard = true }
                 if !focused { searchPrimedOnHome = false }
                 else if !addMode && !searchPrimedOnHome { enterAddMode() }
+            }
+            // With no sheet up, a keyboard on Home can only be the search field's.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                if sheet == nil { footerFollowsKeyboard = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                if !searching { footerFollowsKeyboard = false }
+            }
+            // Also let go shortly after the field does, in case iOS never reports the keyboard leaving.
+            .task(id: searching) {
+                guard !searching else { return }
+                try? await Task.sleep(for: .milliseconds(700))
+                if !Task.isCancelled, !searching { footerFollowsKeyboard = false }
             }
             .onChange(of: actionRouter.pending) { _, request in
                 if request != nil { _ = openPendingAction() }
@@ -417,6 +461,7 @@ struct MainView: View {
         case .profile: ProfileView()
         case .progress: ProgressScreen()
         case .weighIn: WeightEditorSheet(record: weights.record(on: Date()), unit: weights.unit)
+        case .appleHealth: AppleHealthOfferSheet()
         case .barcode(let date): BarcodeSheet(date: date)
         case .meal(let id, let date): MealAddSheet(mealID: id, date: date)
         case .photo: AIInputSheet(mode: .photo, date: loggingDate).id("photo")
@@ -446,14 +491,16 @@ struct MainView: View {
                 .listRowSeparator(.hidden)
                 .environment(\.defaultMinListRowHeight, 16)
             }
-            let local = localSearchFoods
+            let matches = localMatches
+            let local = matches.history
+            let mealQuery = normalizedFoodName(cleanQuery)
             // History always leads, followed by saved meals, built-in foods, then API matches.
             ForEach(local) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: draft.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
             }
-            ForEach(store.meals.filter { normalizedFoodName($0.name).contains(normalizedFoodName(cleanQuery)) }
+            ForEach(store.meals.filter { normalizedFoodName($0.name).contains(mealQuery) }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { meal in
                 FoodRow(name: meal.name, calories: meal.calories, add: {
                     revealNextAddedEntry = true
@@ -468,9 +515,7 @@ struct MainView: View {
                     sheet = .meal(meal.id, loggingDate)
                 })
             }
-            ForEach(CommonFoods.search(cleanQuery).filter { food in
-                !local.contains { normalizedFoodName($0.draft.name) == normalizedFoodName(food.name) }
-            }) { food in
+            ForEach(matches.common) { food in
                 let draft = store.applyingCommonDefault(to: food.draft)
                 FoodRow(name: food.name, calories: draft.calories, detail: draft.servingDescription,
                         add: { addFromSearch(draft) }, edit: { edit(draft, revealAfterSave: true) })
@@ -686,7 +731,7 @@ struct MainView: View {
                             Button {
                                 store.hideFromQuickAdd(foodID: food.id, name: draft.name)
                             } label: {
-                                Label("Remove, No Add Often", systemImage: "eye.slash")
+                                Label("Remove from Quick Add", systemImage: "eye.slash")
                             }
                         }
                         .swipeActions(edge: .trailing) {
@@ -853,7 +898,10 @@ struct MainView: View {
                 .padding(.horizontal, 16).padding(.top, cleanQuery.isEmpty ? 12 : 4).padding(.bottom, 12)
                 .animation(.easeInOut(duration: 0.22), value: searchExpanded)
                 }
-            }.background(Color.caveSurface)
+            }
+            // Runs down behind the keyboard too, so the footer never shows a blank strip below it while
+            // the keyboard slides away faster than the footer follows.
+            .background { Color.caveSurface.ignoresSafeArea() }
         }
     }
     private var weighInReminder: some View {
@@ -880,6 +928,7 @@ struct MainView: View {
                      action: {
                          withAnimation(.easeInOut(duration: 0.22)) { store.finishDay() }
                          if ReviewPrompt.isDueNow { reviewMomentPending = true }
+                         noteHealthMoment()
                      },
                      dismissLabel: "Hide done eating button for today", dismissIdentifier: "dismissFinishDay",
                      dismiss: { store.hideFinishPrompt(on: today) })
@@ -887,7 +936,7 @@ struct MainView: View {
     /// After a few days of logging, iOS's notification prompt appears on its own while Home is idle; reminders
     /// then start on (Settings → Reminders turns them off). There's no Home card for it.
     private var readyToAskForReminders: Bool {
-        sheet == nil && !addMode && !searching && cleanQuery.isEmpty
+        sheet == nil && !addMode && !searching && cleanQuery.isEmpty && !offeredHealthThisSession && !readyToOfferHealth
             && !ProcessInfo.processInfo.arguments.contains { $0 == "--uitesting" || $0 == "--screenshots" }
             && LogReminders.shared.shouldOffer(entries: store.entries)
     }
@@ -902,7 +951,7 @@ struct MainView: View {
     /// session with it.
     private var readyToAskHowItsGoing: Bool {
         reviewMomentPending && ReviewPrompt.isAllowed && !askedForRemindersThisSession && !readyToAskForReminders
-            && sheet == nil && !addMode && !searching && cleanQuery.isEmpty
+            && !offeredHealthThisSession && !readyToOfferHealth && sheet == nil && !addMode && !searching && cleanQuery.isEmpty
     }
     private func askHowItsGoingWhenIdle() async {
         try? await Task.sleep(for: .seconds(1.5))
@@ -910,6 +959,28 @@ struct MainView: View {
         reviewMomentPending = false
         ReviewPrompt.recordAsked()
         askingHowItsGoing = true
+    }
+    /// The Apple Health drawer takes the session's one interruption: it waits for an idle Home, and the
+    /// reminder and rating prompts hold off until another session.
+    private var readyToOfferHealth: Bool {
+        healthMomentPending && !askedForRemindersThisSession
+            && sheet == nil && !addMode && !searching && cleanQuery.isEmpty
+    }
+    private func noteHealthMoment() {
+        guard AppleHealthOffer.isAllowed, !AppleHealthOffer.wasShown, nutrition.available,
+              !nutrition.enabled || (weights.tracking && !weights.healthSharing) else { return }
+        healthMomentPending = true
+    }
+    private func noteHealthMomentIfSecondDay() {
+        if AppleHealthOffer.loggedOnEarlierDay(store.entries) { noteHealthMoment() }
+    }
+    private func offerHealthWhenIdle() async {
+        try? await Task.sleep(for: .seconds(1.5))
+        guard !Task.isCancelled, readyToOfferHealth, !AppleHealthOffer.wasShown else { return }
+        healthMomentPending = false
+        offeredHealthThisSession = true
+        AppleHealthOffer.recordShown()
+        sheet = .appleHealth
     }
     /// Lets the alert finish closing before the next one (or Apple's rating prompt) appears.
     private func afterAlert(_ action: @escaping @MainActor () -> Void) {
@@ -1398,5 +1469,36 @@ private struct CalorieCalendarSheet: View {
                 }
             }
         }
+    }
+}
+
+/// Home re-renders on every keystroke and again as online results arrive, so local matches are worked out
+/// once per query and diary change rather than on every update. Still synchronous: history shows at once.
+@MainActor final class LocalFoodSearch {
+    struct Matches { var history: [HistoricalFood] = []; var common: [CommonFood] = [] }
+    /// A one-letter query can match thousands of built-in foods; the best-ranked are plenty.
+    static let commonLimit = 50
+    private var index: FoodHistory.SearchIndex?
+    private var indexRevision = -1
+    private var cached: (query: String, revision: Int, matches: Matches)?
+
+    /// Builds the history index ahead of time. Relevance follows the time of day, so an index older than
+    /// ten minutes is rebuilt too.
+    func prepare(entries: [CalorieEntry], revision: Int) {
+        guard index == nil || indexRevision != revision || Date().timeIntervalSince(index?.date ?? .distantPast) > 600 else { return }
+        index = FoodHistory.SearchIndex(entries: entries)
+        indexRevision = revision
+    }
+    func matches(for query: String, entries: [CalorieEntry], revision: Int) -> Matches {
+        guard !query.isEmpty else { return Matches() }
+        if let cached, cached.query == query, cached.revision == revision { return cached.matches }
+        prepare(entries: entries, revision: revision)
+        let history = index?.search(query) ?? []
+        let historyNames = Set(history.map { normalizedFoodName($0.draft.name) })
+        let common = CommonFoods.search(query, limit: Self.commonLimit + history.count)
+            .filter { !historyNames.contains(normalizedFoodName($0.name)) }
+        let matches = Matches(history: history, common: Array(common.prefix(Self.commonLimit)))
+        cached = (query, revision, matches)
+        return matches
     }
 }

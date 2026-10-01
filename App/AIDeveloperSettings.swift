@@ -61,7 +61,7 @@ struct AIDeveloperSettings: View {
             } header: { Text("Subscription testing") }
             if busy { ProgressView("Loading…") }
             if let message { Section { Text(message).font(.cave(.footnote)) } }
-        }.caveScreenBackground().navigationTitle("Developer settings")
+        }.caveScreenBackground().tapOutsideClosesKeyboard().navigationTitle("Developer settings")
             .fullScreenCover(item: $onboardingPreview) { preview in
                 OnboardingView(isPreview: true)
                     .environment(preview.store)

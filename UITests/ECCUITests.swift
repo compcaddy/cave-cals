@@ -20,6 +20,16 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(app.buttons[pill].waitForExistence(timeout: 5))
         app.buttons[pill].tap()
     }
+    /// Editors have no Done bar over the keyboard; tapping the navigation title closes it.
+    private func closeKeyboard() {
+        guard app.keyboards.firstMatch.exists else { return }
+        let bar = app.navigationBars.allElementsBoundByIndex.last { $0.isHittable }
+        bar?.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+    }
+    private func hasKeyboardFocus(_ element: XCUIElement) -> Bool {
+        element.value(forKey: "hasKeyboardFocus") as? Bool == true
+    }
     private var onHome: Bool { app.otherElements["calorieSummary"].waitForExistence(timeout: 5) && !app.buttons["Quick Add"].exists }
 
     private func launchSearchLayoutFixture() {
@@ -62,6 +72,45 @@ final class ECCUITests: XCTestCase {
         assertFooterPosition()
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Footer below scrolling log"; shot.lifetime = .keepAlways; add(shot)
+    }
+
+    func testFooterReturnsToBottomAfterKeyboardLeaves() {
+        let search = app.textFields["foodSearch"]
+        let footer = app.otherElements["loggingFooter"]
+        let keyboard = app.keyboards.firstMatch
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-'")).firstMatch
+        let initialBottom = footer.frame.maxY
+        // A search add returns Home with the field (and keyboard) still up.
+        func keyboardUpOnHome(_ calories: String) {
+            if !hasKeyboardFocus(search) { search.tap() }
+            search.typeText(calories)
+            let add = app.buttons["Add \(calories) calories"].firstMatch
+            XCTAssertTrue(add.waitForExistence(timeout: 3)); add.tap()
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 3))
+            XCTAssertLessThanOrEqual(search.frame.maxY, keyboard.frame.minY)
+        }
+        func assertFooterAtBottom(_ step: String) {
+            XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), step)
+            let deadline = Date().addingTimeInterval(3)
+            while footer.frame.maxY < initialBottom - 2, Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+            XCTAssertEqual(footer.frame.maxY, initialBottom, accuracy: 2, step)
+        }
+        // The editor opens over Home with its own keyboard; swiping it away leaves no keyboard.
+        keyboardUpOnHome("75")
+        entry.tap()
+        XCTAssertTrue(app.textFields["entryCalories"].waitForExistence(timeout: 3))
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.11))
+            .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        assertFooterAtBottom("editor swiped away")
+        // Home still makes room for the keyboard the next time search is used.
+        keyboardUpOnHome("50")
+        entry.tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 3)); app.buttons["Cancel"].tap()
+        assertFooterAtBottom("editor canceled")
+        keyboardUpOnHome("25")
+        app.buttons["cancelAddMode"].tap()
+        assertFooterAtBottom("search canceled")
     }
 
     func testChangedSearchStartsAtTopWithHistoryBeforeRemoteResults() {
@@ -425,7 +474,7 @@ final class ECCUITests: XCTestCase {
         let calories = app.textFields["caloriesPerServing"]
         XCTAssertTrue(calories.waitForExistence(timeout: 5))
         calories.tap(); calories.typeText("250")
-        app.buttons["Done"].firstMatch.tap()
+        closeKeyboard()
         let saveDefault = app.switches["saveCommonFoodDefault"]
         for _ in 0..<4 where !saveDefault.isHittable { app.swipeUp() }
         XCTAssertTrue(saveDefault.waitForExistence(timeout: 3))
@@ -471,16 +520,16 @@ final class ECCUITests: XCTestCase {
         XCTAssertEqual(app.textFields["macro-totalCarbs"].value as? String, "30")
         XCTAssertEqual(app.textFields["macro-fiber"].value as? String, "3")
         protein.tap(); protein.typeText("1.5")
-        app.buttons["Done"].firstMatch.tap()
+        closeKeyboard()
         let carbs = app.textFields["macro-totalCarbs"]
         for _ in 0..<6 where !carbs.isHittable { app.swipeUp() }
         carbs.tap(); carbs.typeText("24")
-        app.buttons["Done"].firstMatch.tap()
+        closeKeyboard()
         XCTAssertEqual(carbs.value as? String, "24")
         let fat = app.textFields["macro-fat"]
         for _ in 0..<6 where !fat.isHittable { app.swipeUp() }
         fat.tap(); fat.typeText("0")
-        app.buttons["Done"].firstMatch.tap()
+        closeKeyboard()
         XCTAssertTrue(app.buttons["saveEntry"].isEnabled)
         let editorShot = XCTAttachment(screenshot: app.screenshot()); editorShot.name = "Macros editor"; editorShot.lifetime = .keepAlways; add(editorShot)
         app.buttons["saveEntry"].tap()
@@ -618,6 +667,31 @@ final class ECCUITests: XCTestCase {
         XCTAssertEqual(size.value as? String, "2 cups")
         XCTAssertEqual(app.textFields["entryCalories"].value as? String, "105")
     }
+    func testEditorKeyboardClosesOnTapOutsideAndRowsKeepIt() {
+        let search = app.textFields["foodSearch"]
+        search.tap(); search.typeText("140")
+        app.buttons["foodDetails-140 calories"].tap()
+        let name = app.textFields["entryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3)); name.tap(); name.typeText("Toast")
+        XCTAssertFalse(app.toolbars.buttons["Done"].exists)
+        // A row's label opens its field without closing the keyboard.
+        app.staticTexts["cals / serving"].tap()
+        let perServing = app.textFields["caloriesPerServing"]
+        expectation(for: NSPredicate(format: "hasKeyboardFocus == true"), evaluatedWith: perServing)
+        waitForExpectations(timeout: 5)
+        // Buttons in a field's pop-up list still work: a servings preset fills the field.
+        let servings = app.textFields["servingCount"]
+        servings.tap()
+        let preset = app.buttons["Use 2 servings"]
+        XCTAssertTrue(preset.waitForExistence(timeout: 3)); preset.tap()
+        XCTAssertEqual(servings.value as? String, "2")
+        // Anywhere else closes it.
+        name.tap()
+        XCTAssertTrue(hasKeyboardFocus(name))
+        closeKeyboard()
+        XCTAssertFalse(hasKeyboardFocus(name))
+        XCTAssertEqual(name.value as? String, "Toast")
+    }
     func testNamedEntryServingEditorAndSavedMeal() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("140")
@@ -625,7 +699,7 @@ final class ECCUITests: XCTestCase {
         let name = app.textFields["entryName"]
         XCTAssertTrue(name.waitForExistence(timeout: 3)); name.tap(); name.typeText("Cheerios")
         // Serving controls are shown directly in the editor.
-        app.buttons["Done"].tap()
+        closeKeyboard()
         let entryServings = app.textFields["servingCount"]
         entryServings.tap(); entryServings.typeText("2")
         app.buttons["saveEntry"].tap()

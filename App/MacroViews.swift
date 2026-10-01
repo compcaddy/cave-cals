@@ -197,6 +197,7 @@ struct MacroGoalsView: View {
                 }
             } footer: { Text("Daily goals. Leave blank for none.") }
         }.caveScreenBackground()
+        .tapOutsideClosesKeyboard()
         .navigationTitle("Macro goals").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -204,9 +205,6 @@ struct MacroGoalsView: View {
                     .hapticButtonStyle(.automatic).hapticFeel(.success)
                     .disabled(!goals.isValidGoal)
                     .accessibilityIdentifier("saveMacroGoals")
-            }
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer(); Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }.hapticButtonStyle(.automatic)
             }
         }
     }
@@ -377,7 +375,8 @@ struct DailySummaryCard: View {
                 Image(icon).renderingMode(.template).resizable().scaledToFit()
                     .frame(height: 24).foregroundStyle(Color.caveOrange).accessibilityHidden(true)
                     .padding(.leading, -12 * iconSize.width / iconSize.height)
-                Text(kind.title.uppercased()).font(.cave(.caption).bold())
+                // Closer to the 24-pt icons beside them.
+                Text(kind.title.uppercased()).font(.cave(.subheadline).bold())
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .firstTextBaseline, spacing: 3) {

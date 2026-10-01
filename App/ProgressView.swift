@@ -206,16 +206,14 @@ struct WeeklyProgressReview: View {
         let change = ProgressFormat.change(stats.change(from: previous), unit: weight ? unit : nil)
         let amount = change.replacingOccurrences(of: " vs prior week", with: "")
         return VStack(alignment: .trailing, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    InkBoldText(amount, font: .cave(.subheadline), weight: 0.45)
-                    if change.contains("vs prior week") { Text("vs prior week").font(.cave(.caption2)) }
-                }
-                VStack(alignment: .trailing, spacing: 2) {
-                    InkBoldText(amount, font: .cave(.subheadline), weight: 0.45)
-                    if change.contains("vs prior week") { Text("vs prior week").font(.cave(.caption)) }
-                }
-            }.foregroundStyle(Color.caveOrange)
+            // The change sits right-aligned above the chart, with its comparison on a second line.
+            VStack(alignment: .trailing, spacing: 2) {
+                InkBoldText(amount, font: .cave(.subheadline), weight: 0.45)
+                if change.contains("vs prior week") { Text("versus prior week").font(.cave(.caption)) }
+            }
+            .multilineTextAlignment(.trailing)
+            .foregroundStyle(Color.caveOrange)
+            .accessibilityElement(children: .combine)
             RecapMiniChart(days: week.days, unit: unit, weight: weight)
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }

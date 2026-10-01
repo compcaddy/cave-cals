@@ -229,10 +229,12 @@ struct AISubscriptionSection: View {
     var body: some View {
         Section {
             VStack(spacing: 16) {
+                // The caveman logo is tall, so its height sets the size.
                 Image("CaveCalsPlusLogo")
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: 280)
+                    .creamBadgeInDarkMode(cornerRadius: 24, padding: 12)
+                    .frame(maxHeight: 190)
                     .accessibilityLabel("Cave Cals Plus")
 
                 if subscriptions.busy {

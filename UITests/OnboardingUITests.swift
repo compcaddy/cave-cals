@@ -36,6 +36,9 @@ final class OnboardingUITests: XCTestCase {
         let dial = ageDial
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
         revealField(dial)
+        // A sideways drag near the bottom edge is iOS's swipe between apps, so keep the dial well above it.
+        let bottom = app.windows.firstMatch.frame.maxY - 140
+        for _ in 0..<5 where dial.frame.maxY > bottom { app.scrollViews.firstMatch.swipeUp(velocity: .slow) }
         let slot = dial.frame.height * 56 / 104
         let reach = max(1, Int((dial.frame.width / 2 - 20) / slot))
         for _ in 0..<30 {
@@ -45,6 +48,7 @@ final class OnboardingUITests: XCTestCase {
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: CGFloat(steps) * slot, dy: 0)),
                         withVelocity: .slow, thenHoldForDuration: 0.3)
         }
+        if dial.value as? String != "\(target) years" { capture("Age dial did not reach \(target)") }
         XCTAssertEqual(dial.value as? String, "\(target) years")
     }
     private func assertTrackingDefaults() {
@@ -63,7 +67,14 @@ final class OnboardingUITests: XCTestCase {
         let field = app.textFields[id]
         revealField(field)
         field.tap(); field.typeText(text)
-        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        closeKeyboard()
+    }
+    /// Setup has no Done bar; tapping the empty margin beside the content closes the keyboard.
+    private func closeKeyboard() {
+        guard app.keyboards.firstMatch.exists else { return }
+        app.scrollViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.3))
+            .withOffset(CGVector(dx: 8, dy: 0)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
     }
     private func capture(_ name: String) {
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
@@ -74,7 +85,7 @@ final class OnboardingUITests: XCTestCase {
         revealField(field)
         app.staticTexts["Tap to adjust"].tap()
         field.typeText(text)
-        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        closeKeyboard()
         XCTAssertEqual(field.value as? String, expected)
     }
     private func basics(startingWeight: String = "90") {
@@ -86,6 +97,8 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["gender-Male"].tap(); setAge(35)
         capture("Me info")
         next()
+        // Let Measurements settle (height focuses once it slides in) so the unit tap lands on the settled picker.
+        waitForFocus(app.textFields["planHeight"], "Measurements opens with height focused")
         let metric = app.segmentedControls["planUnits"].buttons["kg / cm"]
         metric.tap()
         enter("planHeight", "180"); enter("planWeight", startingWeight); next()
@@ -200,7 +213,7 @@ final class OnboardingUITests: XCTestCase {
         assertTrackingOff()
     }
     func testManualGoalRespectsDisabledTracking() {
-        next(); app.buttons["gender-Prefer not to say"].tap(); setAge(35); next()
+        next(); app.buttons["gender-Female"].tap(); setAge(16); next()
         turnOffTrackingChoices(); next()
         app.buttons["manualSetup"].tap()
         let goal = app.textFields["profileGoal"]
@@ -267,7 +280,7 @@ final class OnboardingUITests: XCTestCase {
         skipPlan(); next()
         skipOffer()
         openDeveloperSettings(); openOnboardingPreview()
-        next(); app.buttons["gender-Prefer not to say"].tap(); setAge(35); next(); next()
+        next(); app.buttons["gender-Female"].tap(); setAge(16); next(); next()
         app.buttons["manualSetup"].tap()
         let goal = app.textFields["profileGoal"]
         XCTAssertTrue(goal.waitForExistence(timeout: 5))
@@ -343,6 +356,8 @@ final class OnboardingUITests: XCTestCase {
     }
     func testMaintenanceCustomTargetAndForgettingDetails() {
         basics()
+        // Let Set Goal finish sliding in and focus goal weight, so the Maintain tap lands on the settled picker.
+        waitForFocus(app.textFields["planGoalWeight"], "Set Goal opens with goal weight focused")
         app.segmentedControls["planIntent"].buttons["Maintain"].tap(); next(); next()
         XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,600")
         replaceTarget(with: "400", shows: "400")
@@ -366,17 +381,31 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,500")
         XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
     }
+    func testTappingOutsideANumberBoxClosesTheKeyboard() {
+        next(); app.buttons["gender-Male"].tap(); next()
+        // Measurements opens with height focused and no Done bar over the keyboard.
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.toolbars.buttons["Done"].exists)
+        Thread.sleep(forTimeInterval: 0.8) // let the keyboard finish sliding up before the screenshot
+        capture("Measurements keyboard")
+        closeKeyboard()
+        // Tapping the box around a field (here its unit) focuses that field.
+        app.staticTexts["lb"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["planWeight"].value(forKey: "hasKeyboardFocus") as? Bool, true)
+    }
     func testManualRouteBackReturnsToAboutYouAfterRevisingAnswers() {
         basics()
         app.buttons["onboardingBack"].tap()
         app.buttons["onboardingBack"].tap()
         app.buttons["onboardingBack"].tap()
-        app.buttons["gender-Prefer not to say"].tap(); next(); next()
+        setAge(16); next(); next()
         XCTAssertTrue(app.buttons["manualSetup"].exists)
         app.buttons["onboardingBack"].tap()
         XCTAssertTrue(app.switches["planTrackWeight"].waitForExistence(timeout: 5))
         app.buttons["onboardingBack"].tap()
-        XCTAssertTrue(app.buttons["gender-Prefer not to say"].exists)
+        XCTAssertEqual(ageDial.value as? String, "16 years")
+        XCTAssertFalse(app.buttons["gender-Prefer not to say"].exists)
     }
     func testLargestTextCanFinishWithoutAGoal() {
         app.terminate()

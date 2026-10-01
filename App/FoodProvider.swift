@@ -212,7 +212,7 @@ struct SearchLayoutFixture: FoodSearchService {
     var results: [FoodResult] = []
     var loading = false
     var message: String?
-    private struct Cached: Codable { let results: [FoodResult]; let expiresAt: Date }
+    private struct Cached: Codable, Sendable { let results: [FoodResult]; let expiresAt: Date }
     private let provider: any FoodSearchService
     private var cache: [String: Cached] = [:]
     private let cacheURL: URL?
@@ -228,14 +228,23 @@ struct SearchLayoutFixture: FoodSearchService {
             persist()
         }
     }
+    /// One queue keeps writes in order; encoding and disk I/O stay off the main thread while typing.
+    private static let diskQueue = DispatchQueue(label: "com.philstarkovich.cavecals.food-search-cache", qos: .utility)
     private func persist() {
-        if let cacheURL, let data = try? JSONEncoder().encode(cache) { try? data.write(to: cacheURL, options: .atomic) }
+        guard let cacheURL else { return }
+        let snapshot = cache
+        Self.diskQueue.async {
+            if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: cacheURL, options: .atomic) }
+        }
     }
+    /// Waits for queued cache writes to reach disk (tests reopen the file right after searching).
+    static func waitForPendingWrites() { diskQueue.sync {} }
     func search(_ text: String) async {
         let id = UUID(); requestID = id
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        cache = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
-        persist()
+        // Saved only when something actually expired, not on every keystroke.
+        let unexpired = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
+        if unexpired.count != cache.count { cache = unexpired; persist() }
         message = nil; results = []; loading = false
         guard query.count >= 2, Double(query) == nil, QuickEntryText.parse(query)?.name.isEmpty != true else { return }
         if let hit = cache[query] { results = hit.results; return }
@@ -252,9 +261,9 @@ struct SearchLayoutFixture: FoodSearchService {
             } else if page.cacheLifetime > 0 {
                 cache[query] = Cached(results: page.results, expiresAt: now().addingTimeInterval(min(page.cacheLifetime, 3600)))
                 if cache.count > 150, let oldest = cache.min(by: { $0.value.expiresAt < $1.value.expiresAt })?.key { cache.removeValue(forKey: oldest) }
+                persist()
             }
             // Never cache an empty response or a provider error. Basic FatSecret results aren't cached.
-            persist()
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
             if let error = error as? URLError {

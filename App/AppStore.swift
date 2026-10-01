@@ -47,6 +47,8 @@ import WidgetKit
     var toast: String?
     var lastAddedID: UUID?
     var syncStatus = "Stored on this iPhone"
+    /// Bumped whenever the diary is reloaded, so derived data (like the search index) knows to rebuild.
+    @ObservationIgnored private(set) var entriesRevision = 0
     /// Called after every successful reload of the diary (local saves, iCloud imports, Siri).
     @ObservationIgnored var entriesDidChange: (([CalorieEntry]) -> Void)?
     private var undoAction: (() -> Void)?
@@ -78,6 +80,7 @@ import WidgetKit
         do {
             profiles = try context.fetch(FetchDescriptor<UserProfile>())
             entries = try context.fetch(FetchDescriptor<CalorieEntry>(sortBy: [SortDescriptor(\.timestamp), SortDescriptor(\.componentOrder), SortDescriptor(\.createdAt)]))
+            entriesRevision &+= 1
             // Remember up to the eligibility threshold, including deleted entries. Imported
             // iCloud rows and edits are deduplicated by entry ID; AI results do not count.
             var seen = regularEntryIDs

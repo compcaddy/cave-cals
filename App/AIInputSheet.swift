@@ -8,7 +8,7 @@ struct CaptureCancelButton: View {
 
     var body: some View {
         Button(role: .cancel, action: action) {
-            Text("Go Back")
+            Text("Cancel")
                 .font(.cave(.body))
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity, minHeight: 44)

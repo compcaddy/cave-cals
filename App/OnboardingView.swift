@@ -73,7 +73,7 @@ struct OnboardingView: View {
     }
     private var title: String {
         if step == 6 && estimate == nil { return "Start your way" }
-        return ["", "Me Info", "Measurements", "Usual Week", "Set Goal", "Tracking", "Your target"][step]
+        return ["", "Tell About You", "Measurements", "Usual Week", "Set Goal", "Tracking", "Your target"][step]
     }
     /// When the goal weight would be reached at the typed target: the weight left to lose at 7,700 kcal/kg,
     /// divided by the daily deficit below today's maintenance. A straight line, so it's framed as "could".
@@ -129,6 +129,8 @@ struct OnboardingView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !dynamicTypeSize.isAccessibilitySize { footer }
             }
+            // No Done bar over the keyboard: a tap in a number box opens it, and anywhere else closes it.
+            .tapOutsideClosesKeyboard()
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -144,7 +146,6 @@ struct OnboardingView: View {
                             .hapticButtonStyle(.automatic).accessibilityIdentifier("closeOnboardingPreview")
                     } else if isRevising && step > 0 { Button("Cancel") { dismiss() }.hapticButtonStyle(.automatic) }
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { field = nil }.hapticButtonStyle(.automatic) }
             }
             .sheet(isPresented: $showingManual) {
                 SetupView(goal: isRevising ? store.profile?.dailyGoal : nil, isAdjustingGoal: true,
@@ -203,10 +204,18 @@ struct OnboardingView: View {
     @ViewBuilder private var welcome: some View {
         let content = VStack(spacing: 28) {
             // The logo takes whatever height the words leave, up to a cap; it never pushes them into the buttons.
-            Image("WelcomeLogo").resizable().scaledToFit()
-                .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 0, maxHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 250)
-                .offset(y: introOffset(stage: 1, by: -700)).opacity(introStage >= 1 ? 1 : 0)
-                .accessibilityHidden(true)
+            Group {
+                if reduceMotion || ProcessInfo.processInfo.arguments.contains("--uitesting") {
+                    Image("WelcomeLogo").resizable().scaledToFit()
+                } else {
+                    // The caveman starts scanning his drumstick on a loop once “Weight Drop.” (stage 4) slides in.
+                    WelcomeScanAnimation(isRunning: introStage >= 4)
+                }
+            }
+            .creamBadgeInDarkMode()
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 0, maxHeight: dynamicTypeSize.isAccessibilitySize ? 160 : 250)
+            .offset(y: introOffset(stage: 1, by: -700)).opacity(introStage >= 1 ? 1 : 0)
+            .accessibilityHidden(true)
             // All three lines share the largest size that fits on one line each; none wraps or truncates.
             ViewThatFits(in: .horizontal) {
                 headline(size: 60); headline(size: 50); headline(size: 42); headline(size: 34, fitted: false)
@@ -266,13 +275,14 @@ struct OnboardingView: View {
         switch step {
         case 1:
             VStack(alignment: .leading, spacing: 14) {
-                Text("Type").font(.cave(.headline))
+                // Reads into the cards: “Me … Man”, “Me … Woman”.
+                Text("Me").font(.cave(.headline)).accessibilityLabel("I am")
                 genderChoices
                 Text("Age").font(.cave(.headline)).padding(.top, 8)
                 AgeDial(age: $age).accessibilityIdentifier("planAge")
-                switchRow("Me need doctor plan", isOn: $clinicianSupport, id: "planClinician", spoken: "I need a clinician-led plan")
+                switchRow("Me follow doctor plan", isOn: $clinicianSupport, id: "planClinician", spoken: "I follow a clinician-led plan")
                     .font(.cave(.subheadline))
-                Text("Pick this if pregnant, breastfeeding, or doctor help with eating disorder or special food needs.")
+                Text("Pick if pregnant, breastfeeding, or doctor help with eating disorder or special food needs.")
                     .font(.cave(.caption)).foregroundStyle(.secondary)
             }
         case 2:
@@ -337,8 +347,7 @@ struct OnboardingView: View {
                 }.padding(.leading, 16).padding(.trailing, 40).padding(.top, 16).padding(.bottom, 14)
                     .frame(maxWidth: .infinity).background(Color.caveOrange.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
                     // The whole card opens the number with it selected, so typing replaces it.
-                    .contentShape(RoundedRectangle(cornerRadius: 22))
-                    .onTapGesture { field = "planCalories" }
+                    .keyboardInputArea { field = "planCalories" }
                 if !validStep {
                     Text("Enter \(Int(gender?.minimumCalories ?? 1500).formatted())–6,000 calories, or go back to change your plan.")
                         .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planTargetValidation")
@@ -451,7 +460,9 @@ struct OnboardingView: View {
         }.font(.cave(.body)).padding(.horizontal, 24).padding(.vertical, 12)
             // A little more room above the welcome's Build Plan button.
             .padding(.top, step == 0 ? 8 : 0)
-            .frame(maxWidth: 560).frame(maxWidth: .infinity).background(.regularMaterial)
+            .frame(maxWidth: 560).frame(maxWidth: .infinity)
+            // The panel runs down behind the keyboard, so no page content shows through between them.
+            .background { Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom) }
             // The welcome intro brings the buttons and their panel up last.
             .offset(y: step == 0 ? introOffset(stage: Self.introDone, by: 360) : 0)
             .opacity(step == 0 && introStage < Self.introDone ? 0 : 1)
@@ -480,6 +491,8 @@ struct OnboardingView: View {
                     .selectValueOnFocus(identifier: id)
                 Text(suffix).foregroundStyle(.secondary)
             }.padding(16).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                // The whole box opens its field, rather than counting as a tap outside that closes the keyboard.
+                .keyboardInputArea { field = id }
         }
     }
     /// Scroll views swallow quick taps on a bare switch, so the whole row flips it.
@@ -603,7 +616,8 @@ struct OnboardingView: View {
         if isRevising { trackWeight = weights.tracking }
         guard isRevising, let saved = weights.caloriePlan else { return }
         let p = saved.input
-        gender = p.gender; age = AgeDial.range.clamped(p.age); activity = p.activity; intent = p.intent; pace = p.weeklyLossKG
+        // A saved choice that setup no longer shows (No Say) is picked again.
+        gender = PlanGender.choices.contains(p.gender) ? p.gender : nil; age = AgeDial.range.clamped(p.age); activity = p.activity; intent = p.intent; pace = p.weeklyLossKG
         weight = WeightInput.text(weights.records.first?.kilograms ?? p.weightKG, in: unit)
         goalWeight = WeightInput.text(p.goalKG, in: unit)
         setHeight(p.heightCM, unit: unit)

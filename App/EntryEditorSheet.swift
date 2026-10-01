@@ -46,7 +46,7 @@ struct EntryEditorSheet: View {
                                 }.hapticButtonStyle(.borderless).accessibilityLabel("Use name \(name)")
                             }
                         }
-                    }
+                    }.keyboardInputArea()
                     }.editorRowInsets()
                 }
                 Section {
@@ -75,7 +75,7 @@ struct EntryEditorSheet: View {
                                 }
                             }.frame(height: 176).padding(.top, 8)
                         }
-                        }
+                        }.keyboardInputArea()
                         HStack {
                             Text("cals / serving").font(.cave(.subheadline)).opacity(0.65)
                             Spacer()
@@ -127,6 +127,7 @@ struct EntryEditorSheet: View {
                     }
                 }
             }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add Calories" : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingTime) {
@@ -153,7 +154,6 @@ struct EntryEditorSheet: View {
                     .fontWeight(.semibold).disabled(!draft.isValid)
                     .accessibilityIdentifier("saveEntry")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }.hapticButtonStyle(.automatic) }
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
             .onChange(of: changedCommonFood?.id) { _, _ in saveAsCommonDefault = false }
@@ -217,7 +217,8 @@ extension View {
         }
     }
     func selectValueOnTap(focus: FocusState<Bool>.Binding) -> some View {
-        contentShape(Rectangle())
+        keyboardInputArea()
+            .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded {
                 focus.wrappedValue = true
                 // Wait for SwiftUI to focus the field and finish placing the insertion point.
@@ -337,7 +338,8 @@ struct ServingControl: View {
                 }
             }.caveScreenBackground().frame(height: 176).padding(.top, 8)
         }
-        }
+        // The presets belong to the servings field.
+        }.keyboardInputArea()
     }
     private var controls: some View {
         TextField("1", value: $value, format: .number.precision(.fractionLength(0...3)))

@@ -202,6 +202,7 @@ struct SetupView: View {
                     }
                 }.padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 24)
             }.scrollDismissesKeyboard(.interactively)
+                .tapOutsideClosesKeyboard()
                 .toolbar(isAdjustingGoal ? .visible : .hidden, for: .navigationBar)
                 .task {
                     guard isAdjustingGoal else { return }

@@ -836,6 +836,7 @@ import SwiftData
         let search = FoodSearchState(provider: provider, cacheURL: file, now: { now }, debounce: .zero)
         await search.search("Urbane Cafe"); await search.search("urbane cafe")
         var calls = await provider.calls; XCTAssertEqual(calls, 1)
+        FoodSearchState.waitForPendingWrites()
         let reopened = FoodSearchState(provider: provider, cacheURL: file, now: { now }, debounce: .zero)
         await reopened.search("urbane cafe")
         calls = await provider.calls; XCTAssertEqual(calls, 1)
@@ -847,7 +848,9 @@ import SwiftData
         let uncached = FoodSearchState(provider: basic, cacheURL: basicFile, debounce: .zero)
         await uncached.search("urbane"); await uncached.search("urbane")
         calls = await basic.calls; XCTAssertEqual(calls, 2)
-        XCTAssertFalse(String(data: try Data(contentsOf: basicFile), encoding: .utf8)!.contains("Sandwich"))
+        FoodSearchState.waitForPendingWrites()
+        // Basic results never trigger a save, so the file may not exist at all.
+        XCTAssertFalse((try? String(contentsOf: basicFile, encoding: .utf8))?.contains("Sandwich") ?? false)
     }
     func testFoodSearchIgnoresOlderResponsesAfterQueryChanges() async throws {
         let provider = SlowSearchFixture()
@@ -898,6 +901,39 @@ import SwiftData
         XCTAssertEqual(H.inches("113", previous: "11"), "3")
         XCTAssertEqual(H.inches("05", previous: "0"), "5")
         XCTAssertFalse(H.inchesComplete(""))
+    }
+    func testWelcomeScanLoopRestsTwoSecondsAndRepeatsSeamlessly() {
+        typealias F = WelcomeScanFrame
+        let start = F.leadIn
+        // It holds while the intro finishes, then lifts.
+        XCTAssertEqual(F(elapsed: 0).armLowering, 1)
+        XCTAssertEqual(F(elapsed: start + F.lift).armLowering, 1)
+        XCTAssertLessThan(F(elapsed: start + F.lift + 0.1).armLowering, 1)
+        // The label fills to 100% and says it's complete.
+        XCTAssertEqual(F(elapsed: start + F.scanEnd).progress, 1)
+        XCTAssertTrue(F(elapsed: start + F.scanEnd).isComplete)
+        // The phone comes down with everything faded, and stays still for the pause before the next lift.
+        for rest in stride(from: F.lowered, through: F.loopDuration + F.lift, by: 0.25) {
+            let frame = F(elapsed: start + rest)
+            XCTAssertEqual(frame.armLowering, 1, accuracy: 1e-9, "\(rest)")
+            XCTAssertEqual(frame.corners + frame.rays + frame.label, 0, accuracy: 1e-9, "\(rest)")
+        }
+        XCTAssertEqual(F.loopDuration + F.lift - F.lowered, 2, accuracy: 1e-9)
+        // The next loop starts exactly where the last one ended.
+        XCTAssertLessThan(F(elapsed: start + F.loopDuration + F.lift + 0.1).armLowering, 1)
+    }
+    func testAppleHealthOfferWaitsForASecondDayOfLogging() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 9))!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+        func entry(logged: Date, for day: Date) -> CalorieEntry {
+            let entry = CalorieEntry(draft: EntryDraft(name: "Eggs", calories: 150, timestamp: day)); entry.createdAt = logged; return entry
+        }
+        XCTAssertFalse(AppleHealthOffer.loggedOnEarlierDay([], now: now, calendar: calendar))
+        XCTAssertFalse(AppleHealthOffer.loggedOnEarlierDay([entry(logged: now, for: now)], now: now, calendar: calendar))
+        // Backfilling yesterday today doesn't count as a second day of use.
+        XCTAssertFalse(AppleHealthOffer.loggedOnEarlierDay([entry(logged: now, for: yesterday)], now: now, calendar: calendar))
+        XCTAssertTrue(AppleHealthOffer.loggedOnEarlierDay([entry(logged: yesterday, for: yesterday)], now: now, calendar: calendar))
     }
     func testSetupWeightsKeepOneDecimalPlace() {
         XCTAssertEqual(WeightInput.oneDecimal("190.55", separator: "."), "190.5")

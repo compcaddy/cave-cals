@@ -115,6 +115,7 @@ struct WeightEditorSheet: View {
                             .accessibilityLabel("Weight in \(unit == .pounds ? "pounds" : "kilograms")")
                         Text(unit.rawValue).foregroundStyle(.secondary)
                     }.padding(.vertical, 8)
+                    .keyboardInputArea { focused = true }
                 } header: {
                     Text(date, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                 }
@@ -126,6 +127,7 @@ struct WeightEditorSheet: View {
                     }
                 }
             }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .navigationTitle("Weigh-in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -137,7 +139,6 @@ struct WeightEditorSheet: View {
                     .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success).disabled(!valid)
                     .accessibilityIdentifier("saveWeight")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focused = false }.hapticButtonStyle(.automatic) }
             }
             .confirmationDialog("Delete this weigh-in?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 // Dialog buttons may skip the haptic button style, so they play their own feel.
@@ -269,5 +270,115 @@ struct WeightHistoryView: View {
             Button("Add weigh-in") { editor = WeightEditorRoute() }.hapticButtonStyle(.automatic).accessibilityIdentifier("addHistoricalWeight")
         } }
         .sheet(item: $editor) { route in WeightEditorSheet(record: route.record, unit: weights.unit) }
+    }
+}
+
+
+/// A one-time drawer offering Apple Health sharing once someone has a reason to want it: right after a
+/// weigh-in, the first time they tap Done eating, or on a later day after logging food on an earlier one.
+/// Shown at most once per iPhone; Settings → Apple Health keeps the same switches.
+enum AppleHealthOffer {
+    static let shownKey = "appleHealthOfferShown.v1"
+
+    static var wasShown: Bool { UserDefaults.standard.bool(forKey: shownKey) && !optedInForTesting }
+    static func recordShown() { UserDefaults.standard.set(true, forKey: shownKey) }
+
+    /// Food logged on the day it belongs to, on a day before today (backfilling doesn't count).
+    static func loggedOnEarlierDay(_ entries: [CalorieEntry], now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let today = calendar.startOfDay(for: now)
+        return entries.contains { $0.createdAt < today && calendar.isDate($0.createdAt, inSameDayAs: $0.timestamp) }
+    }
+
+    /// UI tests and screenshots never see it, unless a DEBUG UI test opts in with `--health-offer`.
+    static var isAllowed: Bool {
+        optedInForTesting || !ProcessInfo.processInfo.arguments.contains { $0 == "--uitesting" || $0 == "--screenshots" }
+    }
+    private static var optedInForTesting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--health-offer")
+        #else
+        false
+        #endif
+    }
+}
+
+struct AppleHealthOfferSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutrition
+    @Environment(\.dismiss) private var dismiss
+    /// The drawer opens exactly as tall as its content, so the switches are never below the fold on a
+    /// small iPhone or with large text.
+    @State private var contentHeight: CGFloat = 480
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Sync with Apple Health").font(.cave(.title)).accessibilityAddTraits(.isHeader)
+                .padding(.top, 28)
+            Text("Share what you track with Apple Health and apps that use it.")
+                .font(.cave(.subheadline)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            VStack(spacing: 0) {
+                row("Calories & macros", isOn: nutritionBinding, busy: nutrition.connecting,
+                    id: "offerShareNutritionHealth") {
+                    HStack(spacing: 10) {
+                        ForEach([CaveGlyph.protein, .carbs, .fat], id: \.self) { CaveIcon($0, size: 32) }
+                    }.foregroundStyle(Color.caveOrange)
+                }
+                if weights.tracking {
+                    Divider()
+                    row("Weigh-ins", isOn: weightBinding, busy: weights.connecting, id: "offerShareWeightHealth") {
+                        Image("TrackWeightScale").resizable().scaledToFit().frame(width: 44, height: 44)
+                    }
+                }
+            }.padding(.horizontal, 16).padding(.vertical, 4)
+                .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
+            if let message = nutrition.message ?? weights.healthMessage {
+                Text(message).font(.cave(.footnote)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            Button { dismiss() } label: {
+                Text("Done").frame(maxWidth: .infinity).padding(.vertical, 8)
+            }.hapticButtonStyle(.borderedProminent).accessibilityIdentifier("closeHealthOffer")
+                .padding(.top, 6)
+            Text("You can change these anytime in Settings.").font(.cave(.footnote)).foregroundStyle(.secondary)
+        }
+        .font(.cave(.body))
+        .padding(.horizontal, 24).padding(.bottom, 12)
+        .frame(maxWidth: 560)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .caveScreenBackground()
+        .presentationDetents([.height(contentHeight), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var nutritionBinding: Binding<Bool> {
+        Binding(get: { nutrition.enabled }, set: { enabled in
+            Task { await nutrition.setEnabled(enabled, entries: store.entries) }
+        })
+    }
+    private var weightBinding: Binding<Bool> {
+        Binding(get: { weights.healthSharing }, set: { enabled in
+            Task { await weights.setHealthSharing(enabled) }
+        })
+    }
+
+    /// Scroll views and sheets swallow quick taps on a bare switch, so the whole row flips it.
+    private func row<Art: View>(_ title: String, isOn: Binding<Bool>, busy: Bool, id: String,
+                                @ViewBuilder art: () -> Art) -> some View {
+        Button { isOn.wrappedValue.toggle() } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).foregroundStyle(Color.primary)
+                    art().accessibilityHidden(true)
+                }
+                Spacer(minLength: 8)
+                if busy { ProgressView() }
+                Toggle(title, isOn: isOn).labelsHidden().allowsHitTesting(false)
+            }.padding(.vertical, 10).frame(minHeight: 44).contentShape(Rectangle())
+        }.hapticButtonStyle(.plain).hapticFeel(.selection)
+            .disabled(busy)
+            .accessibilityRepresentation { Toggle(title, isOn: isOn) }
+            .accessibilityIdentifier(id)
     }
 }

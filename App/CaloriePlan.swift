@@ -5,8 +5,9 @@ import Foundation
 enum PlanGender: String, Codable, CaseIterable, Identifiable {
     case female = "Female", male = "Male", another = "Another option", undisclosed = "Prefer not to say"
     var id: String { rawValue }
-    /// Shown in setup. `another` stays decodable so previously saved plans still load.
-    static let choices: [PlanGender] = [.male, .female, .undisclosed]
+    /// Shown in setup. The calculator needs one of these two, so “No Say” (`undisclosed`) is hidden for now
+    /// (September 30, 2026); it and `another` stay decodable so previously saved plans still load.
+    static let choices: [PlanGender] = [.male, .female]
     /// Setup's wording; raw values stay unchanged because saved plans store them.
     var title: String {
         switch self { case .female: return "Woman"; case .male: return "Man"; case .undisclosed: return "No Say"; case .another: return rawValue }

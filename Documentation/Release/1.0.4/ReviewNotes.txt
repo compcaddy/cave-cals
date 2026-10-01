@@ -1,0 +1,19 @@
+No account signup or demo login is required. Manual logging, food and restaurant search, barcode lookup, saved meals, calorie plans, macros, weight tracking, and Progress are free.
+
+FIRST LAUNCH
+Setup is optional. Tap "Build Plan" to answer a few questions, or "Just start tracking" to skip. After setup, the Cave Cals+ subscription offer appears once; "Skip for now" closes it without purchasing. Plans cover weight loss or maintenance only. The calculator estimates targets only for adults 18 to 80 and never suggests a goal below a healthy BMI. People who are pregnant, breastfeeding, or following a clinician-led plan are asked to enter their clinician's target instead.
+
+CAVE CALS+ (IN-APP PURCHASE)
+Monthly (3-day free trial) and yearly (7-day free trial, new in this version) auto-renewable subscriptions unlock Meal Scan, Voice Log, recipe-link import, and Siri estimates for foods the app hasn't seen before. Meal Scan and Voice Log include 10 free analyses, so they can be reviewed without purchasing. To open the subscription page at any time, tap the person icon (About You) or the gear icon (Settings) and select the Cave Cals+ card. Restore purchases is available there and on the paywall. AI analysis needs a physical device (App Attest) and an internet connection. Users review and can edit every AI estimate before it is saved.
+
+APPLE HEALTH (NEW: FOOD SHARING)
+Health sharing is off by default. It is turned on in Settings > Apple Health, or from a one-time "Sync with Apple Health" sheet. Cave Cals only writes to Health: weigh-ins (body mass) and, for each logged food, dietary energy plus protein, carbohydrates, fat, and fiber when known. It never reads Health data. Health data is not sent to our servers, AI providers, or advertisers.
+
+SIRI AND SHORTCUTS (NEW)
+"Log food with Cave Cals" asks what you ate and logs it without opening the app. Foods from your own history, saved meals, and entries like "pizza 300" are handled on the device. Anything else is sent as text to our backend and OpenAI for a calorie estimate, counting as one AI analysis like a voice log.
+
+NOTIFICATIONS (NEW)
+After food has been logged on three different days, iOS asks for notification permission. Cave Cals uses it only for a local morning reminder on days nothing has been logged yet, at most one per day. There are no push or marketing notifications. Reminders can be turned off in Settings > Reminders.
+
+OTHER
+Settings shows a "Developer settings" section only in TestFlight and sandbox builds, for our internal testing. It does not appear in App Store builds. Food search uses FatSecret; barcode lookup uses Open Food Facts.

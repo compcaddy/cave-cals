@@ -96,4 +96,27 @@ extension Color {
             return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
         })
     }
+    /// The launch screen's cream, in every appearance.
+    static let caveLaunchCream = Color(red: 0.984, green: 0.973, blue: 0.949)
+}
+
+extension View {
+    /// Supplied logos have near-black outlines and lettering that vanish on the dark background, so in dark
+    /// mode they sit on a cream badge (light mode is unchanged).
+    func creamBadgeInDarkMode(cornerRadius: CGFloat = 28, padding: CGFloat = 14) -> some View {
+        modifier(CreamBadgeInDarkMode(cornerRadius: cornerRadius, padding: padding))
+    }
+}
+
+private struct CreamBadgeInDarkMode: ViewModifier {
+    let cornerRadius: CGFloat
+    let padding: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    func body(content: Content) -> some View {
+        if colorScheme == .dark {
+            content.padding(padding).background(Color.caveLaunchCream, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            content
+        }
+    }
 }

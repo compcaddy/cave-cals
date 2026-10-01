@@ -47,11 +47,22 @@ enum CommonFoods {
     static func matching(_ name: String) -> CommonFood? {
         let normalized = normalizedFoodName(name)
         guard !normalized.isEmpty else { return nil }
-        if let exact = indexedFoods.first(where: { $0.name == normalized }) { return exact.food }
-        let aliases = indexedFoods.filter { $0.names.contains(normalized) }
+        if let exact = byName[normalized] { return exact }
         // Ambiguous aliases must never save a personal default to the wrong food.
-        return aliases.count == 1 ? aliases[0].food : nil
+        guard let aliases = byAnyName[normalized], aliases.count == 1 else { return nil }
+        return aliases[0]
     }
+    // Every search row looks its food up here, so these are dictionaries rather than scans of the catalog.
+    private static let byName: [String: CommonFood] = {
+        var index: [String: CommonFood] = [:]
+        for item in indexedFoods where index[item.name] == nil { index[item.name] = item.food }
+        return index
+    }()
+    private static let byAnyName: [String: [CommonFood]] = {
+        var index: [String: [CommonFood]] = [:]
+        for item in indexedFoods { for name in Set(item.names) { index[name, default: []].append(item.food) } }
+        return index
+    }()
     private struct Catalog: Decodable { let foods: [CommonFood] }
     static let foods: [CommonFood] = {
         guard let url = Bundle.main.url(forResource: "CommonFoods", withExtension: "json"),
@@ -63,7 +74,8 @@ enum CommonFoods {
         (food: food, name: normalizedFoodName(food.name),
          names: ([food.name] + food.aliases).map(normalizedFoodName))
     }
-    static func search(_ query: String) -> [CommonFood] {
+    /// `limit` keeps a one-letter query from listing thousands of foods; the best-ranked come first.
+    static func search(_ query: String, limit: Int? = nil) -> [CommonFood] {
         let q = normalizedFoodName(query)
         guard !q.isEmpty else { return [] }
         let words = q.split(separator: " ").map(String.init)
@@ -78,7 +90,7 @@ enum CommonFoods {
         }.sorted {
             if $0.rank != $1.rank { return $0.rank < $1.rank }
             return $0.food.name < $1.food.name
-        }.map(\.food)
+        }.prefix(limit ?? .max).map(\.food)
     }
 }
 
@@ -137,26 +149,40 @@ enum FoodHistory {
         }
     }
     static func search(_ query: String, entries: [CalorieEntry], date: Date = Date(), calendar: Calendar = .current) -> [HistoricalFood] {
-        let q = normalizedFoodName(query)
-        guard !q.isEmpty else { return [] }
-        let candidates = foods(entries).filter { normalizedFoodName($0.draft.name).contains(q) }
-        let histories = Dictionary(grouping: entries.filter { $0.timestamp <= date }, by: key)
-        let contexts = Array(entries.filter { $0.timestamp <= date }.sorted { $0.timestamp > $1.timestamp }.prefix(3))
-        let scored = candidates.map { food -> (food: HistoricalFood, textRank: Int, relevance: Double) in
-            let name = normalizedFoodName(food.draft.name)
-            let textRank = name == q ? 0 : (name.hasPrefix(q) ? 1 : 2)
-            let uses = histories[food.id] ?? food.uses
-            let habit = habitStrength(uses: uses, date: date, hasRecentHistory: false)
-            let time = 0.25 + 2.75 * timePatternProbability(uses: uses, date: date, calendar: calendar, hasRecentHistory: false)
-            let day = conditionalDayFactor(uses: uses, date: date, calendar: calendar)
-            let session = sessionFactor(candidateKey: food.id, contexts: contexts, histories: histories, date: date, calendar: calendar)
-            return (food, textRank, habit * time * day * session)
+        SearchIndex(entries: entries, date: date, calendar: calendar).search(query)
+    }
+    /// Everything about history search that doesn't depend on the typed text: each food's normalized name
+    /// and how relevant it is right now. Built once per diary change so typing only filters and sorts.
+    struct SearchIndex {
+        private let items: [(food: HistoricalFood, name: String, relevance: Double)]
+        let date: Date
+
+        init(entries: [CalorieEntry], date: Date = Date(), calendar: Calendar = .current) {
+            self.date = date
+            let histories = Dictionary(grouping: entries.filter { $0.timestamp <= date }, by: FoodHistory.key)
+            let contexts = Array(entries.filter { $0.timestamp <= date }.sorted { $0.timestamp > $1.timestamp }.prefix(3))
+            items = FoodHistory.foods(entries).map { food in
+                let uses = histories[food.id] ?? food.uses
+                let habit = FoodHistory.habitStrength(uses: uses, date: date, hasRecentHistory: false)
+                let time = 0.25 + 2.75 * FoodHistory.timePatternProbability(uses: uses, date: date, calendar: calendar, hasRecentHistory: false)
+                let day = FoodHistory.conditionalDayFactor(uses: uses, date: date, calendar: calendar)
+                let session = FoodHistory.sessionFactor(candidateKey: food.id, contexts: contexts, histories: histories, date: date, calendar: calendar)
+                return (food, normalizedFoodName(food.draft.name), habit * time * day * session)
+            }
         }
-        return scored.sorted {
-            if $0.textRank != $1.textRank { return $0.textRank < $1.textRank }
-            if $0.relevance != $1.relevance { return $0.relevance > $1.relevance }
-            return normalizedFoodName($0.food.draft.name) < normalizedFoodName($1.food.draft.name)
-        }.map(\.food)
+
+        func search(_ query: String) -> [HistoricalFood] {
+            let q = normalizedFoodName(query)
+            guard !q.isEmpty else { return [] }
+            return items.compactMap { item -> (food: HistoricalFood, name: String, textRank: Int, relevance: Double)? in
+                guard item.name.contains(q) else { return nil }
+                return (item.food, item.name, item.name == q ? 0 : (item.name.hasPrefix(q) ? 1 : 2), item.relevance)
+            }.sorted {
+                if $0.textRank != $1.textRank { return $0.textRank < $1.textRank }
+                if $0.relevance != $1.relevance { return $0.relevance > $1.relevance }
+                return $0.name < $1.name
+            }.map(\.food)
+        }
     }
     /// True when a food is usually logged more than once on the days it's eaten (two coffees most
     /// mornings) and today's count hasn't reached that usual number yet.
