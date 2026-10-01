@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cave Cals Gym Flyer</title>
+<style>
+  @font-face { font-family: "Schoolbell"; src: url("brand/Schoolbell-Regular.ttf"); }
+  @page { size: 8.5in 11in; margin: 0; }
+  :root { --orange: #C4531B; --cream: #F5ECDC; --surface: #FBF6EC; --ink: #2B211A; --muted: #6E5E50; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--cream); color: var(--ink); }
+  body { width: 8.5in; height: 11in; font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; position: relative; overflow: hidden; }
+  .page { position: absolute; inset: 0.4in; border: 3px solid var(--orange); border-radius: 28px; padding: 0.3in 0.4in 0.22in; display: flex; flex-direction: column; }
+  .hero { display: flex; align-items: center; gap: 0.25in; }
+  .hero img { width: 2.45in; height: 2.45in; object-fit: contain; border-radius: 22px; }
+  .hero-text h1 { font-family: "Schoolbell", cursive; font-size: 58px; line-height: 1.02; margin: 0 0 10px; }
+  .hero-text p { font-size: 19px; line-height: 1.35; margin: 0; color: var(--muted); }
+  .features { margin-top: 0.2in; display: grid; gap: 11px; }
+  .feature { display: flex; align-items: center; gap: 18px; background: var(--surface); border-radius: 18px; padding: 11px 20px; }
+  .feature img { width: 46px; height: 46px; object-fit: contain; flex: none; }
+  .feature b { font-family: "Schoolbell", cursive; font-size: 27px; font-weight: normal; display: block; line-height: 1.1; }
+  .feature span { font-size: 15.5px; color: var(--muted); }
+  .bottom { margin-top: auto; padding-top: 0.18in; display: flex; gap: 0.3in; align-items: stretch; }
+  .qr { background: white; border-radius: 18px; padding: 12px; width: 2.05in; flex: none; text-align: center; }
+  .qr img { width: 100%; display: block; }
+  .qr div { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .coach { flex: 1; border: 2px dashed var(--orange); border-radius: 18px; padding: 16px 20px; display: flex; flex-direction: column; justify-content: center; }
+  .coach .label { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--orange); font-weight: 700; }
+  .coach .line { font-family: "Schoolbell", cursive; font-size: 26px; margin: 6px 0 2px; }
+  .blank { display: inline-block; min-width: 2.2in; border-bottom: 2px solid var(--ink); }
+  .coach .small { font-size: 14px; color: var(--muted); margin-top: 8px; line-height: 1.35; }
+  .fine { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <img src="brand/launch-art.png" alt="Cave Cals caveman logo">
+      <div class="hero-text">
+        <h1>Me eat.<br>App count.</h1>
+        <p>The calorie tracker so simple, a caveman uses it. Log food in seconds and hit your protein.</p>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature"><img src="brand/orange/CaveLightning.svg" alt=""><div><b>Your usual foods. One tap.</b><span>Quick Add learns what you eat, so breakfast is one tap.</span></div></div>
+      <div class="feature"><img src="brand/orange/CaveCamera.svg" alt=""><div><b>Snap it. Say it. Done.</b><span>Photo or voice gives an estimate you review. 10 free tries.</span></div></div>
+      <div class="feature"><img src="brand/orange/CaveBarcode.svg" alt=""><div><b>Barcode scan. Free.</b><span>Plus food search, manual logging, meals, weigh-ins, and progress.</span></div></div>
+      <div class="feature"><img src="brand/orange/CaveCheck.svg" alt=""><div><b>Protein, carbs &amp; fat.</b><span>Set goals with your trainer. Send a one-page weekly recap every Sunday.</span></div></div>
+    </div>
+
+    <div class="bottom">
+      <div class="qr">
+        <img src="brand/app-store-qr.svg" alt="QR code to Cave Cals on the App Store">
+        <div>Scan · Free on iPhone</div>
+      </div>
+      <div class="coach">
+        <div class="label">Recommended by your coach</div>
+        <div class="line">Coach: <span class="blank"></span></div>
+        <div class="line">Code: <span class="blank"></span></div>
+        <div class="small">Enter the code for <b>1 free month</b> of Cave Cals+ (photo &amp; voice logging).<br>Ask at the front desk about the <b>30-Day Cave Challenge</b>.</div>
+      </div>
+    </div>
+    <div class="fine">Cave Cals is a food diary, not medical advice. AI estimates can be wrong. Review before saving. Cave Cals+ is optional; plans renew until cancelled in Apple Account settings. iPhone, iOS 17+.</div>
+  </div>
+</body>
+</html>

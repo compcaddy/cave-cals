@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trainer Cue Cards</title>
+<style>
+  @font-face { font-family: "Schoolbell"; src: url("brand/Schoolbell-Regular.ttf"); }
+  @page { size: 8.5in 11in; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: #2B211A; font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; }
+  .sheet { width: 8.5in; height: 11in; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; page-break-after: always; }
+  .card { border: 1px dashed #BFB2A2; padding: 0.35in 0.35in 0.3in; display: flex; flex-direction: column; gap: 10px; }
+  .id { display: flex; justify-content: space-between; align-items: baseline; }
+  .id b { font-family: Schoolbell, cursive; font-weight: 400; font-size: 34px; color: #C4531B; }
+  .id span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #6E5E50; }
+  .hook { font-family: Schoolbell, cursive; font-size: 25px; line-height: 1.12; }
+  .label { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #C4531B; margin-top: 4px; }
+  ul { margin: 0; padding-left: 17px; font-size: 13.5px; line-height: 1.42; }
+  .shot { margin-top: auto; font-size: 12px; color: #6E5E50; background: #F5ECDC; border-radius: 10px; padding: 7px 10px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const cards = [
+  ["A1", "#1 reason my clients don't lose weight? They don't know what they eat.", ["Not lazy: tracking apps are a chore, so people quit by week two", "This one learns what you eat. Breakfast, one tap.", "If you won't track, you're guessing. Stop guessing."], "Mid-set, rack the weight, turn to camera. Over-shoulder: Quick Add tap + count-up."],
+  ["A2", "How much protein do you actually need? Way simpler than TikTok says.", ["Your own rule of thumb (your words)", "Most clients are at about half that", "Set a protein goal and watch one bar"], "Home screen: protein column vs goal."],
+  ["A3", "This is why your Monday weigh-in is up.", ["It's not the donut: it's the untracked meals around it", "Weekend is 2/7 of your week", "Track it to know, not to feel bad"], "Holding a donut box. Progress week chart with a tall Saturday."],
+  ["A4", "Up 2 pounds overnight?!", ["Water, salt, carbs, sleep", "One weigh-in means nothing", "Weekly average is what I watch"], "Step off the scale. Weekly Recap: average weight vs last week."],
+  ["A5", "You hate tracking calories? Here's the deal I make with clients.", ["Track for 3 weeks, not forever", "Long enough to learn your usual meals", "After a week the app already knows them"], "Quick Add list filling in."],
+  ["A6", "My client tracked for 7 days. Look at this.", ["Weekday vs weekend calories", "Protein low every day", "You can't fix what you can't see"], "Printed Weekly Recap PDF: STAGED demo only (or written client consent)."],
+  ["A7", "Three 'protein' foods that are mostly not protein.", ["Protein bar: check the label", "Peanut butter: mostly fat", "\"Protein\" granola: mostly carbs", "Barcode scanning is free, by the way"], "Hold each; barcode-scan one in the app."],
+  ["A8", "Stop doing cardio to 'burn off' dinner.", ["40 minutes here is about one slice of pizza", "Know the number, then decide", "Train to get strong, track to get lean"], "On a treadmill. Type \"pizza 300\" and tap the one-tap add row. No \"earn your food.\""],
+  ["A9", "Hey Siri, log food with Cave Cals.", ["Hands full? Log anyway", "Siri asks what you ate and reads back your total", "Hands full. Log done."], "Dumbbells in both hands. Use a food logged before."],
+  ["A10", "Eating out doesn't have to wreck your week.", ["Snap the plate", "Fix a portion if it's off", "Close enough beats not at all"], "Restaurant table: Meal Scan, Review Scan, Add All."],
+  ["A11", "The weigh-in routine I give every single client.", ["Same time, after the bathroom, before food", "Log it, then ignore it", "Check the weekly average on Sunday"], "About You: log today's weight, then the Progress weight chart."],
+  ["A12", "Trainer ranks calorie apps.", ["Fair pros and cons of each (checked today)", "Cave Cals: free barcode, learns your meals, caveman", "Best app is the one you'll actually use"], "Green screen over App Store pages. MUST disclose the partnership."]
+];
+const root = document.getElementById("root");
+for (let i = 0; i < cards.length; i += 4) {
+  const sheet = document.createElement("div"); sheet.className = "sheet";
+  cards.slice(i, i + 4).forEach(([id, hook, beats, shot]) => {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<div class="id"><b>${id}</b><span>Cave Cals · trainer series</span></div><div class="label">Hook (first 2 seconds)</div><div class="hook"></div><div class="label">Beats: say it your way</div><ul>${beats.map(() => "<li></li>").join("")}</ul><div class="shot"></div>`;
+    c.querySelector(".hook").textContent = "“" + hook + "”";
+    c.querySelectorAll("li").forEach((li, j) => li.textContent = beats[j]);
+    c.querySelector(".shot").textContent = "🎬 " + shot;
+    sheet.appendChild(c);
+  });
+  root.appendChild(sheet);
+}
+</script>
+</body>
+</html>
