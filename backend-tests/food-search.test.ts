@@ -11,7 +11,7 @@ const fetcher = (fn: (url: string, init?: RequestInit) => Promise<Response>) => 
 const token = () => json({ access_token: 'fixture-token', expires_in: 86400 });
 
 test('Basic preserves restaurant, calorie portion, zero calories, and single-object response', () => {
-  assert.deepEqual(normalizeFoods(result, false), [{ id: 'fatsecret:123', name: 'So-Cal Sandwich', brand: 'Urbane Cafe', calories: 800, servingDescription: '1 sandwich', macros: { protein: undefined, netCarbs: undefined, fat: 36 } }]);
+  assert.deepEqual(normalizeFoods(result, false), [{ id: 'fatsecret:123', name: 'So-Cal Sandwich', brand: 'Urbane Cafe', calories: 800, servingDescription: '1 sandwich', macros: { protein: undefined, totalCarbs: 45, fiber: undefined, fat: 36 } }]);
   assert.equal(normalizeFoods({ foods: { total_results: '1', food: { ...food, food_description: 'Per 100 g - Calories: 0kcal | Fat: 0g' } } }, false)[0].calories, 0);
   assert.deepEqual(normalizeFoods({ foods: { total_results: '0' } }, false), []);
   assert.equal(normalizeFoods({ foods: { total_results: '2', food: [food, food] } }, false).length, 1);
@@ -111,9 +111,9 @@ test('Premier macros use the selected serving and preserve unknown fiber, zero, 
       serving_id: '5', serving_description: '1 salad', calories: '560', ...serving,
     } } } } } }, true)[0].macros;
   }
-  assert.deepEqual(normalize({ protein: '30.5', carbohydrate: '45', fiber: '9', fat: '26' }), { protein: 30.5, netCarbs: 36, fat: 26 });
-  assert.deepEqual(normalize({ protein: '0', carbohydrate: '45', fat: '' }), { protein: 0, netCarbs: undefined, fat: undefined });
-  assert.equal(normalize({ carbohydrate: '0' })?.netCarbs, 0);
-  assert.equal(normalize({ carbohydrate: '5', fiber: '8' })?.netCarbs, undefined);
+  assert.deepEqual(normalize({ protein: '30.5', carbohydrate: '45', fiber: '9', fat: '26' }), { protein: 30.5, totalCarbs: 45, fiber: 9, fat: 26 });
+  assert.deepEqual(normalize({ protein: '0', carbohydrate: '45', fat: '' }), { protein: 0, totalCarbs: 45, fiber: undefined, fat: undefined });
+  assert.equal(normalize({ carbohydrate: '0' })?.totalCarbs, 0);
+  assert.equal(normalize({ carbohydrate: '5', fiber: '8' })?.fiber, undefined);
   for (const value of ['NaN', 'Infinity', '-1', '100001', '', ' ']) assert.equal(normalize({ protein: value })?.protein, undefined);
 });

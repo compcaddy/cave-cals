@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { foodSearchClient, foodSearchInput, limitFoodSearch } from './food-search';
 import { APIError, errorResponse, readLimited, positiveInt } from './config';
-import { authenticate, challenge, register } from './auth';
-import { products, entitlement, requirePaid, verifyPurchase, verifyNotification } from './apple';
+import { authenticate, challenge, register, issueTrialKey, trialKeyPattern, OWNER_TEST_KEY } from './auth';
+import { products, entitlement, requirePaid, verifyPurchase, applyNotification } from './apple';
 import { signUpload, uploadInput } from './storage';
-import { analyze, reserveAIUsage } from './analysis';
+import { analyze, describe, describeInput, reserveAIUsage } from './analysis';
 import { importMealFromWebsite } from './ai';
-import { estimateMacros, macroInput } from './macros';
+import { estimateMacros, macroInput, withLegacyItems, withLegacyNetCarbs } from './macros';
 import { consume, tomorrow, limitPublic } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
@@ -26,7 +26,8 @@ export async function api(request: Request, path: string): Promise<Response> {
       const input = foodSearchInput.parse(body);
       const provider = foodSearchClient();
       await limitFoodSearch(request);
-      return ok(await provider.search(input.query));
+      const page = await provider.search(input.query);
+      return ok({ ...page, results: page.results.map(food => food.macros ? { ...food, macros: withLegacyNetCarbs(food.macros) } : food) });
     }
     if (path === 'device/challenge') {
       const input = z.object({ keyId: keySchema, purpose: z.enum(['register','request']) }).parse(body);
@@ -34,13 +35,12 @@ export async function api(request: Request, path: string): Promise<Response> {
     }
     if (path === 'device/register') {
       await limitPublic(request);
-      const input = z.object({ keyId: keySchema, nonce: nonceSchema, attestation: z.string().min(1).max(20000) }).parse(body);
-      return ok(await register(input.keyId, input.nonce, input.attestation));
+      const input = z.object({ keyId: keySchema, nonce: nonceSchema, attestation: z.string().min(1).max(20000), trialKey: z.string().regex(trialKeyPattern).optional() }).parse(body);
+      return ok(await register(input.keyId, input.nonce, input.attestation, input.trialKey));
     }
     if (path === 'apple/notifications') {
       const { signedPayload } = z.object({ signedPayload: z.string().max(60000) }).parse(body);
-      await verifyNotification(signedPayload);
-      // No stale entitlement cache to invalidate: every billable action queries Apple live.
+      await applyNotification(signedPayload);
       return ok({ received: true });
     }
     const { nonce } = z.object({ nonce: nonceSchema }).parse(body);
@@ -51,7 +51,7 @@ export async function api(request: Request, path: string): Promise<Response> {
       // One fixed owner identity keeps usage quotas shared across reinstalls and test clients.
       const accountId = '00000000-0000-4000-8000-000000000002';
       await database().insert(accounts).values({ id: accountId }).onConflictDoNothing();
-      identity = { accountId, keyId: 'owner-test', development: false, testAccess };
+      identity = { accountId, keyId: OWNER_TEST_KEY, development: false, testAccess };
     } else {
       identity = await authenticate(request, raw, nonce);
     }
@@ -59,8 +59,12 @@ export async function api(request: Request, path: string): Promise<Response> {
     await consume(`requests:${identity.accountId}:${new Date().toISOString().slice(0,16)}`, 30, tomorrow());
     if (path === 'account/status') {
       const { regularLogCount } = scanUsageInput.parse(body);
+      const { issueTrialKey: wantsTrialKey } = z.object({ issueTrialKey: z.boolean().optional() }).parse(body);
       const membership = await entitlement(identity);
-      return ok({ accountId: identity.accountId, ...membership, ...await scanAccess(identity, membership.active, regularLogCount), productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300) });
+      const access = await scanAccess(identity, membership.active, regularLogCount);
+      // Only attested installs keep an install key; developer and owner-test identities are shared.
+      const trialKey = wantsTrialKey && !identity.development && identity.keyId !== OWNER_TEST_KEY ? await issueTrialKey(identity) : undefined;
+      return ok({ accountId: identity.accountId, ...membership, ...access, productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300), ...(trialKey ? { trialKey } : {}) });
     }
     if (path === 'purchase/verify') {
       const input = z.object({ signedTransaction: z.string().min(1).max(50000) }).parse(body);
@@ -79,7 +83,14 @@ export async function api(request: Request, path: string): Promise<Response> {
       const { regularLogCount } = scanUsageInput.parse(body);
       // Persist the high-water mark even if access is denied inside the analysis transaction.
       await scanAccess(identity, false, regularLogCount);
-      return ok(await analyze(identity, uploadId, undefined, regularLogCount));
+      return ok(withLegacyItems(await analyze(identity, uploadId, undefined, regularLogCount)));
+    }
+    if (path === 'food/describe') {
+      const { text } = describeInput.parse(body);
+      const { regularLogCount } = scanUsageInput.parse(body);
+      // Persist the high-water mark even if access is denied inside the charging transaction.
+      await scanAccess(identity, false, regularLogCount);
+      return ok(withLegacyItems(await describe(identity, text, undefined, regularLogCount)));
     }
     if (path === 'food/macros') {
       const input = macroInput.parse(body);
@@ -88,13 +99,13 @@ export async function api(request: Request, path: string): Promise<Response> {
         await consume(`macro-estimate:${identity.accountId}:${new Date().toISOString().slice(0,10)}`, positiveInt('MACRO_ESTIMATE_DAILY_LIMIT', 10), tomorrow(), tx);
         await reserveAIUsage(identity, tx);
       });
-      return ok(await estimateMacros(input));
+      return ok(withLegacyNetCarbs(await estimateMacros(input)));
     }
     if (path === 'meal/import') {
       const { url } = z.object({ url: z.string().url().max(2048) }).parse(body);
       await requirePaid(identity);
       await reserveAIUsage(identity);
-      return ok(await importMealFromWebsite(url));
+      return ok(withLegacyItems(await importMealFromWebsite(url)));
     }
     throw new APIError(404, 'not_found', 'Not found.');
   } catch (error) {

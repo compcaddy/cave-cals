@@ -108,7 +108,7 @@ test('food search is free, returns normalized restaurant results, and uses share
     upstreamCalls++;
     return String(url).includes('/connect/token')
       ? Response.json({ access_token: 'fixture-token', expires_in: 86400 })
-      : Response.json({ foods: { total_results: '1', food: { food_id: '123', food_name: 'Sandwich', brand_name: 'Urbane Cafe', food_description: 'Per 1 sandwich - Calories: 800kcal | Fat: 36g' } } });
+      : Response.json({ foods: { total_results: '1', food: { food_id: '123', food_name: 'Sandwich', brand_name: 'Urbane Cafe', food_description: 'Per 1 sandwich - Calories: 800kcal | Fat: 36g | Carbs: 45g' } } });
   };
   try {
     const response = await api(new Request('http://localhost:3000/api/v1/foods/search', {
@@ -118,6 +118,8 @@ test('food search is free, returns normalized restaurant results, and uses share
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const body = await response.json();
     assert.equal(body.results[0].brand, 'Urbane Cafe'); assert.equal(body.results[0].calories, 800);
+    // Basic search has no fiber: newer apps get total carbs, older apps get no guessed net carbs.
+    assert.equal(body.results[0].macros.totalCarbs, 45); assert.equal(body.results[0].macros.netCarbs, null);
     assert.equal(body.cacheLifetime, 0); assert.equal(upstreamCalls, 2);
   } finally {
     globalThis.fetch = beforeFetch;
@@ -203,7 +205,7 @@ test('manual macro estimates are free, share server budgets, and do not spend th
   let providerCalls = 0;
   globalThis.fetch = async () => {
     providerCalls++;
-    return Response.json({ id: 'resp_macro', object: 'response', status: 'completed', created_at: 1, model: 'test', output: [{ id: 'msg_macro', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ protein: 12, netCarbs: 1, fat: 10 }), annotations: [] }] }] });
+    return Response.json({ id: 'resp_macro', object: 'response', status: 'completed', created_at: 1, model: 'test', output: [{ id: 'msg_macro', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ protein: 12, totalCarbs: 1, fiber: 0, fat: 10 }), annotations: [] }] }] });
   };
   function request(fields: Record<string, unknown> = {}) {
     return new Request('http://localhost/api/v1/food/macros', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cave-owner-test': '1' },
@@ -215,7 +217,7 @@ test('manual macro estimates are free, share server budgets, and do not spend th
     assert.equal((await api(request({ name: '' }), 'food/macros')).status, 400);
     const result = await api(request(), 'food/macros');
     assert.equal(result.status, 200);
-    assert.deepEqual(await result.json(), { protein: 12, netCarbs: 1, fat: 10 });
+    assert.deepEqual(await result.json(), { protein: 12, totalCarbs: 1, fiber: 0, fat: 10, netCarbs: 1 });
     assert.equal((await api(request(), 'food/macros')).status, 429);
     assert.equal(providerCalls, 1);
     const [after] = await database().select().from(accounts).where(eq(accounts.id, ownerID));
@@ -227,4 +229,66 @@ test('manual macro estimates are free, share server budgets, and do not spend th
     if (originalLimit === undefined) delete env.MACRO_ESTIMATE_DAILY_LIMIT; else env.MACRO_ESTIMATE_DAILY_LIMIT = originalLimit;
     await database().delete(limits).where(eq(limits.bucket, bucket));
   }
+});
+
+test('signing challenges require a registered device and do not spend the shared bootstrap budget', async () => {
+  const { issueTrialKey } = await import('../../backend/src/server/auth');
+  const globalBucket = `bootstrap-global:${new Date().toISOString().slice(0,10)}`;
+  const count = async () => (await database().select().from(limits).where(eq(limits.bucket, globalBucket)))[0]?.count ?? 0;
+  await assert.rejects(challenge(new Request('http://localhost:3000'), `${prefix}-unregistered`, 'request'), codeIs('unknown_device'));
+  const identity = await account(); const keyId = `${prefix}-registered`;
+  await database().insert(devices).values({ keyId, accountId: identity.accountId, publicKey: 'unused' });
+  const before = await count();
+  assert.ok((await challenge(new Request('http://localhost:3000'), keyId, 'request')).nonce);
+  assert.equal(await count(), before);
+  const key = await issueTrialKey({ ...identity, keyId, development: false });
+  const [row] = await database().select().from(accounts).where(eq(accounts.id, identity.accountId));
+  const [device] = await database().select().from(devices).where(eq(devices.keyId, keyId));
+  assert.equal(row.trialKeyHash, createHash('sha256').update(key).digest('hex'));
+  assert.equal(device.trialKeyHash, row.trialKeyHash);
+  await database().delete(limits).where(like(limits.bucket, `challenge:${prefix}%`));
+});
+
+test('reinstalling on the same iPhone resumes the highest earlier usage', async () => {
+  const { priorUsage } = await import('../../backend/src/server/auth');
+  const hash = createHash('sha256').update(`${prefix}-install`).digest('hex');
+  const first = await account(), second = await account();
+  await database().update(accounts).set({ trialKeyHash: hash, scansUsed: 7, regularLogCount: 20 }).where(eq(accounts.id, first.accountId));
+  await database().update(accounts).set({ trialKeyHash: hash, scansUsed: 3, regularLogCount: 45 }).where(eq(accounts.id, second.accountId));
+  assert.deepEqual(await database().transaction(tx => priorUsage(tx, hash)), { scansUsed: 7, regularLogCount: 45 });
+  assert.deepEqual(await database().transaction(tx => priorUsage(tx, 'f'.repeat(64))), { scansUsed: 0, regularLogCount: 0 });
+});
+
+test('the subscription device limit counts recent physical iPhones, not replaced App Attest keys', async () => {
+  const { otherActiveDevices } = await import('../../backend/src/server/apple');
+  const owner = await account();
+  const old = new Date(Date.now() - 40 * 86_400_000);
+  await database().insert(devices).values([
+    { keyId: `${prefix}-a`, accountId: owner.accountId, publicKey: 'unused', trialKeyHash: 'phone-1' },
+    { keyId: `${prefix}-a-reinstall`, accountId: owner.accountId, publicKey: 'unused', trialKeyHash: 'phone-1' },
+    { keyId: `${prefix}-b`, accountId: owner.accountId, publicKey: 'unused', trialKeyHash: 'phone-2' },
+    { keyId: `${prefix}-stale`, accountId: owner.accountId, publicKey: 'unused', lastSeen: old },
+    { keyId: `${prefix}-current`, accountId: owner.accountId, publicKey: 'unused', trialKeyHash: 'phone-3' },
+  ]);
+  assert.equal(await database().transaction(tx => otherActiveDevices(tx, owner.accountId, `${prefix}-current`)), 2);
+  assert.equal(await database().transaction(tx => otherActiveDevices(tx, owner.accountId, `${prefix}-a-reinstall`)), 2);
+  assert.equal(await database().transaction(tx => otherActiveDevices(tx, owner.accountId, `${prefix}-new-key`)), 3);
+});
+
+test('spoken descriptions spend one scan, refund failures, and stop at the free limit before OpenAI', async () => {
+  const { describe } = await import('../../backend/src/server/analysis');
+  const identity = { ...await account(), development: false };
+  await database().update(accounts).set({ scansUsed: 8 }).where(eq(accounts.id, identity.accountId));
+  let calls = 0;
+  const model = async () => { calls++; await new Promise(r => setTimeout(r, 200)); return scanResult; };
+  await assert.rejects(describe(identity, 'two eggs', async () => { throw new Error('fixture failure'); }), codeIs('ai_unavailable'));
+  const used = async () => (await database().select().from(accounts).where(eq(accounts.id, identity.accountId)))[0].scansUsed;
+  assert.equal(await used(), 8);
+  assert.deepEqual(await describe(identity, 'two eggs', model), scanResult);
+  assert.equal(await used(), 9);
+  const outcomes = await Promise.allSettled([describe(identity, 'toast', model), describe(identity, 'coffee', model)]);
+  assert.equal(outcomes.filter(r => r.status === 'fulfilled').length, 1);
+  await assert.rejects(describe(identity, 'banana', model), codeIs('subscription_required'));
+  assert.equal(calls, 2); assert.equal(await used(), 10);
+  assert.deepEqual(await describe({ ...identity, testAccess: true }, 'banana', model), scanResult);
 });

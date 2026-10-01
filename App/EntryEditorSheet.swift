@@ -20,12 +20,13 @@ struct EntryEditorSheet: View {
     private let servingSizes = ["1 serving", "1 piece", "1 cup", "1/2 cup", "1 tbsp", "1 tsp", "1 oz", "100 g"]
     var body: some View {
         NavigationStack {
-            Form {
+            HapticForm {
                 Section {
                     Group {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("CALORIES").font(.cave(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                        CalorieAmountField(value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), focusOnOpen: focusCaloriesOnOpen, blankOnOpen: blankCaloriesOnOpen)
+                        CalorieAmountField(value: Binding(get: { draft.calories }, set: { draft.changeCalories($0) }), focusOnOpen: focusCaloriesOnOpen, blankOnOpen: blankCaloriesOnOpen,
+                                           selectOnOpen: draft.entryID != nil)
                             .frame(height: calorieFieldHeight)
                     }.padding(.top, 10)
                     VStack(alignment: .leading, spacing: 0) {
@@ -42,10 +43,10 @@ struct EntryEditorSheet: View {
                                         Spacer()
                                         CaveIcon(.arrowUpLeft, size: 22).foregroundStyle(.secondary)
                                     }.padding(.vertical, 12)
-                                }.buttonStyle(.borderless).accessibilityLabel("Use name \(name)")
+                                }.hapticButtonStyle(.borderless).accessibilityLabel("Use name \(name)")
                             }
                         }
-                    }
+                    }.keyboardInputArea()
                     }.editorRowInsets()
                 }
                 Section {
@@ -69,12 +70,12 @@ struct EntryEditorSheet: View {
                                             servingSizeFocused = false
                                         } label: {
                                             Text(size).frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
-                                        }.buttonStyle(.borderless)
+                                        }.hapticButtonStyle(.borderless)
                                     }
                                 }
                             }.frame(height: 176).padding(.top, 8)
                         }
-                        }
+                        }.keyboardInputArea()
                         HStack {
                             Text("cals / serving").font(.cave(.subheadline)).opacity(0.65)
                             Spacer()
@@ -96,7 +97,7 @@ struct EntryEditorSheet: View {
                                 } label: {
                                     Text(draft.timestamp, format: .dateTime.hour().minute())
                                         .foregroundStyle(.primary).frame(minHeight: 32)
-                                }.buttonStyle(.plain).accessibilityLabel("Time").accessibilityValue(draft.timestamp.formatted(date: .omitted, time: .shortened))
+                                }.hapticButtonStyle(.plain).accessibilityLabel("Time").accessibilityValue(draft.timestamp.formatted(date: .omitted, time: .shortened))
                             }
                         }
                         if let food = changedCommonFood, onSaveComponent == nil {
@@ -125,7 +126,8 @@ struct EntryEditorSheet: View {
                         }
                     }
                 }
-            }
+            }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add Calories" : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingTime) {
@@ -133,14 +135,14 @@ struct EntryEditorSheet: View {
                     DatePicker("Time", selection: timeOfDay, in: ...Date(), displayedComponents: [.hourAndMinute])
                         .datePickerStyle(.wheel).labelsHidden().padding(.horizontal)
                         .navigationTitle("Time").navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTime = false } } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTime = false }.hapticButtonStyle(.automatic) } }
                 }.presentationDetents([.height(300)]).presentationDragIndicator(.visible)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         if let onCancel { onCancel() } else { dismiss() }
-                    }
+                    }.hapticButtonStyle(.automatic)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) {
@@ -148,11 +150,10 @@ struct EntryEditorSheet: View {
                             .labelStyle(.titleAndIcon)
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(.blue)
+                    .hapticButtonStyle(.borderedProminent).tint(.caveOrange).hapticFeel(.success)
                     .fontWeight(.semibold).disabled(!draft.isValid)
                     .accessibilityIdentifier("saveEntry")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { nameFocused = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
             .onChange(of: changedCommonFood?.id) { _, _ in saveAsCommonDefault = false }
@@ -204,7 +205,7 @@ struct EntryEditorSheet: View {
     }
 }
 
-private extension View {
+extension View {
     func selectValueOnFocus(identifier: String) -> some View {
         onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { notification in
             guard let field = notification.object as? UITextField,
@@ -216,7 +217,8 @@ private extension View {
         }
     }
     func selectValueOnTap(focus: FocusState<Bool>.Binding) -> some View {
-        contentShape(Rectangle())
+        keyboardInputArea()
+            .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded {
                 focus.wrappedValue = true
                 // Wait for SwiftUI to focus the field and finish placing the insertion point.
@@ -237,7 +239,9 @@ private struct CalorieAmountField: UIViewRepresentable {
     @Binding var value: Double
     let focusOnOpen: Bool
     let blankOnOpen: Bool
-    func makeCoordinator() -> Coordinator { Coordinator(value: $value, initiallyBlank: blankOnOpen) }
+    /// Editing a logged entry opens with the amount selected so typing replaces it.
+    var selectOnOpen = false
+    func makeCoordinator() -> Coordinator { Coordinator(value: $value, initiallyBlank: blankOnOpen, selectOnFirstFocus: selectOnOpen && focusOnOpen) }
     func makeUIView(context: Context) -> AmountTextField {
         let field = AmountTextField()
         field.focusOnOpen = focusOnOpen
@@ -272,6 +276,7 @@ private struct CalorieAmountField: UIViewRepresentable {
     final class Coordinator: NSObject, UITextFieldDelegate {
         var value: Binding<Double>
         var initiallyBlank: Bool
+        var selectOnFirstFocus: Bool
         let formatter: NumberFormatter = {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
@@ -279,18 +284,21 @@ private struct CalorieAmountField: UIViewRepresentable {
             formatter.maximumFractionDigits = 0
             return formatter
         }()
-        init(value: Binding<Double>, initiallyBlank: Bool) {
+        init(value: Binding<Double>, initiallyBlank: Bool, selectOnFirstFocus: Bool) {
             self.value = value
             self.initiallyBlank = initiallyBlank
+            self.selectOnFirstFocus = selectOnFirstFocus
         }
         func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
             string.allSatisfy { $0.isWholeNumber }
         }
         func textFieldDidBeginEditing(_ textField: UITextField) {
+            let selectAll = selectOnFirstFocus
+            selectOnFirstFocus = false
             DispatchQueue.main.async {
                 guard textField.isFirstResponder else { return }
                 let end = textField.endOfDocument
-                textField.selectedTextRange = textField.textRange(from: end, to: end)
+                textField.selectedTextRange = textField.textRange(from: selectAll ? textField.beginningOfDocument : end, to: end)
             }
         }
         @objc func changed(_ field: UITextField) {
@@ -325,12 +333,13 @@ struct ServingControl: View {
                         } label: {
                             Text(preset.formatted(.number.precision(.fractionLength(0...2))))
                                 .frame(maxWidth: .infinity, alignment: .trailing).frame(minHeight: 44)
-                        }.buttonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
+                        }.hapticButtonStyle(.borderless).accessibilityLabel("Use \(preset.formatted()) servings")
                     }
                 }
-            }.frame(height: 176).padding(.top, 8)
+            }.caveScreenBackground().frame(height: 176).padding(.top, 8)
         }
-        }
+        // The presets belong to the servings field.
+        }.keyboardInputArea()
     }
     private var controls: some View {
         TextField("1", value: $value, format: .number.precision(.fractionLength(0...3)))

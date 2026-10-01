@@ -6,6 +6,16 @@ Add the **Quick Log** widget from the Home Screen widget gallery under **Cave Ca
 
 All external actions start on today's date. If initial setup is required, the action waits until setup is complete. A shortcut takes precedence over the search drawer that normally opens when the app starts or resumes.
 
+## Siri and Shortcuts
+
+Say “Log food with Cave Cals” (also “Log food in…”, “Log a meal in…”, “Log calories in…”, “Add food to…”, “Track food in Cave Cals”). Siri asks “What did you eat?” and `LogFoodIntent` logs the answer on today's date without opening the app:
+
+- `pizza, 300 calories`, `300 calories of pizza`, or `250 calories` are logged locally from `QuickEntryText`.
+- A saved meal name (“my breakfast”) or a food logged before (“a banana”) is logged locally with its usual values.
+- Anything else (“two scrambled eggs and toast”) is estimated by `food/describe` and logged directly. It uses one scan; when scans are used up, Siri suggests including calories or upgrading in the app.
+
+The reply names what was logged and today's total and remaining calories. The same intent is available in the Shortcuts app and for the Action button. “Open Cave Cals” keeps the older `ChooseCalorieLoggingIntent` identity so existing Action button assignments still work.
+
 ## Implementation
 
 - `Shared/LoggingAction.swift` is compiled into the app and widget and defines the four URLs: `cavecals://log/{barcode,voice,image,add}`.

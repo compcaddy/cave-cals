@@ -148,6 +148,15 @@ enum Day {
         return calendar.date(bySettingHour: time.hour ?? 12, minute: time.minute ?? 0, second: time.second ?? 0, of: selected) ?? selected
     }
     static func week(_ date: Date) -> Date { Calendar.current.dateInterval(of: .weekOfYear, for: date)!.start }
+    /// "Breakfast", "Lunch", "Dinner", or "Snack" by time of day.
+    static func mealName(at date: Date, calendar: Calendar = .current) -> String {
+        switch calendar.component(.hour, from: date) {
+        case 4..<11: "Breakfast"
+        case 11..<16: "Lunch"
+        case 16..<21: "Dinner"
+        default: "Snack"
+        }
+    }
 }
 
 extension Double {

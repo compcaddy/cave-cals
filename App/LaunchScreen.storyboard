@@ -14,10 +14,10 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchArtwork" translatesAutoresizingMaskIntoConstraints="NO" id="launch-artwork">
-                                <rect key="frame" x="29.5" y="259" width="334" height="334"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchLogo" translatesAutoresizingMaskIntoConstraints="NO" id="launch-artwork">
+                                <rect key="frame" x="55" y="247" width="283" height="358"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" secondItem="launch-artwork" secondAttribute="height" id="artwork-square"/>
+                                    <constraint firstAttribute="width" secondItem="launch-artwork" secondAttribute="height" multiplier="0.80029" id="artwork-aspect"/>
                                     <constraint firstAttribute="width" relation="lessThanOrEqual" constant="440" id="artwork-max-width"/>
                                 </constraints>
                             </imageView>
@@ -27,8 +27,8 @@
                         <constraints>
                             <constraint firstItem="launch-artwork" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="artwork-center-x"/>
                             <constraint firstItem="launch-artwork" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" id="artwork-center-y"/>
-                            <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-safe-area" secondAttribute="width" multiplier="0.85" priority="999" id="artwork-width"/>
-                            <constraint firstItem="launch-artwork" firstAttribute="height" relation="lessThanOrEqual" secondItem="launch-safe-area" secondAttribute="height" multiplier="0.85" id="artwork-height-limit"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-safe-area" secondAttribute="width" multiplier="0.72" priority="999" id="artwork-width"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="height" relation="lessThanOrEqual" secondItem="launch-safe-area" secondAttribute="height" multiplier="0.75" id="artwork-height-limit"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -37,6 +37,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="LaunchArtwork" width="1254" height="1254"/>
+        <image name="LaunchLogo" width="850" height="1062"/>
     </resources>
 </document>

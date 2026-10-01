@@ -1,0 +1,9 @@
+Cave Cals 1.0.4
+
+Open Progress using the descending line-chart icon between About You and Settings.
+
+Weekly Recap now has separate weight and calorie cards with mini graphs, bold weekly changes, and simple ranges. Daily breakdown starts collapsed.
+
+The printable Weekly Recap fits on one page. The top highlights weight change versus the prior week and average daily calories versus your goal. Six-Week Trends includes weekly averages, ranges, and smaller week-over-week changes beside both averages.
+
+Also try the calendar week/month/year calorie and macro charts, weight history, and widget Search/Add versus background taps. Home keeps its simple cream background.

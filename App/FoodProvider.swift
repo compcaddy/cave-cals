@@ -9,10 +9,22 @@ struct FoodResult: Identifiable, Codable, Equatable, Sendable {
     var servingDescription: String
     var barcode: String?
     var macros: MacroNutrients?
+    /// Products read by their own name ("Diet Coke", not "Coca-Cola — Diet Coke"). A one-word name
+    /// ("Latte", "Original") means little alone, so it keeps its brand in front.
+    var displayName: String {
+        guard let brand = brand?.trimmingCharacters(in: .whitespaces), !brand.isEmpty,
+              name.range(of: brand, options: .caseInsensitive) == nil,
+              name.split(whereSeparator: \.isWhitespace).count <= 1 else { return name }
+        return "\(brand) \(name)"
+    }
+    /// Search rows show the brand quietly beside the serving so similar products stay distinguishable.
+    var searchDetail: String {
+        let shownBrand = brand.flatMap { brand in
+            !brand.isEmpty && displayName.range(of: brand, options: .caseInsensitive) == nil ? brand : nil
+        }
+        return [shownBrand, servingDescription].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
     var draft: EntryDraft {
-        let displayName = brand.flatMap { brand in
-            !brand.isEmpty && name.range(of: brand, options: .caseInsensitive) == nil ? "\(brand) — \(name)" : nil
-        } ?? name
         var value = EntryDraft(name: displayName, calories: calories)
         value.macrosPerServing = macros
         value.externalID = id; value.servingDescription = servingDescription; value.barcode = barcode; value.source = "foodSearch"
@@ -161,18 +173,46 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
                 } else { amount = n["\(key)_100g"]?.value.map { $0 * scale } }
                 return amount.flatMap { $0.isFinite && $0 >= 0 && $0 <= 100_000 ? $0 : nil }
             }
-            // OFF normalizes carbohydrates as available carbs (already excludes fiber).
-            let macros = MacroNutrients(protein: nutrient("proteins"), netCarbs: nutrient("carbohydrates"), fat: nutrient("fat"))
+            // OFF's carbohydrates exclude fiber; prefer its explicit US/Canada total.
+            let fiber = nutrient("fiber")
+            let totalCarbs = nutrient("carbohydrates-total") ?? nutrient("carbohydrates").flatMap { carbs in
+                fiber.flatMap { carbs + $0 <= 100_000 ? carbs + $0 : nil }
+            }
+            let validFiber = fiber.flatMap { amount in totalCarbs.map { amount <= $0 } == false ? nil : amount }
+            let macros = MacroNutrients(protein: nutrient("proteins"), totalCarbs: totalCarbs, fiber: validFiber, fat: nutrient("fat"))
             return FoodResult(id: "openfoodfacts:\(code)", name: name, brand: brands, calories: calories, servingDescription: description, barcode: code, macros: macros)
         }
     }
 }
 
+#if DEBUG && targetEnvironment(simulator)
+/// Isolated, delayed API results for the footer/search UI regression tests. Never uses the network.
+struct SearchLayoutFixture: FoodSearchService {
+    static var isEnabled: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitesting") && arguments.contains("--search-layout-fixture")
+    }
+    static var entries: [EntryDraft] {
+        (1...24).map { index in
+            EntryDraft(name: index == 24 ? "Zesty testbowl" : String(format: "Home row %02d", index),
+                       calories: 80, timestamp: Date().addingTimeInterval(Double(index - 24) * 60))
+        }
+    }
+    func search(query: String) async throws -> [FoodResult] {
+        try await Task.sleep(for: .seconds(1))
+        return (1...32).map { index in
+            FoodResult(id: "fatsecret:layout-\(index)", name: String(format: "A Testbowl option %02d", index),
+                       calories: 100, servingDescription: "1 bowl")
+        }.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+}
+#endif
+
 @MainActor @Observable final class FoodSearchState {
     var results: [FoodResult] = []
     var loading = false
     var message: String?
-    private struct Cached: Codable { let results: [FoodResult]; let expiresAt: Date }
+    private struct Cached: Codable, Sendable { let results: [FoodResult]; let expiresAt: Date }
     private let provider: any FoodSearchService
     private var cache: [String: Cached] = [:]
     private let cacheURL: URL?
@@ -182,22 +222,31 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
     init(provider: any FoodSearchService = FatSecretSearch.shared, persistCache: Bool = true,
          cacheURL: URL? = nil, now: @escaping () -> Date = Date.init, debounce: Duration = .milliseconds(450)) {
         self.provider = provider; self.now = now; self.debounce = debounce
-        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v3.json")) : nil
+        self.cacheURL = persistCache ? (cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("FoodSearchCache-v4.json")) : nil
         if let url = self.cacheURL, let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: Cached].self, from: data) {
             cache = values.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() && $0.value.expiresAt <= now().addingTimeInterval(3600) }
             persist()
         }
     }
+    /// One queue keeps writes in order; encoding and disk I/O stay off the main thread while typing.
+    private static let diskQueue = DispatchQueue(label: "com.philstarkovich.cavecals.food-search-cache", qos: .utility)
     private func persist() {
-        if let cacheURL, let data = try? JSONEncoder().encode(cache) { try? data.write(to: cacheURL, options: .atomic) }
+        guard let cacheURL else { return }
+        let snapshot = cache
+        Self.diskQueue.async {
+            if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: cacheURL, options: .atomic) }
+        }
     }
+    /// Waits for queued cache writes to reach disk (tests reopen the file right after searching).
+    static func waitForPendingWrites() { diskQueue.sync {} }
     func search(_ text: String) async {
         let id = UUID(); requestID = id
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        cache = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
-        persist()
+        // Saved only when something actually expired, not on every keystroke.
+        let unexpired = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
+        if unexpired.count != cache.count { cache = unexpired; persist() }
         message = nil; results = []; loading = false
-        guard query.count >= 2, Double(query) == nil else { return }
+        guard query.count >= 2, Double(query) == nil, QuickEntryText.parse(query)?.name.isEmpty != true else { return }
         if let hit = cache[query] { results = hit.results; return }
         loading = true
         defer { if requestID == id { loading = false } }
@@ -212,9 +261,9 @@ actor OpenFoodFacts: FoodSearchService, BarcodeLookupService {
             } else if page.cacheLifetime > 0 {
                 cache[query] = Cached(results: page.results, expiresAt: now().addingTimeInterval(min(page.cacheLifetime, 3600)))
                 if cache.count > 150, let oldest = cache.min(by: { $0.value.expiresAt < $1.value.expiresAt })?.key { cache.removeValue(forKey: oldest) }
+                persist()
             }
             // Never cache an empty response or a provider error. Basic FatSecret results aren't cached.
-            persist()
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
             if let error = error as? URLError {

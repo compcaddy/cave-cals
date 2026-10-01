@@ -23,6 +23,9 @@ enum CaveGlyph: String, CaseIterable {
     case warning = "CaveWarning"
     case gear = "CaveGear"
     case person = "CavePerson"
+    case protein = "CaveProtein"
+    case carbs = "CaveCarbs"
+    case fat = "CaveFat"
 }
 
 /// Single-color vector artwork inherits its parent's foreground style in either appearance.
@@ -78,5 +81,42 @@ extension Font {
         @unknown default: size = 20
         }
         return .custom("Schoolbell-Regular", size: size, relativeTo: style)
+    }
+}
+
+// Warm "cave" palette. Dark variants keep the same character without a bright cream screen at night.
+extension Color {
+    static let caveOrange = Color(light: (0.769, 0.325, 0.106), dark: (0.878, 0.420, 0.180))
+    static let caveBackground = Color(light: (0.961, 0.925, 0.863), dark: (0.110, 0.086, 0.067))
+    static let caveSurface = Color(light: (0.984, 0.965, 0.925), dark: (0.165, 0.133, 0.106))
+
+    private init(light: (Double, Double, Double), dark: (Double, Double, Double)) {
+        self.init(uiColor: UIColor { traits in
+            let c = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+        })
+    }
+    /// The launch screen's cream, in every appearance.
+    static let caveLaunchCream = Color(red: 0.984, green: 0.973, blue: 0.949)
+}
+
+extension View {
+    /// Supplied logos have near-black outlines and lettering that vanish on the dark background, so in dark
+    /// mode they sit on a cream badge (light mode is unchanged).
+    func creamBadgeInDarkMode(cornerRadius: CGFloat = 28, padding: CGFloat = 14) -> some View {
+        modifier(CreamBadgeInDarkMode(cornerRadius: cornerRadius, padding: padding))
+    }
+}
+
+private struct CreamBadgeInDarkMode: ViewModifier {
+    let cornerRadius: CGFloat
+    let padding: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    func body(content: Content) -> some View {
+        if colorScheme == .dark {
+            content.padding(padding).background(Color.caveLaunchCream, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            content
+        }
     }
 }

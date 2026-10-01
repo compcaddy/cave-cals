@@ -36,7 +36,7 @@ struct BarcodeSheet: View {
                     if loading { ProgressView("Looking up barcode…") }
                     if let message { Text(message).font(.cave(.subheadline)).foregroundStyle(.secondary) }
                 }.padding(20)
-            }
+            }.caveScreenBackground()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CaptureCancelButton {
                     task?.cancel()
@@ -59,6 +59,11 @@ struct BarcodeSheet: View {
         loading = true; message = nil
         task?.cancel()
         task = Task { @MainActor in
+            // A product logged before goes straight into the log with Undo; Home reveals the new row.
+            if var known = store.localBarcode(cleaned) {
+                known.timestamp = date; known.entryID = nil; known.source = "barcode"
+                if store.add([known]) { loading = false; dismiss(); return }
+            }
             var draft = store.localBarcode(cleaned)
             if draft == nil {
                 do { draft = try await OpenFoodFacts.shared.lookup(barcode: cleaned)?.draft }

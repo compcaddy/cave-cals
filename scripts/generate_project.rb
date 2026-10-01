@@ -41,8 +41,8 @@ project.targets.each do |target|
     s['CODE_SIGN_STYLE'] = 'Automatic'
     s['GENERATE_INFOPLIST_FILE'] = 'YES'
     s['PRODUCT_BUNDLE_IDENTIFIER'] = "com.philstarkovich.cavecals#{target == app ? '' : '.' + target.name}"
-    s['MARKETING_VERSION'] = '1.0.3'
-    s['CURRENT_PROJECT_VERSION'] = '3'
+    s['MARKETING_VERSION'] = '1.0.4'
+    s['CURRENT_PROJECT_VERSION'] = '2'
     s['SWIFT_EMIT_LOC_STRINGS'] = 'YES'
     s['SUPPORTS_MACCATALYST'] = 'NO'
     s['SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD'] = 'NO'
@@ -82,7 +82,7 @@ app.add_system_framework('CloudKit')
 app.add_system_framework('AVFoundation')
 r = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
 r.repositoryURL = 'https://github.com/RevenueCat/purchases-ios.git'
-r.requirement = { 'kind' => 'exactVersion', 'version' => '5.88.0' }
+r.requirement = { 'kind' => 'exactVersion', 'version' => '5.90.0' }
 project.root_object.package_references << r
 %w[RevenueCat RevenueCatUI].each do |name|
   d = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)

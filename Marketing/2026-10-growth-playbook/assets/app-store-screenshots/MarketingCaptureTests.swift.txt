@@ -1,0 +1,66 @@
+// Capture-only UI test used on September 28, 2026 to make the raw/ screenshots.
+// It is NOT part of the Xcode project. To re-run: append this class to an existing file in UITests/
+// (for example UITests/ProgressUITests.swift), run only this test on the iPhone 17 Pro Max simulator
+// (1320 x 2868), export the attachments, then remove the class again:
+//
+//   xcodebuild test -project CaveCals.xcodeproj -scheme CaveCals \
+//     -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -parallel-testing-enabled NO \
+//     CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- -resultBundlePath /tmp/capture.xcresult \
+//     -only-testing:ECCUITests/MarketingCaptureTests/testMarketingCaptures
+//   xcrun xcresulttool export attachments --path /tmp/capture.xcresult --output-path /tmp/capture
+//
+// Times on the log rows come from the sample data (relative to "now"); set the simulator status bar with
+// `xcrun simctl status_bar booted override --time 9:41` first. "Done eating" only shows after 6 pm or at 90% of goal.
+
+final class MarketingCaptureTests: XCTestCase {
+    private func shot(_ app: XCUIApplication, _ name: String) {
+        let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
+    }
+    private func fill(_ app: XCUIApplication, _ id: String, _ text: String) {
+        let field = app.textFields[id]
+        for _ in 0..<6 where !(field.exists && field.isHittable) { app.swipeUp() }
+        guard field.waitForExistence(timeout: 3) else { return }
+        field.tap(); field.typeText(text)
+        if app.buttons["Done"].firstMatch.exists { app.buttons["Done"].firstMatch.tap() }
+    }
+    func testMarketingCaptures() {
+        continueAfterFailure = true
+        let app = XCUIApplication()
+        app.launchArguments = ["--screenshots"]
+        app.launch()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 10))
+        let macros: [(String, String, String, String)] = [("Scrambled eggs", "12", "2", "14"), ("Sourdough toast", "6", "30", "1.5"), ("Greek yogurt", "15", "8", "4"), ("Blueberries", "1", "21", "0.5")]
+        for (name, p, c, f) in macros {
+            let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'entry-' AND label BEGINSWITH %@", name)).firstMatch
+            guard row.waitForExistence(timeout: 5) else { continue }
+            row.tap()
+            guard app.buttons["saveEntry"].waitForExistence(timeout: 5) else { continue }
+            fill(app, "macro-protein", p); fill(app, "macro-totalCarbs", c); fill(app, "macro-fat", f)
+            app.buttons["saveEntry"].tap()
+            _ = app.textFields["foodSearch"].waitForExistence(timeout: 5)
+        }
+        sleep(2)
+        shot(app, "home-macros")
+        if app.buttons["finishDay"].waitForExistence(timeout: 3) {
+            app.buttons["finishDay"].tap(); sleep(1); shot(app, "day-done")
+            if app.buttons["reopenDay"].waitForExistence(timeout: 3) { app.buttons["reopenDay"].tap() }
+        }
+        let search = app.textFields["foodSearch"]
+        guard search.waitForExistence(timeout: 5) else { return }
+        search.tap(); sleep(1)
+        app.swipeDown(); sleep(1)
+        shot(app, "quick-add-clean")
+        if app.buttons["Meals"].exists { app.buttons["Meals"].tap(); sleep(1); shot(app, "meals") }
+        if app.buttons["Logged"].exists { app.buttons["Logged"].tap(); sleep(1); shot(app, "today-list") }
+        search.tap(); search.typeText("pizza 300"); sleep(2)
+        shot(app, "type-pizza-300")
+        if app.buttons["clearSearch"].exists { app.buttons["clearSearch"].tap() }
+        if app.buttons["cancelAddMode"].waitForExistence(timeout: 2) { app.buttons["cancelAddMode"].tap() }
+        app.terminate()
+        app.launchArguments = ["--screenshots", "--uitesting"]  // --uitesting stops Voice Log from auto-recording
+        app.launch()
+        if app.buttons["Voice entry"].waitForExistence(timeout: 10) {
+            app.buttons["Voice entry"].tap(); sleep(2); shot(app, "voice-log")
+        }
+    }
+}

@@ -1,0 +1,1516 @@
+{
+ "result": "PASS",
+ "failures": [],
+ "warnings": [
+  "22 servings exceed 1,000 kcal or 500 g; kept as documented USDA portions for review"
+ ],
+ "counts": {
+  "total": 5904,
+  "original": 1000,
+  "added": 4904,
+  "addedGeneric": 4000,
+  "addedBranded": 904,
+  "bySource": {
+   "FDA Raw Fruits poster": 10,
+   "USDA FNDDS 2021-2023": 3891,
+   "USDA SR Legacy (April 2018)": 2003
+  },
+  "addedBySource": {
+   "USDA FNDDS 2021-2023": 2901,
+   "USDA SR Legacy (April 2018)": 2003
+  },
+  "byCategory": {
+   "Vegetables and Vegetable Products": 201,
+   "Breakfast Cereals": 182,
+   "Fruits and Fruit Juices": 168,
+   "Sweets": 142,
+   "Chicken, whole pieces": 134,
+   "Legumes and Legume Products": 124,
+   "Fast Foods": 121,
+   "Meat mixed dishes": 119,
+   "Other vegetables and combinations": 114,
+   "Dairy and Egg Products": 113,
+   "Eggs and omelets": 111,
+   "Finfish and Shellfish Products": 106,
+   "Pasta mixed dishes, excludes macaroni and cheese": 104,
+   "Beverages": 102,
+   "Beef Products": 89,
+   "Cookies and brownies": 84,
+   "Cakes and pies": 73,
+   "Cereal Grains and Pasta": 73,
+   "Restaurant Foods": 72,
+   "Yeast breads": 72,
+   "Nuts and seeds": 71,
+   "Poultry mixed dishes": 70,
+   "Fish": 69,
+   "Pizza": 69,
+   "Coffee": 67,
+   "Rice mixed dishes": 67,
+   "Baked Products": 66,
+   "Poultry Products": 66,
+   "Pork Products": 65,
+   "Beans, peas, legumes": 56,
+   "Deli and cured meat sandwiches": 55,
+   "Soups, Sauces, and Gravies": 55,
+   "Snacks": 53,
+   "Spices and Herbs": 52,
+   "Doughnuts, sweet rolls, pastries": 51,
+   "Ice cream and frozen dairy desserts": 51,
+   "Burgers": 49,
+   "Dips, gravies, other sauces": 49,
+   "Liquor and cocktails": 49,
+   "Cheese": 47,
+   "Nut and Seed Products": 47,
+   "Burritos and tacos": 46,
+   "Crackers, excludes saltines": 46,
+   "Egg/breakfast sandwiches": 45,
+   "Pancakes, waffles, French toast": 45,
+   "Tea": 44,
+   "Other Mexican mixed dishes": 42,
+   "Stir-fry and soy-based sauce mixtures": 42,
+   "Soups, broth-based": 41,
+   "Fruit drinks": 40,
+   "Salad dressings and vegetable oils": 38,
+   "White potatoes, baked or boiled": 36,
+   "Biscuits, muffins, quick breads": 35,
+   "French fries and other fried white potatoes": 35,
+   "Seafood mixed dishes": 34,
+   "Sausages and Luncheon Meats": 33,
+   "Jams, syrups, toppings": 31,
+   "Mashed potatoes and white potato mixtures": 31,
+   "Beef, excludes ground": 30,
+   "Cold cuts and cured meats": 30,
+   "Shellfish": 30,
+   "Cereal bars": 28,
+   "Fats and Oils": 28,
+   "Other fruits and fruit salads": 28,
+   "Other dark green vegetables": 27,
+   "Pretzels/snack mix": 27,
+   "Tortilla, corn, other chips": 27,
+   "Lamb, Veal, and Game Products": 26,
+   "Other starchy vegetables": 26,
+   "Popcorn": 26,
+   "Candy containing chocolate": 25,
+   "Mustard and other condiments": 25,
+   "Potato chips": 25,
+   "Turnovers and other grain-based items": 25,
+   "Egg rolls, dumplings, sushi": 24,
+   "Frankfurter sandwiches": 24,
+   "Not included in a food category": 24,
+   "Candy not containing chocolate": 23,
+   "Fried rice and lo/chow mein": 22,
+   "Grits and other cooked cereals": 22,
+   "Pudding": 22,
+   "Ready-to-eat cereal, higher sugar (>21.2g/100g)": 22,
+   "Rice": 22,
+   "Bagels and English muffins": 21,
+   "Olives, pickles, pickled vegetables": 21,
+   "Pork": 21,
+   "Rolls and buns": 21,
+   "Smoothies and grain drinks": 21,
+   "Bean, pea, legume dishes": 20,
+   "Oatmeal": 20,
+   "Ready-to-eat cereal, lower sugar (=<21.2g/100g)": 20,
+   "Chicken fillet sandwiches": 19,
+   "Meals, Entrees, and Side Dishes": 19,
+   "Meat and BBQ sandwiches": 19,
+   "String beans": 19,
+   "Vegetable dishes": 19,
+   "Other fruit juice": 18,
+   "Peanut butter and jelly sandwiches": 18,
+   "Sport and energy drinks": 18,
+   "Cream and cream substitutes": 17,
+   "Protein and nutritional powders": 17,
+   "Seafood sandwiches": 17,
+   "Yogurt, regular": 17,
+   "Corn": 16,
+   "Plant-based milk": 16,
+   "Sausages": 16,
+   "Turkey, duck, other poultry": 16,
+   "Dried fruits": 15,
+   "Nutritional beverages": 15,
+   "Other red and orange vegetables": 15,
+   "Pasta, noodles, cooked grains": 15,
+   "Broccoli": 14,
+   "Carrots": 14,
+   "Macaroni and cheese": 14,
+   "Ramen and Asian broth-based soups": 14,
+   "Yogurt, Greek": 14,
+   "Chicken patties, nuggets and tenders": 13,
+   "Coleslaw, non-lettuce salads": 13,
+   "Fried vegetables": 13,
+   "Gelatins, ices, sorbets": 13,
+   "Milk shakes and other dairy drinks": 13,
+   "Nutrition bars": 13,
+   "Spinach": 13,
+   "Diet sport and energy drinks": 12,
+   "Soups, cream-based": 12,
+   "Cheese sandwiches": 11,
+   "Citrus juice": 11,
+   "Cream cheese, sour cream, whipped cream": 11,
+   "Diet soft drinks": 11,
+   "Soft drinks": 11,
+   "Tomato-based condiments": 11,
+   "Vegetable sandwiches/burgers": 11,
+   "Wine": 11,
+   "Blueberries and other berries": 10,
+   "Cabbage": 10,
+   "Flavored milk, reduced fat": 10,
+   "Fruit": 10,
+   "Lettuce and lettuce salads": 10,
+   "Mayonnaise": 10,
+   "Soy and meat-alternative products": 10,
+   "Bacon": 9,
+   "Citrus fruits": 9,
+   "Cottage/ricotta cheese": 9,
+   "Sugar substitutes": 9,
+   "Beer": 8,
+   "Butter and animal fats": 8,
+   "Flavored milk, nonfat": 8,
+   "Liver and organ meats": 8,
+   "Soy-based condiments": 8,
+   "Sugars and honey": 8,
+   "Vegetable juice": 8,
+   "Milk, whole": 7,
+   "Tortillas": 7,
+   "Apples": 6,
+   "Flavored milk, lowfat": 6,
+   "Lamb, goat, game": 6,
+   "Margarine": 6,
+   "Nachos": 6,
+   "Onions": 6,
+   "Other diet drinks": 6,
+   "Tomatoes": 6,
+   "Flavored or carbonated water": 5,
+   "Frankfurters": 5,
+   "Mango and papaya": 5,
+   "Pasta sauces, tomato-based": 5,
+   "Peaches and nectarines": 5,
+   "Saltine crackers": 5,
+   "Flavored milk, whole": 4,
+   "Ground beef": 4,
+   "Milk, nonfat": 4,
+   "Pineapple": 4,
+   "Apple juice": 3,
+   "Milk, lowfat": 3,
+   "Milk, reduced fat": 3,
+   "Pears": 3,
+   "Plant-based yogurt": 3,
+   "Enhanced water": 2,
+   "Melons": 2,
+   "Strawberries": 2,
+   "Tap water": 2,
+   "Bananas": 1,
+   "Bottled water": 1
+  },
+  "servingsOf100g": 65,
+  "foodsWithoutAliases": 4019
+ },
+ "sourceRecordCounts": {
+  "fnddsRecords": 5432,
+  "fnddsWithAllFiveNutrients": 5431,
+  "srLegacyRecords": 7793,
+  "srLegacyWithAllFiveNutrients": 7231
+ },
+ "checksums": {
+  "FNDDS 2021-2023": {
+   "file": "FoodData_Central_survey_food_json_2024-10-31.zip",
+   "expected": "dfb06ae7ddc397ccd570b91c14b75438ab2ba39f64f22d321f61d4a52a77f3eb",
+   "actual": "dfb06ae7ddc397ccd570b91c14b75438ab2ba39f64f22d321f61d4a52a77f3eb",
+   "match": true
+  },
+  "SR Legacy 2018-04": {
+   "file": "FoodData_Central_sr_legacy_food_json_2018-04.zip",
+   "expected": "0fe8ae486a2c8eb42cb96413f058deb51863a46c8fb8eeb4b1fb45006dd338ef",
+   "actual": "0fe8ae486a2c8eb42cb96413f058deb51863a46c8fb8eeb4b1fb45006dd338ef",
+   "match": true
+  }
+ },
+ "file": {
+  "path": "App/CommonFoods.json",
+  "bytes": 6162563,
+  "sha256": "73758077bd03315783768b29479e4e09cb6e39be861496e3073337c2122ca364"
+ },
+ "preservation": {
+  "original1000DeepEqual": true,
+  "baselineSha256": "88a2d2f5cf41cc5927e109ce7386c5f7566a755c0c39038d976500f6ac4162f7"
+ },
+ "recalculation": {
+  "additionsRecomputed": 4904,
+  "mismatches": 0
+ },
+ "determinism": {
+  "run1Sha256": "73758077bd03315783768b29479e4e09cb6e39be861496e3073337c2122ca364",
+  "run2Sha256": "73758077bd03315783768b29479e4e09cb6e39be861496e3073337c2122ca364",
+  "identical": true
+ },
+ "generatorCheckMode": {
+  "returncode": 0,
+  "output": "Validated 5,904 foods; 6018 KiB bundled JSON"
+ },
+ "exclusions": {
+  "FNDDS: duplicate of an original FDA fruit": 10,
+  "FNDDS: infant formula, baby or toddler food": 151,
+  "FNDDS: missing required nutrient": 1,
+  "FNDDS: nutritionally redundant source/NS variant of a kept food": 29,
+  "FNDDS: recipe-ingredient-only record": 55,
+  "SR brand: same product as an FNDDS brand record": 6,
+  "SR: by-product or non-consumer cut": 443,
+  "SR: frozen-then-cooked twin of a fresh cooked record": 16,
+  "SR: grade-specific twin of an all-grades record": 262,
+  "SR: human milk reference record": 1,
+  "SR: industrial ingredient or fat": 97,
+  "SR: infant formula, baby or toddler food": 356,
+  "SR: institutional or program-specific record": 13,
+  "SR: missing required nutrient (usually fiber not analysed)": 452,
+  "SR: nutritionally redundant trim/grade variant": 17,
+  "SR: raw meat (cooked form preferred)": 613,
+  "SR: raw seafood with a cooked record": 87,
+  "SR: regional traditional-food survey records (outside app scope)": 165,
+  "SR: salted twin of an unsalted record": 176,
+  "SR: same food as a selected FNDDS record (via FNDDS ingredient link)": 917,
+  "SR: same food as an FNDDS record (similar name and nutrition)": 28,
+  "SR: sodium-only variant of a regular record": 19,
+  "SR: unbranded fast-food record (covered by FNDDS fast-food generics)": 147,
+  "SR: unprepared form (prepared or ready-to-eat form preferred)": 334,
+  "below selection cutoff: FNDDS not reported in NHANES day one": 1292,
+  "below selection cutoff: lower-priority SR Legacy record": 1619,
+  "name collides with an existing food": 25
+ },
+ "brandedSrDuplicatesOfFnddsSkipped": [
+  [
+   "BURGER KING, Cheeseburger",
+   "Cheeseburger (Burger King)"
+  ],
+  [
+   "BURGER KING, Hamburger",
+   "Hamburger (Burger King)"
+  ],
+  [
+   "BURGER KING, WHOPPER, with cheese",
+   "Whopper with cheese (Burger King)"
+  ],
+  [
+   "McDONALD'S, BIG MAC",
+   "Big Mac (McDonalds)"
+  ],
+  [
+   "McDONALD'S, QUARTER POUNDER",
+   "Quarter Pounder (McDonalds)"
+  ],
+  [
+   "McDONALD'S, QUARTER POUNDER with Cheese",
+   "Quarter Pounder with cheese (McDonalds)"
+  ]
+ ],
+ "nameCollisionsSkipped": [
+  "Chili with meat",
+  "Dal",
+  "Lasagna with meat",
+  "Blueberries, raw",
+  "Onions, raw",
+  "Nuts, pecans",
+  "Cheese, feta",
+  "Cheese, cottage, creamed, large or small curd",
+  "Kale, raw",
+  "Spinach, raw",
+  "Seeds, flaxseed",
+  "Beverages, chocolate syrup",
+  "Ice cream cookie sandwich",
+  "Cheese, monterey",
+  "Pie, peach",
+  "Alcoholic beverage, whiskey sour",
+  "Broccoli raab, cooked",
+  "Cheese, Mexican blend",
+  "Cheese, parmesan, hard",
+  "Strudel, apple",
+  "Broccoli, chinese, cooked",
+  "Ice cream, soft serve, chocolate",
+  "Beverages, Energy drink, FULL THROTTLE",
+  "Beverages, Energy drink, RED BULL",
+  "Beverages, Energy drink, ROCKSTAR"
+ ],
+ "aliases": {
+  "sharedAcrossFoods": 1,
+  "sharedExamples": {
+   "macaroni or noodles with cheese": [
+    "usda-58145110",
+    "usda-58145111"
+   ]
+  },
+  "aliasEqualsAnotherFoodName": [
+   {
+    "alias": "pasta with tomato based sauce and meat",
+    "aliasOf": [
+     "usda-58146322"
+    ],
+    "nameOf": "usda-58146321"
+   },
+   {
+    "alias": "chicken tenders or strips breaded",
+    "aliasOf": [
+     "usda-24198741"
+    ],
+    "nameOf": "usda-24198742"
+   }
+  ],
+  "rawCookedConflicts": []
+ },
+ "rawVsCooked": {
+  "pairsChecked": 41,
+  "pairsWithIdenticalEnergyDensity": [],
+  "examples": [
+   {
+    "raw": "Green peas, raw",
+    "cooked": "Green peas, cooked",
+    "kcalPerGramRaw": 0.814,
+    "kcalPerGramCooked": 0.982
+   },
+   {
+    "raw": "Asparagus, raw",
+    "cooked": "Asparagus, cooked with oil",
+    "kcalPerGramRaw": 0.203,
+    "kcalPerGramCooked": 0.486
+   },
+   {
+    "raw": "Asparagus, raw",
+    "cooked": "Asparagus, cooked",
+    "kcalPerGramRaw": 0.203,
+    "kcalPerGramCooked": 0.453
+   },
+   {
+    "raw": "Asparagus, raw",
+    "cooked": "Asparagus, cooked, boiled, drained",
+    "kcalPerGramRaw": 0.203,
+    "kcalPerGramCooked": 0.222
+   },
+   {
+    "raw": "Peppers, sweet, green, raw",
+    "cooked": "Peppers, sweet, green, cooked, boiled, drained",
+    "kcalPerGramRaw": 0.233,
+    "kcalPerGramCooked": 0.277
+   },
+   {
+    "raw": "Plantain, raw",
+    "cooked": "Plantain, cooked with oil",
+    "kcalPerGramRaw": 1.222,
+    "kcalPerGramCooked": 1.435
+   },
+   {
+    "raw": "Plantain, raw",
+    "cooked": "Plantain, cooked with butter or margarine",
+    "kcalPerGramRaw": 1.222,
+    "kcalPerGramCooked": 1.376
+   },
+   {
+    "raw": "Snowpeas, raw",
+    "cooked": "Snowpeas, cooked",
+    "kcalPerGramRaw": 0.415,
+    "kcalPerGramCooked": 0.655
+   },
+   {
+    "raw": "Mushrooms, raw",
+    "cooked": "Mushrooms, cooked with oil",
+    "kcalPerGramRaw": 0.314,
+    "kcalPerGramCooked": 0.7
+   },
+   {
+    "raw": "Mushrooms, raw",
+    "cooked": "Mushrooms, cooked with butter or margarine",
+    "kcalPerGramRaw": 0.314,
+    "kcalPerGramCooked": 0.625
+   },
+   {
+    "raw": "Mushrooms, raw",
+    "cooked": "Mushrooms, cooked",
+    "kcalPerGramRaw": 0.314,
+    "kcalPerGramCooked": 0.662
+   },
+   {
+    "raw": "Cauliflower, raw",
+    "cooked": "Cauliflower, cooked",
+    "kcalPerGramRaw": 0.255,
+    "kcalPerGramCooked": 0.487
+   },
+   {
+    "raw": "Cabbage, red, raw",
+    "cooked": "Cabbage, red, cooked",
+    "kcalPerGramRaw": 0.344,
+    "kcalPerGramCooked": 0.581
+   },
+   {
+    "raw": "Onions, green, raw",
+    "cooked": "Onions, green, cooked",
+    "kcalPerGramRaw": 0.32,
+    "kcalPerGramCooked": 0.6
+   },
+   {
+    "raw": "Peppers, hot, raw",
+    "cooked": "Peppers, hot, cooked",
+    "kcalPerGramRaw": 0.347,
+    "kcalPerGramCooked": 0.6
+   }
+  ]
+ },
+ "crossSourceReviewCandidates": [],
+ "oversizedServings": [
+  {
+   "id": "usda-92513000",
+   "name": "Slush frozen drink",
+   "serving": "1 medium (660 g)",
+   "calories": 185
+  },
+  {
+   "id": "usda-78101110",
+   "name": "Fruit and vegetable smoothie, added protein",
+   "serving": "1 small (540 g)",
+   "calories": 464
+  },
+  {
+   "id": "usda-92309510",
+   "name": "Tea, iced, bottled, green, diet",
+   "serving": "1 medium drink (512 g)",
+   "calories": 20
+  },
+  {
+   "id": "usda-sr-167674",
+   "name": "Lemon chicken (Chinese restaurant)",
+   "serving": "1 order (623 g)",
+   "calories": 1570
+  },
+  {
+   "id": "usda-sr-171907",
+   "name": "Malt liquor beverage",
+   "serving": "1 bottle (1184 g)",
+   "calories": 474
+  },
+  {
+   "id": "usda-sr-168083",
+   "name": "Chicken chow mein (Chinese restaurant)",
+   "serving": "1 order (604 g)",
+   "calories": 513
+  },
+  {
+   "id": "usda-sr-169909",
+   "name": "Mammy-apple, (mamey), raw",
+   "serving": "1 fruit without refuse (846 g)",
+   "calories": 431
+  },
+  {
+   "id": "usda-sr-168080",
+   "name": "Shrimp and vegetables (Chinese restaurant)",
+   "serving": "1 order (601 g)",
+   "calories": 469
+  },
+  {
+   "id": "usda-sr-167680",
+   "name": "Spaghetti with meat sauce (Italian restaurant)",
+   "serving": "1 serving (554 g)",
+   "calories": 670
+  },
+  {
+   "id": "usda-sr-169033",
+   "name": "Spaghetti with pomodoro sauce (no meat) (Italian restaurant)",
+   "serving": "1 serving (510 g)",
+   "calories": 530
+  },
+  {
+   "id": "usda-95322200",
+   "name": "Sports drink, low calorie (Gatorade G2)",
+   "serving": "1 bottle (16.9 fl oz or 500 ml) (507 g)",
+   "calories": 41
+  },
+  {
+   "id": "usda-95320500",
+   "name": "Sports drink (Powerade)",
+   "serving": "1 bottle (20 fl oz) (620 g)",
+   "calories": 198
+  },
+  {
+   "id": "usda-95322500",
+   "name": "Sports drink, low calorie (Powerade Zero)",
+   "serving": "1 bottle (20 fl oz) (600 g)",
+   "calories": 0
+  },
+  {
+   "id": "usda-95312600",
+   "name": "Energy drink, sugar-free (Red Bull)",
+   "serving": "1 can (16.9 fl oz) (507 g)",
+   "calories": 25
+  },
+  {
+   "id": "usda-95310750",
+   "name": "Energy drink (SoBe Energize Energy Juice Drink)",
+   "serving": "1 bottle (20 fl oz) (620 g)",
+   "calories": 279
+  },
+  {
+   "id": "usda-sr-170730",
+   "name": "Burger King Double Whopper, with cheese",
+   "serving": "1 item (399 g)",
+   "calories": 1061
+  },
+  {
+   "id": "usda-sr-173289",
+   "name": "Little Caesars 14\" Cheese Pizza, Thin Crust",
+   "serving": "1/2 pie (362 g)",
+   "calories": 1119
+  },
+  {
+   "id": "usda-sr-170736",
+   "name": "Taco Bell Taco Salad",
+   "serving": "1 item (533 g)",
+   "calories": 906
+  },
+  {
+   "id": "usda-sr-169840",
+   "name": "Applebee's crunchy onion rings",
+   "serving": "1 serving (350 g)",
+   "calories": 1246
+  },
+  {
+   "id": "usda-sr-168086",
+   "name": "Carrabba's Italian Grill spaghetti with meat sauce",
+   "serving": "1 serving (537 g)",
+   "calories": 655
+  },
+  {
+   "id": "usda-sr-168085",
+   "name": "Olive Garden spaghetti with meat sauce",
+   "serving": "1 serving (525 g)",
+   "calories": 635
+  },
+  {
+   "id": "usda-sr-173188",
+   "name": "Glaceau Vitamin Water, Revive Fruit Punch, fortified",
+   "serving": "20 fl oz (591 g)",
+   "calories": 0
+  }
+ ],
+ "spotChecks": [
+  {
+   "kind": "highFiber",
+   "id": "usda-41205017",
+   "name": "Refried beans, from fast food / restaurant",
+   "serving": "1/2 cup (130 g)",
+   "sourceDescription": "Refried beans, from fast food / restaurant",
+   "sourcePer100g": {
+    "kcal": 177,
+    "protein": 6.7,
+    "totalCarbs": 16.3,
+    "fiber": 7.8,
+    "fat": 9.48
+   },
+   "expected": {
+    "calories": 230,
+    "protein": 8.71,
+    "totalCarbs": 21.19,
+    "fiber": 10.14,
+    "fat": 12.32
+   },
+   "catalog": {
+    "calories": 230,
+    "protein": 8.71,
+    "totalCarbs": 21.19,
+    "fiber": 10.14,
+    "fat": 12.32
+   }
+  },
+  {
+   "kind": "highFiber",
+   "id": "usda-41102010",
+   "name": "Black beans, from dried, fat added",
+   "serving": "1 cup (185 g)",
+   "sourceDescription": "Black beans, from dried, fat added",
+   "sourcePer100g": {
+    "kcal": 181,
+    "protein": 8.23,
+    "totalCarbs": 22.0,
+    "fiber": 8.1,
+    "fat": 7.01
+   },
+   "expected": {
+    "calories": 335,
+    "protein": 15.23,
+    "totalCarbs": 40.7,
+    "fiber": 14.98,
+    "fat": 12.97
+   },
+   "catalog": {
+    "calories": 335,
+    "protein": 15.23,
+    "totalCarbs": 40.7,
+    "fiber": 14.98,
+    "fat": 12.97
+   }
+  },
+  {
+   "kind": "highFiber",
+   "id": "usda-41304990",
+   "name": "Lentils, from dried, fat added",
+   "serving": "1 cup (185 g)",
+   "sourceDescription": "Lentils, from dried, fat added",
+   "sourcePer100g": {
+    "kcal": 166,
+    "protein": 8.38,
+    "totalCarbs": 18.7,
+    "fiber": 7.3,
+    "fat": 6.86
+   },
+   "expected": {
+    "calories": 307,
+    "protein": 15.5,
+    "totalCarbs": 34.59,
+    "fiber": 13.51,
+    "fat": 12.69
+   },
+   "catalog": {
+    "calories": 307,
+    "protein": 15.5,
+    "totalCarbs": 34.59,
+    "fiber": 13.51,
+    "fat": 12.69
+   }
+  },
+  {
+   "kind": "highFiber",
+   "id": "usda-41104200",
+   "name": "Pinto beans, from fast food / restaurant",
+   "serving": "1/2 cup (130 g)",
+   "sourceDescription": "Pinto beans, from fast food / restaurant",
+   "sourcePer100g": {
+    "kcal": 210,
+    "protein": 8.12,
+    "totalCarbs": 23.6,
+    "fiber": 8.1,
+    "fat": 9.6
+   },
+   "expected": {
+    "calories": 273,
+    "protein": 10.56,
+    "totalCarbs": 30.68,
+    "fiber": 10.53,
+    "fat": 12.48
+   },
+   "catalog": {
+    "calories": 273,
+    "protein": 10.56,
+    "totalCarbs": 30.68,
+    "fiber": 10.53,
+    "fat": 12.48
+   }
+  },
+  {
+   "kind": "zeroCarb",
+   "id": "usda-24100020",
+   "name": "Chicken, skin not eaten",
+   "serving": "1 slice (60 g)",
+   "sourceDescription": "Chicken, NS as to part and cooking method, skin not eaten",
+   "sourcePer100g": {
+    "kcal": 164,
+    "protein": 26.8,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 6.36
+   },
+   "expected": {
+    "calories": 98,
+    "protein": 16.08,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 3.82
+   },
+   "catalog": {
+    "calories": 98,
+    "protein": 16.08,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 3.82
+   }
+  },
+  {
+   "kind": "zeroCarb",
+   "id": "usda-24124201",
+   "name": "Chicken breast, sauteed, skin not eaten",
+   "serving": "1 large or thick slice (85 g)",
+   "sourceDescription": "Chicken breast, sauteed, skin not eaten",
+   "sourcePer100g": {
+    "kcal": 176,
+    "protein": 29.6,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 5.45
+   },
+   "expected": {
+    "calories": 150,
+    "protein": 25.16,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 4.63
+   },
+   "catalog": {
+    "calories": 150,
+    "protein": 25.16,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 4.63
+   }
+  },
+  {
+   "kind": "zeroCarb",
+   "id": "usda-21101000",
+   "name": "Beef, steak",
+   "serving": "1 thin (120 g)",
+   "sourceDescription": "Beef, steak, NFS",
+   "sourcePer100g": {
+    "kcal": 229,
+    "protein": 27.0,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 12.9
+   },
+   "expected": {
+    "calories": 275,
+    "protein": 32.4,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 15.48
+   },
+   "catalog": {
+    "calories": 275,
+    "protein": 32.4,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 15.48
+   }
+  },
+  {
+   "kind": "zeroCarb",
+   "id": "usda-24100000",
+   "name": "Chicken",
+   "serving": "4 oz, cooked (113.4 g)",
+   "sourceDescription": "Chicken, NS as to part and cooking method, NS as to skin eaten",
+   "sourcePer100g": {
+    "kcal": 164,
+    "protein": 26.8,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 6.36
+   },
+   "expected": {
+    "calories": 186,
+    "protein": 30.39,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 7.21
+   },
+   "catalog": {
+    "calories": 186,
+    "protein": 30.39,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 7.21
+   }
+  },
+  {
+   "kind": "drinks",
+   "id": "usda-92103000",
+   "name": "Coffee, instant, reconstituted",
+   "serving": "1 cup (8 fl oz) (240 g)",
+   "sourceDescription": "Coffee, instant, reconstituted",
+   "sourcePer100g": {
+    "kcal": 3.0,
+    "protein": 0.1,
+    "totalCarbs": 0.63,
+    "fiber": 0.0,
+    "fat": 0.0
+   },
+   "expected": {
+    "calories": 7,
+    "protein": 0.24,
+    "totalCarbs": 1.51,
+    "fiber": 0.0,
+    "fat": 0.0
+   },
+   "catalog": {
+    "calories": 7,
+    "protein": 0.24,
+    "totalCarbs": 1.51,
+    "fiber": 0.0,
+    "fat": 0.0
+   }
+  },
+  {
+   "kind": "drinks",
+   "id": "usda-61210250",
+   "name": "Orange juice, 100%, with calcium added, canned, bottled or in a carton",
+   "serving": "1 bottle (8 fl oz) (248 g)",
+   "sourceDescription": "Orange juice, 100%, with calcium added, canned, bottled or in a carton",
+   "sourcePer100g": {
+    "kcal": 47.0,
+    "protein": 0.77,
+    "totalCarbs": 10.2,
+    "fiber": 0.3,
+    "fat": 0.34
+   },
+   "expected": {
+    "calories": 117,
+    "protein": 1.91,
+    "totalCarbs": 25.3,
+    "fiber": 0.74,
+    "fat": 0.84
+   },
+   "catalog": {
+    "calories": 117,
+    "protein": 1.91,
+    "totalCarbs": 25.3,
+    "fiber": 0.74,
+    "fat": 0.84
+   }
+  },
+  {
+   "kind": "drinks",
+   "id": "usda-92530610",
+   "name": "Fruit juice drink, with high vitamin C",
+   "serving": "8 fl oz (no ice) (248 g)",
+   "sourceDescription": "Fruit juice drink, with high vitamin C",
+   "sourcePer100g": {
+    "kcal": 46.0,
+    "protein": 0.13,
+    "totalCarbs": 11.4,
+    "fiber": 0.1,
+    "fat": 0.11
+   },
+   "expected": {
+    "calories": 114,
+    "protein": 0.32,
+    "totalCarbs": 28.27,
+    "fiber": 0.25,
+    "fat": 0.27
+   },
+   "catalog": {
+    "calories": 114,
+    "protein": 0.32,
+    "totalCarbs": 28.27,
+    "fiber": 0.25,
+    "fat": 0.27
+   }
+  },
+  {
+   "kind": "drinks",
+   "id": "usda-92309000",
+   "name": "Tea, iced, bottled, black",
+   "serving": "1 can or bottle (12 fl oz) (372 g)",
+   "sourceDescription": "Tea, iced, bottled, black",
+   "sourcePer100g": {
+    "kcal": 45.0,
+    "protein": 0.0,
+    "totalCarbs": 10.8,
+    "fiber": 0.0,
+    "fat": 0.22
+   },
+   "expected": {
+    "calories": 167,
+    "protein": 0.0,
+    "totalCarbs": 40.18,
+    "fiber": 0.0,
+    "fat": 0.82
+   },
+   "catalog": {
+    "calories": 167,
+    "protein": 0.0,
+    "totalCarbs": 40.18,
+    "fiber": 0.0,
+    "fat": 0.82
+   }
+  },
+  {
+   "kind": "mixedDishes",
+   "id": "usda-58106514",
+   "name": "Pizza with pepperoni, from frozen, medium crust",
+   "serving": "2 pieces (204 g)",
+   "sourceDescription": "Pizza with pepperoni, from frozen, medium crust",
+   "sourcePer100g": {
+    "kcal": 275,
+    "protein": 11.5,
+    "totalCarbs": 27.8,
+    "fiber": 2.5,
+    "fat": 13.1
+   },
+   "expected": {
+    "calories": 561,
+    "protein": 23.46,
+    "totalCarbs": 56.71,
+    "fiber": 5.1,
+    "fat": 26.72
+   },
+   "catalog": {
+    "calories": 561,
+    "protein": 23.46,
+    "totalCarbs": 56.71,
+    "fiber": 5.1,
+    "fat": 26.72
+   }
+  },
+  {
+   "kind": "mixedDishes",
+   "id": "usda-58106200",
+   "name": "Pizza, cheese, from frozen, thin crust",
+   "serving": "2 pieces (194 g)",
+   "sourceDescription": "Pizza, cheese, from frozen, thin crust",
+   "sourcePer100g": {
+    "kcal": 263,
+    "protein": 11.9,
+    "totalCarbs": 28.8,
+    "fiber": 3.0,
+    "fat": 11.1
+   },
+   "expected": {
+    "calories": 510,
+    "protein": 23.09,
+    "totalCarbs": 55.87,
+    "fiber": 5.82,
+    "fat": 21.53
+   },
+   "catalog": {
+    "calories": 510,
+    "protein": 23.09,
+    "totalCarbs": 55.87,
+    "fiber": 5.82,
+    "fat": 21.53
+   }
+  },
+  {
+   "kind": "mixedDishes",
+   "id": "usda-58403010",
+   "name": "Soup, chicken noodle, canned",
+   "serving": "1 individual container (440 g)",
+   "sourceDescription": "Soup, chicken noodle, canned",
+   "sourcePer100g": {
+    "kcal": 42.0,
+    "protein": 2.38,
+    "totalCarbs": 6.02,
+    "fiber": 0.8,
+    "fat": 0.98
+   },
+   "expected": {
+    "calories": 185,
+    "protein": 10.47,
+    "totalCarbs": 26.49,
+    "fiber": 3.52,
+    "fat": 4.31
+   },
+   "catalog": {
+    "calories": 185,
+    "protein": 10.47,
+    "totalCarbs": 26.49,
+    "fiber": 3.52,
+    "fat": 4.31
+   }
+  },
+  {
+   "kind": "mixedDishes",
+   "id": "usda-58163310",
+   "name": "Flavored rice mixture",
+   "serving": "1 cup (218 g)",
+   "sourceDescription": "Flavored rice mixture",
+   "sourcePer100g": {
+    "kcal": 127,
+    "protein": 1.87,
+    "totalCarbs": 19.8,
+    "fiber": 0.4,
+    "fat": 4.26
+   },
+   "expected": {
+    "calories": 277,
+    "protein": 4.08,
+    "totalCarbs": 43.16,
+    "fiber": 0.87,
+    "fat": 9.29
+   },
+   "catalog": {
+    "calories": 277,
+    "protein": 4.08,
+    "totalCarbs": 43.16,
+    "fiber": 0.87,
+    "fat": 9.29
+   }
+  },
+  {
+   "kind": "fruitsAndVegetables",
+   "id": "usda-sr-168556",
+   "name": "Catsup",
+   "serving": "2 tbsp (34 g)",
+   "sourceDescription": "Catsup",
+   "sourcePer100g": {
+    "kcal": 101,
+    "protein": 1.04,
+    "totalCarbs": 27.4,
+    "fiber": 0.3,
+    "fat": 0.1
+   },
+   "expected": {
+    "calories": 34,
+    "protein": 0.35,
+    "totalCarbs": 9.32,
+    "fiber": 0.1,
+    "fat": 0.03
+   },
+   "catalog": {
+    "calories": 34,
+    "protein": 0.35,
+    "totalCarbs": 9.32,
+    "fiber": 0.1,
+    "fat": 0.03
+   }
+  },
+  {
+   "kind": "fruitsAndVegetables",
+   "id": "usda-sr-169248",
+   "name": "Lettuce, iceberg, raw",
+   "serving": "6 leaves, large (90 g)",
+   "sourceDescription": "Lettuce, iceberg (includes crisphead types), raw",
+   "sourcePer100g": {
+    "kcal": 14.0,
+    "protein": 0.9,
+    "totalCarbs": 2.97,
+    "fiber": 1.2,
+    "fat": 0.14
+   },
+   "expected": {
+    "calories": 13,
+    "protein": 0.81,
+    "totalCarbs": 2.67,
+    "fiber": 1.08,
+    "fat": 0.13
+   },
+   "catalog": {
+    "calories": 13,
+    "protein": 0.81,
+    "totalCarbs": 2.67,
+    "fiber": 1.08,
+    "fat": 0.13
+   }
+  },
+  {
+   "kind": "fruitsAndVegetables",
+   "id": "usda-sr-169249",
+   "name": "Lettuce, green leaf, raw",
+   "serving": "4 leaves outer (96 g)",
+   "sourceDescription": "Lettuce, green leaf, raw",
+   "sourcePer100g": {
+    "kcal": 15.0,
+    "protein": 1.36,
+    "totalCarbs": 2.87,
+    "fiber": 1.3,
+    "fat": 0.15
+   },
+   "expected": {
+    "calories": 14,
+    "protein": 1.31,
+    "totalCarbs": 2.76,
+    "fiber": 1.25,
+    "fat": 0.14
+   },
+   "catalog": {
+    "calories": 14,
+    "protein": 1.31,
+    "totalCarbs": 2.76,
+    "fiber": 1.25,
+    "fat": 0.14
+   }
+  },
+  {
+   "kind": "fruitsAndVegetables",
+   "id": "usda-sr-167772",
+   "name": "Applesauce, canned, unsweetened, with added ascorbic acid",
+   "serving": "1/4 cup (61 g)",
+   "sourceDescription": "Applesauce, canned, unsweetened, with added ascorbic acid",
+   "sourcePer100g": {
+    "kcal": 42.0,
+    "protein": 0.17,
+    "totalCarbs": 11.3,
+    "fiber": 1.1,
+    "fat": 0.1
+   },
+   "expected": {
+    "calories": 26,
+    "protein": 0.1,
+    "totalCarbs": 6.89,
+    "fiber": 0.67,
+    "fat": 0.06
+   },
+   "catalog": {
+    "calories": 26,
+    "protein": 0.1,
+    "totalCarbs": 6.89,
+    "fiber": 0.67,
+    "fat": 0.06
+   }
+  },
+  {
+   "kind": "fruitsAndVegetables",
+   "id": "usda-sr-169097",
+   "name": "Oranges, raw, all commercial varieties",
+   "serving": "1 fruit (2-5/8\" dia) (131 g)",
+   "sourceDescription": "Oranges, raw, all commercial varieties",
+   "sourcePer100g": {
+    "kcal": 47.0,
+    "protein": 0.94,
+    "totalCarbs": 11.8,
+    "fiber": 2.4,
+    "fat": 0.12
+   },
+   "expected": {
+    "calories": 62,
+    "protein": 1.23,
+    "totalCarbs": 15.46,
+    "fiber": 3.14,
+    "fat": 0.16
+   },
+   "catalog": {
+    "calories": 62,
+    "protein": 1.23,
+    "totalCarbs": 15.46,
+    "fiber": 3.14,
+    "fat": 0.16
+   }
+  },
+  {
+   "kind": "srLegacyOther",
+   "id": "usda-sr-169447",
+   "name": "Beef, ground, patties, frozen, cooked, broiled",
+   "serving": "3 oz (85 g)",
+   "sourceDescription": "Beef, ground, patties, frozen, cooked, broiled",
+   "sourcePer100g": {
+    "kcal": 295,
+    "protein": 23.0,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 21.8
+   },
+   "expected": {
+    "calories": 251,
+    "protein": 19.55,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 18.53
+   },
+   "catalog": {
+    "calories": 251,
+    "protein": 19.55,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 18.53
+   }
+  },
+  {
+   "kind": "srLegacyOther",
+   "id": "usda-sr-170187",
+   "name": "Walnuts, english",
+   "serving": "1 cup, in shell, edible yield (7 nuts) (28 g)",
+   "sourceDescription": "Nuts, walnuts, english",
+   "sourcePer100g": {
+    "kcal": 654,
+    "protein": 15.2,
+    "totalCarbs": 13.7,
+    "fiber": 6.7,
+    "fat": 65.2
+   },
+   "expected": {
+    "calories": 183,
+    "protein": 4.26,
+    "totalCarbs": 3.84,
+    "fiber": 1.88,
+    "fat": 18.26
+   },
+   "catalog": {
+    "calories": 183,
+    "protein": 4.26,
+    "totalCarbs": 3.84,
+    "fiber": 1.88,
+    "fat": 18.26
+   }
+  },
+  {
+   "kind": "srLegacyOther",
+   "id": "usda-sr-174038",
+   "name": "Beef, ground, 75% lean meat / 25% fat, patty, cooked, broiled",
+   "serving": "3 oz (85 g)",
+   "sourceDescription": "Beef, ground, 75% lean meat / 25% fat, patty, cooked, broiled",
+   "sourcePer100g": {
+    "kcal": 279,
+    "protein": 25.6,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 18.9
+   },
+   "expected": {
+    "calories": 237,
+    "protein": 21.76,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 16.06
+   },
+   "catalog": {
+    "calories": 237,
+    "protein": 21.76,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 16.06
+   }
+  },
+  {
+   "kind": "srLegacyOther",
+   "id": "usda-sr-171797",
+   "name": "Beef, ground, 80% lean meat / 20% fat, patty, cooked, broiled",
+   "serving": "3 oz (85 g)",
+   "sourceDescription": "Beef, ground, 80% lean meat / 20% fat, patty, cooked, broiled",
+   "sourcePer100g": {
+    "kcal": 270,
+    "protein": 25.8,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 17.8
+   },
+   "expected": {
+    "calories": 230,
+    "protein": 21.93,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 15.13
+   },
+   "catalog": {
+    "calories": 230,
+    "protein": 21.93,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 15.13
+   }
+  },
+  {
+   "kind": "hundredGram",
+   "id": "usda-11446000",
+   "name": "Yogurt parfait, with fruit",
+   "serving": "100 g",
+   "sourceDescription": "Yogurt parfait, with fruit",
+   "sourcePer100g": {
+    "kcal": 104,
+    "protein": 5.25,
+    "totalCarbs": 16.1,
+    "fiber": 1.3,
+    "fat": 2.18
+   },
+   "expected": {
+    "calories": 104,
+    "protein": 5.25,
+    "totalCarbs": 16.1,
+    "fiber": 1.3,
+    "fat": 2.18
+   },
+   "catalog": {
+    "calories": 104,
+    "protein": 5.25,
+    "totalCarbs": 16.1,
+    "fiber": 1.3,
+    "fat": 2.18
+   }
+  },
+  {
+   "kind": "hundredGram",
+   "id": "usda-53240010",
+   "name": "Cookie, animal, with frosting or icing",
+   "serving": "100 g",
+   "sourceDescription": "Cookie, animal, with frosting or icing",
+   "sourcePer100g": {
+    "kcal": 509,
+    "protein": 3.0,
+    "totalCarbs": 70.1,
+    "fiber": 0.9,
+    "fat": 24.1
+   },
+   "expected": {
+    "calories": 509,
+    "protein": 3.0,
+    "totalCarbs": 70.1,
+    "fiber": 0.9,
+    "fat": 24.1
+   },
+   "catalog": {
+    "calories": 509,
+    "protein": 3.0,
+    "totalCarbs": 70.1,
+    "fiber": 0.9,
+    "fat": 24.1
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-95320200",
+   "name": "Sports drink (Gatorade G)",
+   "serving": "1 bottle (12 fl oz) (372 g)",
+   "sourceDescription": "Sports drink (Gatorade G)",
+   "sourcePer100g": {
+    "kcal": 26.0,
+    "protein": 0.0,
+    "totalCarbs": 6.43,
+    "fiber": 0.0,
+    "fat": 0.0
+   },
+   "expected": {
+    "calories": 97,
+    "protein": 0.0,
+    "totalCarbs": 23.92,
+    "fiber": 0.0,
+    "fat": 0.0
+   },
+   "catalog": {
+    "calories": 97,
+    "protein": 0.0,
+    "totalCarbs": 23.92,
+    "fiber": 0.0,
+    "fat": 0.0
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-sr-172045",
+   "name": "Domino's 14\" Pepperoni Pizza, Ultimate Deep Dish Crust",
+   "serving": "2 slices (246 g)",
+   "sourceDescription": "DOMINO'S 14\" Pepperoni Pizza, Ultimate Deep Dish Crust",
+   "sourcePer100g": {
+    "kcal": 283,
+    "protein": 11.5,
+    "totalCarbs": 31.9,
+    "fiber": 2.4,
+    "fat": 12.1
+   },
+   "expected": {
+    "calories": 696,
+    "protein": 28.29,
+    "totalCarbs": 78.47,
+    "fiber": 5.9,
+    "fat": 29.77
+   },
+   "catalog": {
+    "calories": 696,
+    "protein": 28.29,
+    "totalCarbs": 78.47,
+    "fiber": 5.9,
+    "fat": 29.77
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-sr-175073",
+   "name": "Archway Home Style Cookies Molasses",
+   "serving": "1 serving (26 g)",
+   "sourceDescription": "Archway Home Style Cookies, Molasses",
+   "sourcePer100g": {
+    "kcal": 403,
+    "protein": 4.25,
+    "totalCarbs": 69.4,
+    "fiber": 1.2,
+    "fat": 12.1
+   },
+   "expected": {
+    "calories": 105,
+    "protein": 1.1,
+    "totalCarbs": 18.04,
+    "fiber": 0.31,
+    "fat": 3.15
+   },
+   "catalog": {
+    "calories": 105,
+    "protein": 1.1,
+    "totalCarbs": 18.04,
+    "fiber": 0.31,
+    "fat": 3.15
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-sr-167581",
+   "name": "Nestle Goobers Chocolate Covered Peanuts",
+   "serving": "1 serving 0.25 cup (41 g)",
+   "sourceDescription": "Candies, NESTLE, GOOBERS Chocolate Covered Peanuts",
+   "sourcePer100g": {
+    "kcal": 512,
+    "protein": 9.7,
+    "totalCarbs": 53.0,
+    "fiber": 9.7,
+    "fat": 34.0
+   },
+   "expected": {
+    "calories": 210,
+    "protein": 3.98,
+    "totalCarbs": 21.73,
+    "fiber": 3.98,
+    "fat": 13.94
+   },
+   "catalog": {
+    "calories": 210,
+    "protein": 3.98,
+    "totalCarbs": 21.73,
+    "fiber": 3.98,
+    "fat": 13.94
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-sr-174636",
+   "name": "Quaker Instant Oatmeal, Cinnamon-Spice, dry",
+   "serving": "1 packet (43 g)",
+   "sourceDescription": "Cereals, QUAKER, Instant Oatmeal, Cinnamon-Spice, dry",
+   "sourcePer100g": {
+    "kcal": 369,
+    "protein": 10.4,
+    "totalCarbs": 74.5,
+    "fiber": 8.2,
+    "fat": 5.1
+   },
+   "expected": {
+    "calories": 159,
+    "protein": 4.47,
+    "totalCarbs": 32.03,
+    "fiber": 3.53,
+    "fat": 2.19
+   },
+   "catalog": {
+    "calories": 159,
+    "protein": 4.47,
+    "totalCarbs": 32.03,
+    "fiber": 3.53,
+    "fat": 2.19
+   }
+  },
+  {
+   "kind": "branded",
+   "id": "usda-sr-171033",
+   "name": "Oil, vegetable, Natreon canola, high stability, non trans, high oleic (70%)",
+   "serving": "1 tbsp (14 g)",
+   "sourceDescription": "Oil, vegetable, Natreon canola, high stability, non trans, high oleic (70%)",
+   "sourcePer100g": {
+    "kcal": 884,
+    "protein": 0.0,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 100
+   },
+   "expected": {
+    "calories": 124,
+    "protein": 0.0,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 14.0
+   },
+   "catalog": {
+    "calories": 124,
+    "protein": 0.0,
+    "totalCarbs": 0.0,
+    "fiber": 0.0,
+    "fat": 14.0
+   }
+  }
+ ]
+}

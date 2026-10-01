@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import AppIntents
 
 private struct QuickLogEntry: TimelineEntry {
     let date: Date
@@ -37,12 +38,12 @@ private struct QuickLogView: View {
                         let height = max(0, geometry.size.height - 8) / 2
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
-                                actionLink(.barcode, width: width, height: height)
-                                actionLink(.voice, width: width, height: height)
+                                actionButton(.barcode, width: width, height: height)
+                                actionButton(.voice, width: width, height: height)
                             }
                             HStack(spacing: 8) {
-                                actionLink(.image, width: width, height: height)
-                                actionLink(.add, width: width, height: height)
+                                actionButton(.image, width: width, height: height)
+                                actionButton(.add, width: width, height: height)
                             }
                         }
                     }
@@ -51,6 +52,7 @@ private struct QuickLogView: View {
                 mediumContent
             }
         }
+        .widgetURL(LoggingActionRouter.homeURL)
         .containerBackground(.background, for: .widget)
     }
 
@@ -65,7 +67,7 @@ private struct QuickLogView: View {
                 let unitWidth = max(0, geometry.size.width - 24) / 4.4
                 HStack(spacing: 8) {
                     ForEach(LoggingAction.allCases) { action in
-                        actionLink(action, width: unitWidth * (action == .add ? 1.4 : 1), height: 56)
+                        actionButton(action, width: unitWidth * (action == .add ? 1.4 : 1), height: 56)
                     }
                 }
             }.frame(height: 56)
@@ -85,7 +87,7 @@ private struct QuickLogView: View {
                     Text(abs(goal - total).formatted(.number.precision(.fractionLength(0))))
                         .foregroundStyle(.primary)
                     Text(total > goal ? "over" : "left")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(total > goal ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
                 }
                 .font(.cave(style))
                 .accessibilityElement(children: .combine)
@@ -96,8 +98,8 @@ private struct QuickLogView: View {
         .padding(.horizontal, family == .systemSmall ? 8 : 0)
     }
 
-    private func actionLink(_ action: LoggingAction, width: CGFloat, height: CGFloat) -> some View {
-        Link(destination: action.url) {
+    private func actionButton(_ action: LoggingAction, width: CGFloat, height: CGFloat) -> some View {
+        Button(intent: OpenWidgetLoggingIntent(action: action)) {
             Group {
                 if action == .add {
                     CaveSearchAddIcon(size: family == .systemSmall ? min(20, width / 3) : 22, compact: true)
@@ -108,7 +110,7 @@ private struct QuickLogView: View {
             .accessibilityHidden(true)
             .frame(width: width, height: height)
             .foregroundStyle(.white)
-            .background(Color.blue, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.caveOrange, in: RoundedRectangle(cornerRadius: 14))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

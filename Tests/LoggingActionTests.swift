@@ -37,12 +37,33 @@ import UIKit
         XCTAssertTrue(router.open(url: LoggingAction.voice.url))
         let first = router.pending
         XCTAssertEqual(first?.action, .voice)
-        XCTAssertEqual(router.consume(), .voice)
+        XCTAssertEqual(router.consume()?.action, .voice)
         XCTAssertNil(router.consume())
         XCTAssertTrue(router.open(shortcut: UIApplicationShortcutItem(type: LoggingAction.voice.shortcutType, localizedTitle: "Voice Log")))
         XCTAssertNotEqual(first?.id, router.pending?.id)
         XCTAssertFalse(router.open(url: URL(string: "cavecals://log/unknown")!))
-        XCTAssertEqual(router.consume(), .voice)
+        XCTAssertEqual(router.consume()?.action, .voice)
+    }
+
+    func testWidgetBackgroundReplacesPendingActionWithHome() {
+        let router = LoggingActionRouter()
+        router.open(.voice)
+        XCTAssertTrue(router.open(url: LoggingActionRouter.homeURL))
+        let request = router.consume()
+        XCTAssertNotNil(request)
+        XCTAssertNil(request?.action)
+        XCTAssertNil(router.pending)
+        XCTAssertFalse(router.open(url: URL(string: "cavecals://home?unexpected=1")!))
+    }
+
+    func testWidgetIntentsQueueEachActionForAppLaunch() async throws {
+        let router = LoggingActionRouter.shared
+        defer { _ = router.consume() }
+        for action in LoggingAction.allCases {
+            _ = try await OpenWidgetLoggingIntent(action: action).perform()
+            XCTAssertEqual(router.consume()?.action, action)
+            XCTAssertNil(router.pending)
+        }
     }
 
     func testInstalledShortcutDefinitionsMatchRouter() throws {

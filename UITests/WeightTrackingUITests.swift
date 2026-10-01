@@ -5,16 +5,38 @@ final class WeightTrackingUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication(); app.launchArguments = ["--uitesting"]; app.launch()
-        XCTAssertTrue(app.buttons["Me Start Now"].waitForExistence(timeout: 10))
-        app.buttons["Me Start Now"].tap()
+        XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
+        app.buttons["skipGoal"].tap()
+        XCTAssertTrue(app.alerts.buttons["Yes, skip plan"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Yes, skip plan"].tap()
+        // These tests exercise enabling weight tracking later from About You.
+        XCTAssertTrue(app.switches["planTrackWeight"].waitForExistence(timeout: 5))
+        app.switches["planTrackWeight"].tap()
+        app.buttons["onboardingContinue"].tap()
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        app.buttons["skipOnboardingPaywall"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
     private func openProfile() {
-        let profile = app.buttons["Settings"]
+        let profile = app.buttons["profile"]
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: profile)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         profile.tap()
-        XCTAssertTrue(app.navigationBars["You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
+    }
+    private func openWeightProgress() {
+        app.buttons["progress"].tap()
+        let picker = app.segmentedControls["weightChartRange"]
+        // Short drags: a full swipe on a small iPhone carries the picker past the screen and under the bar.
+        let window = app.windows.firstMatch
+        for _ in 0..<16 where !picker.isHittable {
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+        }
+        if !picker.isHittable {
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Weight range picker not reachable"; shot.lifetime = .keepAlways; add(shot)
+        }
+        XCTAssertTrue(picker.isHittable)
     }
     private func toggleTracking() {
         let toggle = app.switches["trackWeight"].firstMatch
@@ -29,7 +51,7 @@ final class WeightTrackingUITests: XCTestCase {
     func testOptionalReminderDismissalAndTrackingOff() {
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
         enableWeight()
-        app.navigationBars["You"].buttons["Done"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
         app.buttons["dismissWeighIn"].tap()
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
@@ -40,12 +62,41 @@ final class WeightTrackingUITests: XCTestCase {
         let toggle = app.switches["trackWeight"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 3)); toggleTracking()
         XCTAssertFalse(app.buttons["todayWeight"].exists)
-        app.navigationBars["You"].buttons["Done"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
+    }
+    func testFirstWeighInOffersAppleHealth() {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--health-offer"]
+        app.launch()
+        // Skip the plan with weight tracking left on.
+        XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
+        app.buttons["skipGoal"].tap()
+        app.alerts.buttons["Yes, skip plan"].tap()
+        XCTAssertTrue(app.switches["planTrackWeight"].waitForExistence(timeout: 5))
+        app.buttons["onboardingContinue"].tap()
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        app.buttons["skipOnboardingPaywall"].tap()
+        XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Sync with Apple Health"].exists)
+        app.buttons["weighInReminder"].tap()
+        let amount = app.textFields["weightAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText("180.5")
+        app.buttons["saveWeight"].tap()
+        XCTAssertTrue(app.staticTexts["Sync with Apple Health"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.switches["offerShareNutritionHealth"].exists)
+        XCTAssertTrue(app.switches["offerShareWeightHealth"].exists)
+        Thread.sleep(forTimeInterval: 0.8) // let the drawer finish sliding up before the screenshot
+        XCTAssertTrue(app.buttons["closeHealthOffer"].isHittable, "The whole drawer fits without scrolling")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Apple Health offer"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["closeHealthOffer"].tap()
+        XCTAssertFalse(app.staticTexts["Sync with Apple Health"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.textFields["foodSearch"].exists)
     }
     func testWeighInEditChartAndDelete() {
         enableWeight()
-        app.navigationBars["You"].buttons["Done"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
         app.buttons["weighInReminder"].tap()
         let amount = app.textFields["weightAmount"]
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
@@ -54,10 +105,12 @@ final class WeightTrackingUITests: XCTestCase {
         app.buttons["saveWeight"].tap()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
-        openProfile()
+        openWeightProgress()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 5))
         for range in ["Week", "Year", "Month"] { app.segmentedControls["weightChartRange"].buttons[range].tap() }
-        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Personal area with weight graph"; screenshot.lifetime = .keepAlways; add(screenshot)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Progress with weight graph"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.navigationBars["Progress"].buttons["Done"].tap()
+        openProfile()
         app.buttons["todayWeight"].tap()
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap()
@@ -70,7 +123,7 @@ final class WeightTrackingUITests: XCTestCase {
         let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Delete weigh-in", "deleteWeight")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3)); confirm.tap()
         XCTAssertTrue(app.buttons["todayWeight"].waitForExistence(timeout: 5))
-        app.navigationBars["You"].buttons["Done"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
     }
     func testWeekPickerLoadsDaysWithoutMovingWeightsAndProtectsEdits() {
@@ -126,10 +179,12 @@ final class WeightTrackingUITests: XCTestCase {
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap(); amount.typeText("180.5")
         app.buttons["saveWeight"].tap()
+        app.navigationBars["About You"].buttons["Done"].tap()
+        openWeightProgress()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 5))
-        app.buttons["Previous weight period"].tap()
+        app.buttons["weightChartRangePrevious"].tap()
         XCTAssertTrue(app.staticTexts["No weigh-ins in this period"].waitForExistence(timeout: 3))
-        app.buttons["Next weight period"].tap()
+        app.buttons["weightChartRangeNext"].tap()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 3))
     }
 }

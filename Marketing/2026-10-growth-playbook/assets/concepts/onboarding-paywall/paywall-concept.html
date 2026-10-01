@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Onboarding Paywall Concept</title>
+<style>
+@font-face { font-family: Schoolbell; src: url("../../brand/Schoolbell-Regular.ttf"); }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1320px; height: 2868px; overflow: hidden; background: #F5ECDC; color: #2B211A; font-family: "Avenir Next", "Helvetica Neue", sans-serif; }
+.wrap { padding: 190px 90px 0; display: flex; flex-direction: column; align-items: center; text-align: center; height: 100%; }
+.concept { position: absolute; top: 60px; left: 0; right: 0; text-align: center; font-size: 30px; letter-spacing: .14em; text-transform: uppercase; color: #C4531B; font-weight: 700; }
+.close { position: absolute; top: 150px; right: 70px; font-size: 56px; color: #8A7968; }
+img.art { width: 420px; height: 420px; border-radius: 48px; }
+h1 { font-family: Schoolbell; font-weight: 400; font-size: 118px; line-height: 1.02; margin-top: 50px; }
+.sub { font-size: 42px; color: #6E5E50; margin-top: 22px; line-height: 1.35; }
+.timeline { margin-top: 70px; width: 100%; background: #FBF6EC; border-radius: 44px; padding: 44px 50px; text-align: left; display: grid; gap: 34px; }
+.step { display: grid; grid-template-columns: 70px 1fr; gap: 26px; align-items: start; }
+.dot { width: 70px; height: 70px; border-radius: 50%; background: #C4531B; color: #FFF8EF; display: grid; place-items: center; font-family: Schoolbell; font-size: 40px; }
+.dot.soft { background: #E9D7BE; color: #C4531B; }
+.step b { font-size: 42px; display: block; }
+.step span { font-size: 36px; color: #6E5E50; line-height: 1.35; }
+.plans { margin-top: 44px; width: 100%; display: grid; gap: 22px; }
+.plan { border: 4px solid #E0CFB6; border-radius: 34px; padding: 30px 40px; display: flex; justify-content: space-between; align-items: center; font-size: 40px; background: #FBF6EC; }
+.plan.sel { border-color: #C4531B; }
+.plan em { font-style: normal; font-size: 30px; background: #C4531B; color: #FFF8EF; padding: 6px 16px; border-radius: 999px; margin-left: 14px; }
+.plan small { display: block; font-size: 30px; color: #6E5E50; }
+.btn { margin-top: 44px; width: 100%; background: #C4531B; color: #FFF8EF; border-radius: 999px; padding: 40px; font-size: 52px; font-weight: 700; }
+.skip { margin-top: 34px; font-size: 40px; color: #6E5E50; text-decoration: underline; }
+.legal { margin-top: 30px; font-size: 26px; color: #8A7968; line-height: 1.4; }
+</style></head>
+<body>
+<div class="concept">Concept · not in the app</div>
+<div class="close">×</div>
+<div class="wrap">
+  <img class="art" src="../../brand/launch-art.png" alt="">
+  <h1>Plan ready.<br>Want the lazy way?</h1>
+  <p class="sub">Snap your plate or say what you ate.<br>Cave Cals does the math.</p>
+  <div class="timeline">
+    <div class="step"><div class="dot">1</div><div><b>Today: $0.00</b><span>Photo &amp; voice logging unlocked.</span></div></div>
+    <div class="step"><div class="dot soft">2</div><div><b>Day 5: we remind you</b><span>A heads-up before your trial ends.</span></div></div>
+    <div class="step"><div class="dot soft">3</div><div><b>Day 7: yearly plan starts</b><span>$39.99/year ($3.33/month). Cancel anytime before.</span></div></div>
+  </div>
+  <div class="plans">
+    <div class="plan sel"><div>Yearly <em>7 days free</em><small>$39.99/year</small></div><div>$3.33/mo</div></div>
+    <div class="plan"><div>Monthly<small>$9.99/month</small></div><div>$9.99/mo</div></div>
+  </div>
+  <div class="btn">Try for $0.00</div>
+  <div class="skip">Me keep logging by hand (free)</div>
+  <div class="legal">Renews automatically unless cancelled at least 24 hours before the period ends. Restore Purchases · Terms · Privacy</div>
+</div>
+</body></html>

@@ -1,0 +1,132 @@
+{
+ "genericTarget": 5000,
+ "original": 1000,
+ "added": 4904,
+ "total": 5904,
+ "brandedAdded": 904,
+ "addedBySource": {
+  "FNDDS": 2783,
+  "SR Legacy": 1217,
+  "FNDDS (brand)": 118,
+  "SR Legacy (brand)": 786
+ },
+ "brandedSrDuplicatesOfFndds": [
+  [
+   "BURGER KING, Cheeseburger",
+   "Cheeseburger (Burger King)"
+  ],
+  [
+   "BURGER KING, Hamburger",
+   "Hamburger (Burger King)"
+  ],
+  [
+   "BURGER KING, WHOPPER, with cheese",
+   "Whopper with cheese (Burger King)"
+  ],
+  [
+   "McDONALD'S, BIG MAC",
+   "Big Mac (McDonalds)"
+  ],
+  [
+   "McDONALD'S, QUARTER POUNDER",
+   "Quarter Pounder (McDonalds)"
+  ],
+  [
+   "McDONALD'S, QUARTER POUNDER with Cheese",
+   "Quarter Pounder with cheese (McDonalds)"
+  ]
+ ],
+ "candidatePools": {
+  "fnddsAfterExclusions": 4078,
+  "fnddsReportedInNhanes": 2786,
+  "fnddsUnreported": 1292,
+  "srAfterExclusionsAndDedup": 2855
+ },
+ "exclusions": {
+  "FNDDS: duplicate of an original FDA fruit": 10,
+  "FNDDS: infant formula, baby or toddler food": 151,
+  "FNDDS: missing required nutrient": 1,
+  "FNDDS: nutritionally redundant source/NS variant of a kept food": 29,
+  "FNDDS: recipe-ingredient-only record": 55,
+  "SR brand: same product as an FNDDS brand record": 6,
+  "SR: by-product or non-consumer cut": 443,
+  "SR: frozen-then-cooked twin of a fresh cooked record": 16,
+  "SR: grade-specific twin of an all-grades record": 262,
+  "SR: human milk reference record": 1,
+  "SR: industrial ingredient or fat": 97,
+  "SR: infant formula, baby or toddler food": 356,
+  "SR: institutional or program-specific record": 13,
+  "SR: missing required nutrient (usually fiber not analysed)": 452,
+  "SR: nutritionally redundant trim/grade variant": 17,
+  "SR: raw meat (cooked form preferred)": 613,
+  "SR: raw seafood with a cooked record": 87,
+  "SR: regional traditional-food survey records (outside app scope)": 165,
+  "SR: salted twin of an unsalted record": 176,
+  "SR: same food as a selected FNDDS record (via FNDDS ingredient link)": 917,
+  "SR: same food as an FNDDS record (similar name and nutrition)": 28,
+  "SR: sodium-only variant of a regular record": 19,
+  "SR: unbranded fast-food record (covered by FNDDS fast-food generics)": 147,
+  "SR: unprepared form (prepared or ready-to-eat form preferred)": 334,
+  "below selection cutoff: FNDDS not reported in NHANES day one": 1292,
+  "below selection cutoff: lower-priority SR Legacy record": 1619,
+  "name collides with an existing food": 25
+ },
+ "redundantFnddsVariants": [
+  "Potato, hash brown, from restaurant",
+  "Egg omelet or scrambled egg, NS as to fat",
+  "Potato, mashed, NFS",
+  "Chicken wing, fried, coated, from restaurant",
+  "Chicken thigh, fried, coated, skin / coating eaten, from restaurant",
+  "Chicken nuggets, from restaurant",
+  "Potato, scalloped, from fresh",
+  "Garlic bread, NFS",
+  "Potato, scalloped, NFS",
+  "Potato, french fries, NFS",
+  "Chicken fillet sandwich, NFS",
+  "Lentils, from canned",
+  "Potato, mashed, ready-to-heat, NFS",
+  "Coffee, NS as to brewed or instant",
+  "Chicken breast, fried, coated, skin / coating not eaten, from raw",
+  "Chicken nuggets, NFS",
+  "Egg omelet or scrambled egg, with meat, NS as to fat type",
+  "Egg white omelet, scrambled, or fried, NS as to fat",
+  "Blackeyed peas, from frozen",
+  "Pork bacon, smoked or cured, reduced sodium, cooked",
+  "Chicken drumstick, fried, coated, skin / coating not eaten, from pre-cooked",
+  "Chicken thigh, fried, coated, skin / coating not eaten, from raw",
+  "Chicken thigh, fried, coated, skin / coating not eaten, from restaurant",
+  "Egg, whole, fried, NS as to fat type",
+  "Egg omelet or scrambled egg, with cheese and meat, NS as to fat type",
+  "Pretzels, soft, from frozen, NFS",
+  "Potato, hash brown, from fast food, with cheese",
+  "Potato, hash brown, from dry mix",
+  "Popsicle, NFS"
+ ],
+ "nameCollisionsSkipped": [
+  "Chili with meat",
+  "Dal",
+  "Lasagna with meat",
+  "Blueberries, raw",
+  "Onions, raw",
+  "Nuts, pecans",
+  "Cheese, feta",
+  "Cheese, cottage, creamed, large or small curd",
+  "Kale, raw",
+  "Spinach, raw",
+  "Seeds, flaxseed",
+  "Beverages, chocolate syrup",
+  "Ice cream cookie sandwich",
+  "Cheese, monterey",
+  "Pie, peach",
+  "Alcoholic beverage, whiskey sour",
+  "Broccoli raab, cooked",
+  "Cheese, Mexican blend",
+  "Cheese, parmesan, hard",
+  "Strudel, apple",
+  "Broccoli, chinese, cooked",
+  "Ice cream, soft serve, chocolate",
+  "Beverages, Energy drink, FULL THROTTLE",
+  "Beverages, Energy drink, RED BULL",
+  "Beverages, Energy drink, ROCKSTAR"
+ ]
+}

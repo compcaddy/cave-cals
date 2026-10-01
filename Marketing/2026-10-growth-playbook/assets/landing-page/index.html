@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cave Cals: Calorie Tracker, Caveman Simple</title>
+<meta name="description" content="Cave Cals is an iPhone calorie and macro tracker that learns your usual foods. Snap a photo, say what you ate, or tap once. Free food search, barcode scanning, and logging.">
+<meta name="apple-itunes-app" content="app-id=6809208501">
+<meta property="og:title" content="Cave Cals: Me eat. App count.">
+<meta property="og:description" content="The calorie tracker so simple, a caveman uses it. Free on iPhone.">
+<meta property="og:image" content="og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../brand/app-icon.png">
+<!-- DRAFT: not deployed. To publish, copy this folder into the backend's public/ directory (or a static host),
+     replace ../ paths with local copies, and swap the text App Store button for Apple's official badge
+     (Apple Marketing Tools: https://tools.applemarketingtools.com). -->
+<style>
+  @font-face { font-family: Schoolbell; src: url("../brand/Schoolbell-Regular.ttf"); font-display: swap; }
+  :root { --bg: #F5ECDC; --surface: #FBF6EC; --ink: #2B211A; --muted: #6E5E50; --accent: #C4531B; --accent-ink: #FFF8EF; --line: #E6D8C3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1A1410; --surface: #261E18; --ink: #F2E7D8; --muted: #B5A28E; --accent: #E57636; --accent-ink: #1A1410; --line: #3A2E24; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 "Avenir Next", "Helvetica Neue", Arial, sans-serif; padding-inline: 20px; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1, h2, h3 { font-family: Schoolbell, "Chalkboard SE", cursive; font-weight: 400; line-height: 1.05; margin: 0; text-wrap: balance; }
+  a { color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 700; padding: 14px 22px; border-radius: 14px; }
+  .btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  header.nav { display: flex; justify-content: space-between; align-items: center; padding-block: 18px; }
+  header.nav .logo { font-family: Schoolbell, cursive; font-size: 28px; text-decoration: none; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+  header.nav img { width: 40px; height: 40px; border-radius: 10px; }
+  .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; padding-block: 30px 60px; }
+  .hero h1 { font-size: clamp(56px, 9vw, 96px); }
+  .hero p { font-size: 20px; color: var(--muted); margin: 18px 0 26px; max-width: 34ch; }
+  .hero .fine { font-size: 14px; color: var(--muted); margin-top: 12px; }
+  .hero .art { justify-self: center; width: min(100%, 380px); border-radius: 32px; box-shadow: 0 30px 70px rgba(60,30,10,.18); }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding-block: 20px 60px; }
+  .feature { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px; display: grid; gap: 8px; align-content: start; }
+  .feature img { width: 44px; height: 44px; }
+  .feature h3 { font-size: 26px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x mandatory; }
+  .shots img { width: 220px; flex: none; border-radius: 22px; scroll-snap-align: start; border: 1px solid var(--line); }
+  section { padding-block: 40px; }
+  section > h2 { font-size: clamp(38px, 6vw, 56px); margin-bottom: 18px; }
+  .free { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .free div { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 22px; }
+  .free h3 { font-size: 28px; margin-bottom: 8px; }
+  .free ul { margin: 0; padding-left: 20px; }
+  .coach { background: var(--accent); color: var(--accent-ink); border-radius: 26px; padding: 30px; display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: center; }
+  .coach h2 { font-size: clamp(34px, 5vw, 48px); }
+  .coach p { margin: 10px 0 0; max-width: 55ch; }
+  .coach .btn { background: var(--accent-ink); color: var(--accent); }
+  details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin-bottom: 10px; }
+  summary { font-weight: 700; cursor: pointer; }
+  details p { margin: 8px 0 0; color: var(--muted); }
+  footer { border-top: 1px solid var(--line); padding-block: 26px 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; }
+  @media (max-width: 760px) { .hero, .free, .coach { grid-template-columns: 1fr; } .hero .art { width: 260px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="nav">
+    <a class="logo" href="#"><img src="../brand/app-icon.png" alt="">Cave Cals</a>
+    <a class="btn" href="https://apps.apple.com/us/app/cave-cals-ai-calorie-tracker/id6809208501">Get the app</a>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Me eat.<br>App count.</h1>
+      <p>The calorie tracker so simple, a caveman uses it. Snap a photo, say what you ate, or tap your usual foods once.</p>
+      <a class="btn" href="https://apps.apple.com/us/app/cave-cals-ai-calorie-tracker/id6809208501"> Download on the App Store</a>
+      <div class="fine">Free on iPhone. No account needed.</div>
+    </div>
+    <img class="art" src="../brand/launch-art.png" alt="Cave Cals caveman holding a phone that scans a drumstick">
+  </div>
+
+  <div class="features">
+    <div class="feature"><img src="../brand/orange/CaveLightning.svg" alt=""><h3>Your usuals, one tap</h3><p>Quick Add learns what you eat and when. Same breakfast? Tap once.</p></div>
+    <div class="feature"><img src="../brand/orange/CaveCamera.svg" alt=""><h3>Snap it</h3><p>Photo to a calorie and macro estimate. Review it, fix a portion, log it.</p></div>
+    <div class="feature"><img src="../brand/orange/CaveVoice.svg" alt=""><h3>Say it</h3><p>“Two eggs, toast, big coffee.” Voice Log turns it into a food list. Or ask Siri.</p></div>
+    <div class="feature"><img src="../brand/orange/CaveBarcode.svg" alt=""><h3>Barcode scan, free</h3><p>Plus food and restaurant search and manual logging. No premium needed.</p></div>
+  </div>
+
+  <div class="shots" aria-label="App screenshots">
+    <img src="../app-store-screenshots/store/01-hero.png" alt="Home screen with today's calories and log">
+    <img src="../app-store-screenshots/store/02-quick-add.png" alt="Quick Add list of usual foods">
+    <img src="../app-store-screenshots/store/03-snap-it.png" alt="Meal Scan with a food photo">
+    <img src="../app-store-screenshots/store/04-plan.png" alt="Setup: You Eat. App Track. Weight Drop.">
+    <img src="../app-store-screenshots/store/05-progress.png" alt="Progress charts">
+    <img src="../app-store-screenshots/store/06-recap.png" alt="One-page Weekly Recap">
+  </div>
+
+  <section>
+    <h2>Free where it counts</h2>
+    <div class="free">
+      <div>
+        <h3>Free, always</h3>
+        <ul>
+          <li>Food and restaurant search</li>
+          <li>Barcode scanning</li>
+          <li>Manual logging and one-tap Quick Add</li>
+          <li>Saved meals, weigh-ins, and progress charts</li>
+          <li>Calorie plan, protein/carb/fat goals, widgets, Apple Health</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Cave Cals+</h3>
+        <ul>
+          <li>Meal Scan: photo to calories and macros</li>
+          <li>Voice Log: say what you ate</li>
+          <li>Import a recipe from a link</li>
+          <li>10 free photo/voice tries before you decide</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="coach">
+      <div>
+        <h2>Personal trainer or coach?</h2>
+        <p>Your clients log in seconds, and every Sunday they can send you a one-page Weekly Recap: averages, macros, weight trend, and six weeks of history. Coaches get free Cave Cals+ and a client code.</p>
+      </div>
+      <a class="btn" href="mailto:[coach-signup-email]">Get a coach code</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <details><summary>Is Cave Cals free?</summary><p>Yes. Search, barcode scanning, manual logging, meals, weigh-ins, and progress are free. Cave Cals+ adds photo and voice logging and recipe import, with 10 free tries first.</p></details>
+    <details><summary>Do I need an account?</summary><p>No. Your diary stays on your iPhone, with private iCloud sync when available.</p></details>
+    <details><summary>How accurate are photo estimates?</summary><p>They're estimates. You always see the foods and portions before logging and can fix anything. Close enough every day beats perfect once a week.</p></details>
+    <details><summary>Does it work with Apple Health?</summary><p>Yes, if you turn it on. Cave Cals can write your calories, macros, and weigh-ins to Apple Health. It never reads your Health data.</p></details>
+    <details><summary>Android?</summary><p>iPhone only for now.</p></details>
+  </section>
+
+  <footer>
+    <span>© 2026 Cave Cals · Made by Phil Starkovich</span>
+    <span><a href="https://cavecals.vercel.app/privacy">Privacy</a> · <a href="mailto:[support-email]">Support</a> · Food data by fatsecret and Open Food Facts</span>
+  </footer>
+</div>
+</body>
+</html>

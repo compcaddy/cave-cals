@@ -1,5 +1,23 @@
 import SwiftUI
 
+extension View {
+    /// Cream screen background in place of the default system list/grouped background.
+    func caveScreenBackground() -> some View {
+        scrollContentBackground(.hidden).background(Color.caveBackground)
+    }
+
+    /// A lighter rounded card behind a list row instead of separator lines.
+    func caveCardRow(opacity: Double = 1) -> some View {
+        listRowSeparator(.hidden)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.caveSurface)
+                    .padding(.horizontal, 16).padding(.vertical, 3)
+                    .opacity(opacity)
+            )
+    }
+}
+
 struct MacroLine: View {
     let summary: MacroSummary
     var body: some View {
@@ -15,16 +33,21 @@ struct DailyMacrosView: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack(alignment: .top, spacing: 8) {
-                ForEach(MacroKind.allCases) { kind in
-                    VStack(spacing: 2) {
-                        Text(kind.title).font(.cave(.caption)).foregroundStyle(.secondary)
-                        Text(summary.total(kind).text + " g").font(.cave(.body))
-                        if let goal = goals[keyPath: kind.keyPath] {
-                            Text("/ \(goal.macroText) g").font(.cave(.caption2)).foregroundStyle(.secondary)
-                        }
-                    }.frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
+                ForEach(MacroKind.primary) { kind in
+                    let title = Text(kind.title + ":").font(.cave(.caption)).foregroundStyle(.secondary)
+                    let amount = Text(summary.total(kind).text).font(.cave(.body))
+                        + Text(goals[keyPath: kind.keyPath].map { "/\($0.macroText)" } ?? "")
+                            .font(.cave(.caption)).foregroundStyle(.secondary)
+                        + Text("g").font(.cave(.body))
+                    // Large Dynamic Type sizes fall back to the stacked layout instead of truncating.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) { title; amount }
+                            .lineLimit(1)
+                        VStack(spacing: 2) { title; amount }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
                 }
             }
             if summary.incomplete {
@@ -46,14 +69,16 @@ struct MacroAmountField: View {
     @FocusState private var focused: Bool
     var body: some View {
         HStack {
-            Text(title)
+            // Matches the serving rows above: lowercase, smaller, lighter label.
+            Text(title.lowercased()).font(.cave(.subheadline)).opacity(0.65)
             if estimated { Text("≈").foregroundStyle(.secondary).accessibilityLabel("Estimated") }
             Spacer(minLength: 16)
             TextField(placeholder, text: $text)
                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                .frame(maxWidth: 110, minHeight: 44).focused($focused)
+                .frame(maxWidth: 110).focused($focused)
                 .foregroundStyle(value.map { !$0.isFinite || $0 < 0 } == true ? Color.red : Color.primary)
                 .accessibilityLabel(title).accessibilityIdentifier(identifier)
+                .selectValueOnFocus(identifier: identifier)
                 .onChange(of: text) { _, text in
                     guard focused else { return }
                     let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,6 +94,8 @@ struct MacroAmountField: View {
                 .onAppear { updateText() }
             Text("g").foregroundStyle(.secondary)
         }
+        .selectValueOnTap(focus: $focused)
+        .editorRowInsets()
     }
     private func updateText() { text = value.flatMap { $0.isFinite ? $0.macroText : nil } ?? (value == nil ? "" : text) }
 }
@@ -80,17 +107,29 @@ struct MacroEditorSection: View {
     var body: some View {
         Section {
             ForEach(MacroKind.allCases) { kind in
-                MacroAmountField(title: kind.title, value: binding(kind), estimated: draft.macrosPerServing?[keyPath: kind.estimateKeyPath] == true, identifier: "macro-\(kind.rawValue)")
+                MacroAmountField(title: kind.editorTitle, value: binding(kind), estimated: draft.macrosPerServing?[keyPath: kind.estimateKeyPath] == true, identifier: "macro-\(kind.rawValue)")
+            }
+            HStack {
+                Text("net carbs (calculated)").font(.cave(.subheadline)).opacity(0.65)
+                Spacer()
+                Text(draft.totalMacros?.netCarbs.map { "\(draft.totalMacros?.estimatedNetCarbs == true ? "≈" : "")\($0.macroText) g" } ?? "—")
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityIdentifier("calculatedNetCarbs")
+            .editorRowInsets()
+            if let macros = draft.totalMacros, let carbs = macros.totalCarbs, let fiber = macros.fiber, fiber > carbs {
+                Text("Fiber cannot exceed total carbohydrates.").font(.cave(.caption)).foregroundStyle(.red)
             }
             if !(draft.totalMacros?.isComplete ?? false) {
                 Button {
                     estimating = true; message = nil
                 } label: {
                     HStack {
-                        Text(estimating ? "Estimating…" : "Estimate missing")
-                        if estimating { Spacer(); ProgressView() }
-                    }.frame(minHeight: 44)
+                        Text(estimating ? "Estimating…" : "Estimate values using AI")
+                        if estimating { Spacer(); ProgressView().controlSize(.small) }
+                    }.font(.cave(.subheadline))
                 }
+                .editorRowInsets()
                 .disabled(estimating || !draft.isValid || draft.name.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 .accessibilityIdentifier("estimateMacros")
             }
@@ -98,9 +137,7 @@ struct MacroEditorSection: View {
         } header: {
             Text("Macros · total")
         } footer: {
-            Text(draft.totalMacros?.hasEstimates == true
-                 ? "≈ Estimated. Net carbs exclude fiber."
-                 : "Optional. Net carbs exclude fiber. Estimates use AI.")
+            if draft.totalMacros?.hasEstimates == true { Text("≈ Estimated") }
         }
         .task(id: estimating) {
             guard estimating else { return }
@@ -112,9 +149,12 @@ struct MacroEditorSection: View {
                 // The user may edit the portion or food while the request is running.
                 guard draft.name == snapshot.name, draft.calories == snapshot.calories,
                       draft.servings == snapshot.servings, draft.servingDescription == snapshot.servingDescription else {
-                    message = "Food changed. Tap Estimate missing again."; return
+                    message = "Food changed. Tap Estimate values using AI again."; return
                 }
                 let totals = (draft.totalMacros ?? MacroNutrients()).fillingMissing(from: estimate)
+                guard totals.isValid else {
+                    message = "Estimate conflicts with your carbohydrates or fiber. Check those values and try again."; return
+                }
                 draft.macrosPerServing = totals.scaled(1 / draft.servings)
                 if !estimate.hasValues { message = "Try a more specific food name." }
             } catch is CancellationError { }
@@ -138,7 +178,7 @@ struct MacroSettingsSection: View {
             Toggle("Track macros", isOn: Binding(get: { store.tracksMacros }, set: { store.setTracksMacros($0) }))
                 .accessibilityIdentifier("trackMacros")
             if store.tracksMacros {
-                NavigationLink("Macro goals") { MacroGoalsView(goals: store.macroGoals) }
+                NavigationLink("Macro goals") { MacroGoalsView(goals: store.macroGoals).hapticOnPush() }
                     .accessibilityIdentifier("macroGoals")
             }
         }
@@ -150,23 +190,227 @@ struct MacroGoalsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var goals: MacroNutrients
     var body: some View {
-        Form {
+        HapticForm {
             Section {
-                ForEach(MacroKind.allCases) { kind in
+                ForEach(MacroKind.primary) { kind in
                     MacroAmountField(title: kind.title, value: Binding(get: { goals[keyPath: kind.keyPath] }, set: { goals[keyPath: kind.keyPath] = $0 }), placeholder: "None", identifier: "goal-\(kind.rawValue)")
                 }
             } footer: { Text("Daily goals. Leave blank for none.") }
-        }
+        }.caveScreenBackground()
+        .tapOutsideClosesKeyboard()
         .navigationTitle("Macro goals").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { if store.saveMacroGoals(goals) { dismiss() } }
+                    .hapticButtonStyle(.automatic).hapticFeel(.success)
                     .disabled(!goals.isValidGoal)
                     .accessibilityIdentifier("saveMacroGoals")
             }
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer(); Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        }
+    }
+}
+
+/// Schoolbell has no bold weight; restating the glyphs at tiny offsets thickens the strokes like a heavier pen.
+struct InkBoldText: View {
+    let text: String
+    let font: Font
+    var weight: CGFloat = 1.1
+    init(_ text: String, font: Font, weight: CGFloat = 1.1) { self.text = text; self.font = font; self.weight = weight }
+    var body: some View {
+        let offsets: [CGSize] = [.init(width: weight, height: 0), .init(width: -weight, height: 0),
+                                 .init(width: 0, height: weight), .init(width: 0, height: -weight),
+                                 .init(width: weight * 0.7, height: weight * 0.7), .init(width: -weight * 0.7, height: -weight * 0.7),
+                                 .init(width: weight * 0.7, height: -weight * 0.7), .init(width: -weight * 0.7, height: weight * 0.7)]
+        Text(text).font(font)
+            .overlay { ZStack { ForEach(offsets.indices, id: \.self) { Text(text).font(font).offset(offsets[$0]) } }.accessibilityHidden(true) }
+    }
+}
+
+private struct SummaryBar: View {
+    let fraction: Double
+    var height: CGFloat = 10
+    /// Only calories turn red when over; going past a macro goal (e.g. protein) is often intended.
+    var warnsWhenOver = true
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.1))
+                Capsule().fill(fraction > 1 && warnsWhenOver ? Color.red : Color.caveOrange)
+                    .frame(width: geometry.size.width * min(max(fraction, 0), 1))
             }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Draws `content` with a number that SwiftUI interpolates when it changes inside an animation, so totals count.
+private struct CountingValue<Content: View>: View, Animatable {
+    var value: Double
+    @ViewBuilder let content: (Double) -> Content
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+    var body: some View { content(value) }
+}
+
+/// The totals the summary card last showed. Home keeps them while the card is hidden (add mode) or covered by
+/// a sheet, so whatever was logged meanwhile counts up once the card can be seen again.
+struct SummaryFigures: Equatable {
+    var day: Date
+    var calories: Double
+    var grams: [MacroKind: Double] = [:]
+}
+
+/// Home summary: one wide calorie row with its bar, then compact macro columns with thinner bars.
+struct DailySummaryCard: View {
+    let day: Date
+    let calories: Double
+    let calorieGoal: Double?
+    let macros: MacroSummary?
+    let macroGoals: MacroNutrients
+    /// False while a sheet covers Home; a new total waits to count until the sheet goes away.
+    let isVisible: Bool
+    @Binding var shown: SummaryFigures?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Fast at first, then slowing as it settles onto the final number. The rumble reads the same curve.
+    private static let countUpCurve = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
+    private static let countUpDuration: TimeInterval = 0.9
+    private static let countUp = Animation.timingCurve(countUpCurve, duration: countUpDuration)
+    private static let totalFont = Font.custom("Schoolbell-Regular", size: 52, relativeTo: .largeTitle)
+
+    private var target: SummaryFigures {
+        var grams: [MacroKind: Double] = [:]
+        if let macros { for kind in MacroKind.primary { grams[kind] = macros.total(kind).grams ?? 0 } }
+        return SummaryFigures(day: Calendar.current.startOfDay(for: day), calories: calories, grams: grams)
+    }
+
+    /// Changes on the same day count from the last shown totals; another day's totals simply appear.
+    private func showLatest() {
+        let target = target
+        guard shown != target else { return }
+        if let shown, shown.day == target.day {
+            guard isVisible else { return }
+            withAnimation(reduceMotion ? nil : Self.countUp) { self.shown = target }
+            // Only a rising total rumbles; with Reduce Motion it's just the landing bump.
+            Haptics.countUp(by: target.calories - shown.calories, curve: Self.countUpCurve,
+                            duration: reduceMotion ? 0 : Self.countUpDuration)
+        } else {
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { self.shown = target }
+        }
+    }
+
+    var body: some View {
+        let target = target
+        let figures = shown.flatMap { $0.day == target.day ? $0 : nil } ?? target
+        VStack(alignment: .leading, spacing: 10) {
+            CountingValue(value: figures.calories) { counted in
+            VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                // The final total holds the width so "/ 2,100 cals" stays put while the digits count.
+                ZStack(alignment: .leading) {
+                    InkBoldText(calories.calorieText, font: Self.totalFont).hidden()
+                    InkBoldText(counted.calorieText, font: Self.totalFont)
+                }
+                Text(calorieGoal.map { "/ \($0.calorieText) cals" } ?? "cals")
+                    .font(.cave(.title3)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let calorieGoal {
+                    Text(counted > calorieGoal
+                         ? "\((counted - calorieGoal).calorieText) over"
+                         : "\((calorieGoal - counted).calorieText) left")
+                        .font(.cave(.title3))
+                        .foregroundStyle(counted > calorieGoal ? Color.red : Color.primary)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            // Pull the larger numeral into the font's spare top space to balance the card's bottom inset.
+            .padding(.top, -UIFontMetrics(forTextStyle: .largeTitle).scaledValue(for: 8))
+            // Trim the big font's empty descender space so the bar sits just under the numbers.
+            .padding(.bottom, (UIFont(name: "Schoolbell-Regular",
+                                      size: UIFontMetrics(forTextStyle: .largeTitle).scaledValue(for: 52))?.descender ?? 0) + 4)
+            if let calorieGoal {
+                SummaryBar(fraction: counted / calorieGoal)
+            }
+            }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(calorieGoal.map { "\(calories.calorieText) of \($0.calorieText) calories" } ?? "\(calories.calorieText) calories")
+            .accessibilityValue(calorieGoal.map { "\((max(calories / $0, 0) * 100).calorieText) percent of goal" } ?? "")
+            .accessibilityIdentifier("calorieSummary")
+            if let macros {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(MacroKind.primary) { kind in
+                        let total = macros.total(kind)
+                        CountingValue(value: figures.grams[kind] ?? total.grams ?? 0) { grams in
+                            macroColumn(kind, total: total, shownGrams: grams, goal: macroGoals[keyPath: kind.keyPath])
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
+        .padding(16)
+        .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dailySummaryCard")
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear(perform: showLatest)
+        .onChange(of: target) { showLatest() }
+        .onChange(of: isVisible) { showLatest() }
+    }
+
+    /// `shownGrams` is the counting amount; `total` keeps the real one for the unknown dash and accessibility.
+    private func macroColumn(_ kind: MacroKind, total: MacroTotal, shownGrams: Double, goal: Double?) -> some View {
+        let icon = glyph(kind).rawValue
+        let iconSize = UIImage(named: icon)?.size ?? CGSize(width: 1, height: 1)
+        return VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                // Height-only sizing keeps each icon's own width (the wheat is narrow). Only half of it
+                // counts toward centering, so the name sits a little left and the icon hangs out.
+                Image(icon).renderingMode(.template).resizable().scaledToFit()
+                    .frame(height: 24).foregroundStyle(Color.caveOrange).accessibilityHidden(true)
+                    .padding(.leading, -12 * iconSize.width / iconSize.height)
+                // Closer to the 24-pt icons beside them.
+                Text(kind.title.uppercased()).font(.cave(.subheadline).bold())
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                ZStack {
+                    Text(wholeGrams(total, grams: total.grams)).hidden()
+                    Text(wholeGrams(total, grams: shownGrams))
+                }
+                .font(.cave(.title2).bold())
+                if let goal, goal > 0 {
+                    Text("/ \(goal.formatted(.number.precision(.fractionLength(0))))g")
+                        .font(.cave(.caption)).foregroundStyle(.secondary)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            if let goal, goal > 0 {
+                SummaryBar(fraction: (total.grams == nil ? 0 : shownGrams) / goal, height: 6, warnsWhenOver: false)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(kind.title) \(total.text) g" + (goal.flatMap { $0 > 0 ? " of \($0.macroText) g" : nil } ?? ""))
+        .accessibilityIdentifier("dailyMacro-\(kind.rawValue)")
+    }
+
+    private func wholeGrams(_ total: MacroTotal, grams: Double?) -> String {
+        guard total.grams != nil, let grams else { return "—" }
+        return grams.formatted(.number.precision(.fractionLength(0))) + (total.incomplete ? "+" : "")
+    }
+
+    private func glyph(_ kind: MacroKind) -> CaveGlyph {
+        switch kind {
+        case .protein: .protein
+        case .totalCarbs: .carbs
+        default: .fat
         }
     }
 }

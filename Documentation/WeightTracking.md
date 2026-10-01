@@ -4,12 +4,12 @@ Implemented locally September 18, 2026. This is not evidence of a TestFlight upl
 
 ## Behavior
 
-- The hand-drawn person icon opens **You**, containing the existing calorie goal, optional weight tracking and history, Apple Health sharing, and existing app/subscription settings.
+- The person icon opens **About You**, containing the calorie plan, goal, macros, and weight settings/logging. The chart icon opens **Progress**, containing weight graphs and editable history. Apple Health sharing lives in Settings.
 - Tracking starts off. Turning it off preserves recorded history and reminder dismissal; turning it back on restores the views. Health export has a separate preference.
 - The home reminder appears only for today when tracking is enabled and no weight exists. It sits above the anchored food search and hides during search/quick-calorie editing. Its X persists a dismissal for that calendar day, surviving app restarts. A new day is eligible again.
 - There is one manual weight per local calendar day. Saving another reading for that day updates the existing record. An explicit edit cannot move onto a different occupied day. History supports adding past dates, editing, and deleting. Future dates are rejected.
 - Kilograms are stored without display rounding; pounds use the exact 0.45359237 conversion. Editing an unchanged displayed value preserves the stored measurement. Decimal input follows the current locale.
-- Week shows seven days; Month shows thirty days; Year shows twelve calendar months, with monthly averages calculated only from recorded days. Empty days/months are not filled. Lines break across gaps. Arrows browse older periods; touching the graph selects a reading/average. All exact entries remain accessible in the history list.
+- Progress uses calendar weeks, full calendar months (28–31 days), and calendar years. Week/month show recorded daily weights; year shows weekly averages of recorded weights, clipping boundary weeks to the year. Empty days/weeks are not filled. Lines break across gaps. The configurable week start defaults to Monday. Arrows browse older periods; touching the graph selects a reading/average. All exact entries remain accessible in All weigh-ins. See [Progress](Progress.md).
 
 ## Storage
 

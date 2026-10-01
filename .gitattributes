@@ -1,0 +1,2 @@
+# Preserve generated documents without line-ending or whitespace transformations.
+*.pdf binary
