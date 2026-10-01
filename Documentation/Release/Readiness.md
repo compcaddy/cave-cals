@@ -1,3 +1,14 @@
+# 1.0.4 (2) uploaded and version prepared — October 1, 2026
+
+- **Source:** all 1.0.4 work was committed and `main` fast-forwarded to it (it had stayed at the 1.0.3 commit `dfb7839`). The build comes from commit `23f8407`, tagged `v1.0.4-build2`, on `main`. Release builds come from `main` from now on.
+- **Fixes before upload:** the privacy manifest now declares the system boot time API (`NSPrivacyAccessedAPICategorySystemBootTime`, reason `35F9.1`) for the welcome animation's `ProcessInfo.systemUptime` clock. The search-cache unit test now waits for the background cache write; it had failed since writes moved off the main thread (the app behavior was correct).
+- **Build:** **1.0.4 (2)**, build ID `1e18c7b3-4b02-405d-97c2-c48fd7483a0c`, uploaded with the asc CLI and processed **VALID**. It is explicitly in Internal Testers with What to Test notes. TestFlight's internal state was still PROCESSING when this was recorded. App and widget are both 1.0.4 (2). The exported IPA passed strict signature verification with production `aps-environment` and App Attest and `get-task-allow` false.
+- **App Store version 1.0.4:** build 2 is attached. What's New (`1.0.4/AppStore-WhatsNew.txt`: “Build Plan” instead of the old “Me Build Plan”, plus a Meals bullet) and the new reviewer notes (`1.0.4/ReviewNotes.txt`, covering Health food sharing, Siri, notifications, the post-setup offer, and Developer settings) were saved and read back unchanged. The description and the seven new iPhone 6.5" screenshots (`AppStore/`, uploaded by the owner) match the local files. Release type is now **automatic after approval** (owner's choice), with phased release on. `asc validate`: 0 errors, 0 blocking (2 optional subscription promotional-image warnings). `asc review doctor`: no public-API blockers.
+- **Not done:** the version was **not submitted for review**; the owner presses Submit for Review. App Privacy and Regulations and Permits can't be checked through the API. All production backend endpoints, including `food/describe`, respond, and the live privacy policy is the September 30 version.
+- **Verification:** all 135 native unit tests passed on iPhone 17 (iOS 26). The signed Release archive and App Store export succeeded. Per the owner, device testing was already done; no UI suite or physical-device checks were run here.
+
+---
+
 # Welcome intro, logo first — September 30, 2026 (local)
 
 - Follow-up: the welcome uses the new logo with CAVE CALS on one line (launch screen unchanged), capped at 250 pt, with more room between “Weight Drop.” and the buttons (about 76 pt on iPhone 17 Pro, up from 33). Checked on iPhone 17 Pro and iPhone SE.

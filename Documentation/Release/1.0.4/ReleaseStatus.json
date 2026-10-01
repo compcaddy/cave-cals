@@ -1,11 +1,14 @@
 {
   "appId": "6809208501",
   "version": "1.0.4",
-  "buildNumber": "1",
-  "buildId": "c6ae0929-55c7-45af-a63e-3cd6b30b1a44",
-  "uploadedDate": "2026-09-27T09:34:18-07:00",
+  "appStoreVersionId": "21a68b9b-3447-4d15-aaa9-f1e1665ac037",
+  "buildNumber": "2",
+  "buildId": "1e18c7b3-4b02-405d-97c2-c48fd7483a0c",
+  "sourceCommit": "23f8407",
+  "sourceTag": "v1.0.4-build2",
+  "uploadedDate": "2026-10-01T12:29:39-07:00",
   "processingState": "VALID",
-  "internalBuildState": "IN_BETA_TESTING",
+  "internalBuildState": "PROCESSING (at time of recording)",
   "expired": false,
   "usesNonExemptEncryption": false,
   "groups": [
@@ -15,7 +18,16 @@
       "membership": "explicit"
     }
   ],
-  "ownerTesterAccessVerified": true,
+  "attachedToAppStoreVersion": true,
+  "releaseType": "AFTER_APPROVAL",
+  "phasedRelease": true,
+  "validateErrors": 0,
+  "validateBlocking": 0,
   "appStoreReviewSubmitted": false,
-  "publiclyReleased": false
+  "publiclyReleased": false,
+  "previousBuild": {
+    "buildNumber": "1",
+    "buildId": "c6ae0929-55c7-45af-a63e-3cd6b30b1a44",
+    "uploadedDate": "2026-09-27T09:34:18-07:00"
+  }
 }

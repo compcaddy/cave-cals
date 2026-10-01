@@ -1,3 +1,11 @@
+Build 2 (October 1, 2026):
+
+Cave Cals 1.0.4 (2), release candidate. New since build 1: redesigned setup (Build Plan, Tracking step, goal date, welcome scan animation), Quick Start on Home, Done eating for today, morning log reminders, Apple Health calories & macros sharing (plus the one-time Sync with Apple Health sheet), haptics, tap-outside keyboard dismissal, the Meals list with New Meal from a photo, voice, or recipe link, Siri "Log food with Cave Cals", and the post-setup Cave Cals+ offer with the yearly 7-day trial. Please check on a real iPhone: yearly trial purchase and restore, Health permission and exports, the notification prompt, and camera/microphone capture.
+
+---
+
+Build 1 (September 27, 2026):
+
 Cave Cals 1.0.4
 
 Open Progress using the descending line-chart icon between About You and Settings.
