@@ -1,6 +1,6 @@
 export default function Terms() {
   return <main>
-    <p className="eyebrow">CAVE CALS</p>
+    <p className="eyebrow"><a href="/">CAVE CALS</a></p>
     <h1>Terms of Use</h1>
     <p><strong>Effective date: September 21, 2026</strong></p>
     <p>These Terms of Use ("Terms") are an agreement between you and Claim727 LLC ("Claim727," "we," "us," or "our") for your use of Cave Cals. By using the app, you agree to these Terms. If you do not agree, do not use Cave Cals.</p>

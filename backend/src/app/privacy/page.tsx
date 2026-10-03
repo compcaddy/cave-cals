@@ -1,6 +1,6 @@
 export default function Privacy() {
   return <main>
-    <p className="eyebrow">CAVE CALS</p>
+    <p className="eyebrow"><a href="/">CAVE CALS</a></p>
     <h1>Privacy Policy</h1>
     <p><strong>Effective date: September 30, 2026</strong></p>
     <p>Claim727 LLC ("Claim727," "we," "us," or "our") operates Cave Cals, a food and calorie tracking app. This policy explains what information Cave Cals processes, why we process it, when it is shared, and the choices available to you.</p>
