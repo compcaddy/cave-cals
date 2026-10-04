@@ -1,3 +1,13 @@
+# Usage stats backend live, App Privacy updated — October 4, 2026
+
+- **Source:** commit `a09c402` (usage stats, error reports, admin pages; see `Documentation/UsageStats.md`), on `main`. The app side ships with **1.0.5**; no 1.0.5 build exists yet. App Store Connect shows **1.0.4 Ready for Distribution**.
+- **Database:** migration `0003_usage_stats` applied to production Neon (`ep-weathered-sun`, 4 migrations); six new tables, existing tables untouched.
+- **Backend:** deployed to Vercel production (aliased to cavecals.com and cavecals.vercel.app), then redeployed after the owner set `ADMIN_PASSWORD`. Verified live: `/admin` and `/admin/errors` prompt for a password and refuse a wrong one; `/privacy` shows the October 3 usage-stats section; food search returns 200; unsigned `account/status` returns 401. A `debug` test report to `POST /api/v1/stats` was stored (country captured, retry not double-counted) and then deleted, so production stats tables are empty.
+- **Admin password:** the owner's value is 11 characters; the pages require 16+, so `/admin` answers 404 until it is lengthened and the backend redeployed.
+- **App Privacy:** published in App Store Connect: Other Diagnostic Data (Analytics, App Functionality), Coarse Location (Analytics), and Analytics added to Search History, each not linked and not used for tracking (12 data types). `App/PrivacyInfo.xcprivacy` updated to match, including Product Interaction as linked.
+
+---
+
 # 1.0.4 (2) uploaded and version prepared — October 1, 2026
 
 - **Source:** all 1.0.4 work was committed and `main` fast-forwarded to it (it had stayed at the 1.0.3 commit `dfb7839`). The build comes from commit `23f8407`, tagged `v1.0.4-build2`, on `main`. Release builds come from `main` from now on.

@@ -49,6 +49,6 @@ Days and weeks follow Pacific time (`America/Los_Angeles`), weeks start Monday. 
 ## Release checklist
 
 1. Run `npm run db:migrate` against production (`DATABASE_URL_UNPOOLED` for the production branch).
-2. Set `ADMIN_PASSWORD` in Vercel (Production), then deploy the backend. Deploy before any 1.0.5 build reaches people; until then the app keeps its batches and retries.
-3. Update App Store Connect → App Privacy: Product Interaction, Other Diagnostic Data, and Search History, each **not linked** to the user and **not used for tracking** (Analytics; diagnostics and search history also App Functionality). `App/PrivacyInfo.xcprivacy` already declares these.
+2. Set `ADMIN_PASSWORD` (16+ characters) in Vercel (Production), then deploy the backend; changing it later needs a redeploy. Deploy before any 1.0.5 build reaches people; until then the app keeps its batches and retries.
+3. App Store Connect → App Privacy was updated and published October 4, 2026: Other Diagnostic Data (Analytics, App Functionality), Coarse Location (Analytics; the country derived from each report's connection), and Analytics added to Search History, all not linked and not used for tracking. Product Interaction was already declared (linked, Analytics and App Functionality) because of the AI usage counters. `App/PrivacyInfo.xcprivacy` matches.
 4. The privacy policy (`/privacy`, effective October 3, 2026) describes the stats; it goes live with the deploy.
