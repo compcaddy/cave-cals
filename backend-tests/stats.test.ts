@@ -58,13 +58,16 @@ test('reported times are kept between the app launch era and now', () => {
   assert.equal(clampTime('2026-10-02T00:00:00Z', now).toISOString(), '2026-10-02T00:00:00.000Z');
 });
 
-test('admin pages need a long password and accept it with any user name', () => {
+test('admin pages need a 10+ character password and accept it with any user name', () => {
   const env = process.env as Record<string, string | undefined>, before = env.ADMIN_PASSWORD;
   const basic = (value: string) => `Basic ${Buffer.from(value).toString('base64')}`;
   try {
-    env.ADMIN_PASSWORD = 'short';
+    env.ADMIN_PASSWORD = 'ninechars';
     assert.equal(adminConfigured(), false);
-    assert.equal(adminAuthorized(basic('admin:short')), false);
+    assert.equal(adminAuthorized(basic('admin:ninechars')), false);
+    env.ADMIN_PASSWORD = 'tencharsok';
+    assert.equal(adminConfigured(), true);
+    assert.equal(adminAuthorized(basic('admin:tencharsok')), true);
     env.ADMIN_PASSWORD = 'correct horse battery staple';
     assert.equal(adminConfigured(), true);
     assert.equal(adminAuthorized(basic('phil:correct horse battery staple')), true);
