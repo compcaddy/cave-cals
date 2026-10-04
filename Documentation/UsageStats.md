@@ -30,7 +30,7 @@ New features should count their key action and report the errors people see, the
 
 ## Admin pages
 
-`/admin` and `/admin/errors` use HTTP Basic authentication: any user name, `ADMIN_PASSWORD` (10+ characters) from the deployment's environment. Without that variable both are a 404. `backend/src/proxy.ts` prompts and enforces the lockout (ten wrong passwords from one IP within an hour lock it out for an hour, even with the right password; counted in `ai_limits`); the pages and the Mark fixed action check the password again.
+`/admin` and `/admin/errors` use HTTP Basic authentication: any user name, `ADMIN_PASSWORD` from the deployment's environment (no length rule, at the owner's choice). Without that variable both are a 404. `backend/src/proxy.ts` prompts and enforces the lockout (ten wrong passwords from one IP within an hour lock it out for an hour, even with the right password; counted in `ai_limits`); the pages and the Mark fixed action check the password again.
 
 Days and weeks follow Pacific time (`America/Los_Angeles`), weeks start Monday. App Store installs only by default; **All builds** includes TestFlight and Xcode builds. Definitions:
 
@@ -49,6 +49,6 @@ Days and weeks follow Pacific time (`America/Los_Angeles`), weeks start Monday. 
 ## Release checklist
 
 1. Run `npm run db:migrate` against production (`DATABASE_URL_UNPOOLED` for the production branch).
-2. Set `ADMIN_PASSWORD` (10+ characters) in Vercel (Production), then deploy the backend; changing it later needs a redeploy. Deploy before any 1.0.5 build reaches people; until then the app keeps its batches and retries.
+2. Set `ADMIN_PASSWORD` in Vercel (Production), then deploy the backend; changing it later needs a redeploy. Deploy before any 1.0.5 build reaches people; until then the app keeps its batches and retries.
 3. App Store Connect → App Privacy was updated and published October 4, 2026: Other Diagnostic Data (Analytics, App Functionality), Coarse Location (Analytics; the country derived from each report's connection), and Analytics added to Search History, all not linked and not used for tracking. Product Interaction was already declared (linked, Analytics and App Functionality) because of the AI usage counters. `App/PrivacyInfo.xcprivacy` matches.
 4. The privacy policy (`/privacy`, effective October 3, 2026) describes the stats; it goes live with the deploy.

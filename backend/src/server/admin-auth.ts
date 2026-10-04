@@ -3,15 +3,14 @@ import { and, eq, gt, sql } from 'drizzle-orm';
 import { safeEqual } from './config';
 import { database } from './db';
 import { limits } from './schema';
-export const ADMIN_MIN_PASSWORD = 10;
 /** Wrong passwords from one IP before it's locked out of the admin pages for an hour. */
 export const ADMIN_MAX_FAILURES = 10;
-/** The admin pages need ADMIN_PASSWORD (10+ characters) in the deployment's environment; without it they're a 404. */
-export function adminConfigured() { return (process.env.ADMIN_PASSWORD?.length ?? 0) >= ADMIN_MIN_PASSWORD; }
+/** The admin pages need ADMIN_PASSWORD in the deployment's environment; without it they're a 404. Any length (the owner's choice); the lockout limits guessing. */
+export function adminConfigured() { return !!process.env.ADMIN_PASSWORD; }
 /** HTTP Basic authentication: any user name, the configured password. */
 export function adminAuthorized(header: string | null): boolean {
   const password = process.env.ADMIN_PASSWORD;
-  if (!password || password.length < ADMIN_MIN_PASSWORD || !header?.startsWith('Basic ')) return false;
+  if (!password || !header?.startsWith('Basic ')) return false;
   const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
   const separator = decoded.indexOf(':');
   return separator >= 0 && safeEqual(decoded.slice(separator + 1), password);

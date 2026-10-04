@@ -59,7 +59,7 @@ The current installation limit is five. Reinstallations may consume another devi
 | `APPLE_PRODUCT_IDS` | Your comma-separated subscription product IDs |
 | `APPLE_ENVIRONMENT` | `Production`; `Sandbox` only for staging/preview |
 | `CRON_SECRET` | A separately generated random secret of at least 32 characters |
-| `ADMIN_PASSWORD` | Password for the `/admin` stats and errors pages (10+ characters, any user name; ten wrong tries lock an IP out for an hour); without it they're a 404. Changing it needs a redeploy. See [Usage stats](UsageStats.md) |
+| `ADMIN_PASSWORD` | Password for the `/admin` stats and errors pages (any user name; ten wrong tries lock an IP out for an hour); without it they're a 404. Changing it needs a redeploy. See [Usage stats](UsageStats.md) |
 | `APP_STORE_URL` | Optional `https://apps.apple.com/...` override; the home page defaults to Cave Cals' verified public listing |
 | `AI_DAILY_LIMIT` | Optional, defaults to 30 attempts per user per UTC day |
 | `AI_MONTHLY_LIMIT` | Optional, defaults to 300 attempts per user per UTC calendar month |
