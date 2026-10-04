@@ -158,7 +158,7 @@ struct MacroEditorSection: View {
                 draft.macrosPerServing = totals.scaled(1 / draft.servings)
                 if !estimate.hasValues { message = "Try a more specific food name." }
             } catch is CancellationError { }
-            catch { message = error.localizedDescription }
+            catch { message = error.localizedDescription; UsageStats.shared.error(.macroEstimate, error) }
         }
     }
     private func binding(_ kind: MacroKind) -> Binding<Double?> {

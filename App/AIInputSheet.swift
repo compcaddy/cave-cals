@@ -56,6 +56,8 @@ struct AIInputSheet: View {
     @State private var operation: Task<Void, Never>?
     @State private var mealRoute: MealRoute?
     @State private var gatedOnOpen = false
+    @State private var paywallTrigger = PaywallTrigger.mealScanOpen
+    private var statsArea: StatsErrorArea { mode == .photo ? .mealScan : .voice }
 
     var body: some View {
         NavigationStack {
@@ -91,11 +93,15 @@ struct AIInputSheet: View {
                     }
                     try Task.checkCancellation()
                     try selectPhoto(data)
-                } catch is CancellationError {} catch { self.error = error.localizedDescription }
+                } catch is CancellationError {} catch {
+                    self.error = error.localizedDescription
+                    UsageStats.shared.error(.mealScan, error)
+                }
             }
             .navigationDestination(isPresented: $showPaywall) {
                 AIUpgradePaywall(
                     subscriptions: subscriptions,
+                    trigger: paywallTrigger,
                     onAccessGranted: { resumeAfterPurchase = true },
                     onDismissRequested: closePaywall
                 )
@@ -143,8 +149,11 @@ struct AIInputSheet: View {
                 MealCameraPreview(captureRequest: captureRequest, isCapturing: capturing, onReady: { cameraReady = true }, onCapture: { data in
                     capturing = false
                     do { try selectPhoto(data); requestAnalysis() }
-                    catch { self.error = error.localizedDescription }
-                }, onError: { message in capturing = false; cameraReady = false; cameraError = message })
+                    catch { self.error = error.localizedDescription; UsageStats.shared.error(.mealScan, error) }
+                }, onError: { message in
+                    capturing = false; cameraReady = false; cameraError = message
+                    UsageStats.shared.error(.mealScan, code: "camera", message: message)
+                })
                     .aspectRatio(4 / 3, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("Meal camera preview")
@@ -398,7 +407,10 @@ struct AIInputSheet: View {
         operation = Task { @MainActor in
             defer { startingRecording = false }
             do { try await recorder.start(); media = nil; uploadId = nil; error = nil }
-            catch is CancellationError { recorder.cancel() } catch { recorder.cancel(); self.error = error.localizedDescription }
+            catch is CancellationError { recorder.cancel() } catch {
+                recorder.cancel(); self.error = error.localizedDescription
+                UsageStats.shared.error(.voice, error)
+            }
         }
     }
     private func finishRecording(analyzeAfter: Bool) {
@@ -406,7 +418,7 @@ struct AIInputSheet: View {
         do {
             media = try recorder.stop(); uploadId = nil; error = nil
             if analyzeAfter { requestAnalysis() }
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription; UsageStats.shared.error(.voice, error) }
     }
     private func requestAnalysis() {
         guard let media, !working else { return }
@@ -421,14 +433,19 @@ struct AIInputSheet: View {
             }
             // A completed upload can always be retrieved, including the tenth free scan.
             guard account.canScan || uploadId != nil else {
-                if subscriptions.offering != nil { showPaywall = true }
-                else { error = subscriptions.message ?? "Subscriptions could not load. Your \(mode == .photo ? "photo" : "recording") is ready; please try again." }
+                if subscriptions.offering != nil { openPaywall(onOpen: false) }
+                else {
+                    error = subscriptions.message ?? "Subscriptions could not load. Your \(mode == .photo ? "photo" : "recording") is ready; please try again."
+                    UsageStats.shared.error(statsArea, code: "paywall_unavailable", message: error ?? "")
+                }
                 return
             }
             do {
                 let response = try await AIBackend.shared.identify(data: media, kind: mode == .photo ? "image" : "audio", mime: mode == .photo ? "image/jpeg" : "audio/mp4", existingUpload: uploadId, regularLogCount: store.regularLogCount, onUpload: { id in await MainActor.run { uploadId = id } })
                 try Task.checkCancellation()
                 let generatedDrafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
+                UsageStats.shared.scan(mode == .photo ? .mealScan : .voice)
+                if generatedDrafts.isEmpty { UsageStats.shared.error(statsArea, code: "no_foods", message: "The scan found no foods to add.") }
                 if let onMealDrafts {
                     self.media = nil; image = nil
                     onMealDrafts(generatedDrafts)
@@ -441,8 +458,9 @@ struct AIInputSheet: View {
                 self.media = nil; image = nil
             } catch is CancellationError {} catch {
                 self.error = error.localizedDescription
+                UsageStats.shared.error(statsArea, error)
                 if let service = error as? AIServiceError {
-                    if service.code == "subscription_required", subscriptions.offering != nil { showPaywall = true }
+                    if service.code == "subscription_required", subscriptions.offering != nil { openPaywall(onOpen: false) }
                     if ["failed", "not_found", "ai_unavailable", "invalid_image", "invalid_audio", "no_speech", "no_estimate", "invalid_estimate", "file_mismatch"].contains(service.code) { uploadId = nil }
                 }
             }
@@ -458,6 +476,22 @@ struct AIInputSheet: View {
               subscriptions.offering != nil, result == nil, uploadId == nil else { return }
         recorder.cancel(); media = nil; image = nil
         gatedOnOpen = true
+        openPaywall(onOpen: true)
+    }
+
+    /// Notes which screen and moment showed the paywall, for the stats.
+    private func openPaywall(onOpen: Bool) {
+        let newMeal = onMealDrafts != nil
+        paywallTrigger = switch (mode, newMeal, onOpen) {
+        case (.photo, false, true): .mealScanOpen
+        case (.photo, false, false): .mealScanAnalyze
+        case (.voice, false, true): .voiceOpen
+        case (.voice, false, false): .voiceAnalyze
+        case (.photo, true, true): .newMealPhotoOpen
+        case (.photo, true, false): .newMealPhotoAnalyze
+        case (.voice, true, true): .newMealVoiceOpen
+        case (.voice, true, false): .newMealVoiceAnalyze
+        }
         showPaywall = true
     }
 

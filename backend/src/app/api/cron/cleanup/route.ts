@@ -1,7 +1,7 @@
-import { lt, inArray } from 'drizzle-orm';
+import { lt, inArray, and, eq } from 'drizzle-orm';
 import { del } from '@vercel/blob';
 import { database } from '@/server/db';
-import { uploads, challenges, limits } from '@/server/schema';
+import { uploads, challenges, limits, usageBatches, usageEvents, appErrors } from '@/server/schema';
 import { deleteUpload } from '@/server/storage';
 import { APIError, errorResponse, required, safeEqual } from '@/server/config';
 export const runtime = 'nodejs';
@@ -24,6 +24,13 @@ export async function GET(request: Request) {
     }
     await db.delete(challenges).where(lt(challenges.expiresAt, now));
     await db.delete(limits).where(lt(limits.expiresAt, now));
+    // Usage stats retention: retry IDs for 60 days, errors and searches that found nothing for 180 days,
+    // other events for 400 days. Daily counts are small and kept.
+    const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000);
+    await db.delete(usageBatches).where(lt(usageBatches.receivedAt, daysAgo(60)));
+    await db.delete(appErrors).where(lt(appErrors.at, daysAgo(180)));
+    await db.delete(usageEvents).where(and(eq(usageEvents.name, 'search.missing'), lt(usageEvents.at, daysAgo(180))));
+    await db.delete(usageEvents).where(lt(usageEvents.at, daysAgo(400)));
     return Response.json({ deleted });
   } catch (error) { return errorResponse(error); }
 }

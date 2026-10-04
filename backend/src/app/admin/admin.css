@@ -1,0 +1,42 @@
+.admin{--ink:#302319;--muted:#72665b;--line:#e4d8ca;--card:#fffdf9;--accent:#b84718;--accent-soft:#f6e3d6;--good:#3f7a3a;--bad:#b8322a;--bar:#d9763f;
+  max-width:1080px;margin:0 auto;padding:20px 16px 64px;color:var(--ink);font-size:15px;line-height:1.45}
+@media(prefers-color-scheme:dark){.admin{--ink:#fbf8f2;--muted:#c6b9aa;--line:#4a3d32;--card:#2a221c;--accent:#eea17c;--accent-soft:#4a3326;--good:#8fcf88;--bad:#f08a80;--bar:#d9763f}}
+.admin a{color:var(--accent)}
+.admin header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-bottom:6px}
+.admin h1{font-size:26px;letter-spacing:-.02em;margin:0;line-height:1.2}
+.admin h2{font-size:18px;margin:0 0 12px;letter-spacing:-.01em}
+.admin h3{font-size:14px;margin:18px 0 8px;color:var(--muted);font-weight:650;text-transform:uppercase;letter-spacing:.06em}
+.admin .note{color:var(--muted);font-size:13px;margin:4px 0 0}
+.admin .nav{display:flex;flex-wrap:wrap;gap:6px}
+.admin .pill{display:inline-block;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;text-decoration:none;color:var(--ink);background:var(--card)}
+.admin .pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.admin section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px;min-width:0}
+.admin .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:0 14px}
+.admin .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.admin .tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.admin .tile b{display:block;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.admin .tile span{display:block;color:var(--muted);font-size:12.5px;line-height:1.3;margin-top:2px}
+.admin .up{color:var(--good)}.admin .down{color:var(--bad)}
+.admin .bars{display:grid;gap:6px}
+.admin .bar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;align-items:center;gap:8px;font-size:13.5px}
+.admin .bar .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin .bar .track{height:12px;background:var(--accent-soft);border-radius:6px;overflow:hidden}
+.admin .bar .fill{height:100%;background:var(--bar);border-radius:6px;min-width:2px}
+.admin .bar .value{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right;min-width:64px}
+.admin .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.admin table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+.admin th,.admin td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.admin th:first-child,.admin td:first-child{text-align:left}
+.admin th{font-weight:650;color:var(--muted);font-size:12px}
+.admin td.wrap{white-space:normal;min-width:180px}
+.admin code{font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.admin .empty{color:var(--muted);font-size:13.5px;margin:4px 0}
+.admin .error-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px}
+.admin .error-card h3{text-transform:none;letter-spacing:0;color:var(--ink);font-size:15px;margin:0 0 4px;word-break:break-word}
+.admin .error-card p{margin:3px 0;font-size:13.5px;word-break:break-word}
+.admin .error-card pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--accent-soft);padding:10px;border-radius:8px;margin:8px 0 0}
+.admin .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.admin .admin-button{font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--card);color:var(--accent);cursor:pointer}
+.admin .admin-button.primary{background:var(--accent);color:#fff}
+.admin details summary{cursor:pointer;color:var(--accent);font-size:13px;margin-top:8px}
+.admin .tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--accent-soft);color:var(--ink);margin-left:6px;vertical-align:1px}

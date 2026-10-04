@@ -212,6 +212,8 @@ struct SearchLayoutFixture: FoodSearchService {
     var results: [FoodResult] = []
     var loading = false
     var message: String?
+    /// The latest query the online search answered with no results (lowercased).
+    private(set) var emptyQuery: String?
     private struct Cached: Codable, Sendable { let results: [FoodResult]; let expiresAt: Date }
     private let provider: any FoodSearchService
     private var cache: [String: Cached] = [:]
@@ -245,7 +247,7 @@ struct SearchLayoutFixture: FoodSearchService {
         // Saved only when something actually expired, not on every keystroke.
         let unexpired = cache.filter { !$0.value.results.isEmpty && $0.value.expiresAt > now() }
         if unexpired.count != cache.count { cache = unexpired; persist() }
-        message = nil; results = []; loading = false
+        message = nil; results = []; loading = false; emptyQuery = nil
         guard query.count >= 2, Double(query) == nil, QuickEntryText.parse(query)?.name.isEmpty != true else { return }
         if let hit = cache[query] { results = hit.results; return }
         loading = true
@@ -257,6 +259,7 @@ struct SearchLayoutFixture: FoodSearchService {
             guard requestID == id else { return }
             results = page.results
             if page.results.isEmpty {
+                emptyQuery = query
                 message = "No online matches. Try a dish name, or add calories manually."
             } else if page.cacheLifetime > 0 {
                 cache[query] = Cached(results: page.results, expiresAt: now().addingTimeInterval(min(page.cacheLifetime, 3600)))
@@ -266,6 +269,7 @@ struct SearchLayoutFixture: FoodSearchService {
             // Never cache an empty response or a provider error. Basic FatSecret results aren't cached.
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
+            UsageStats.shared.error(.search, error)
             if let error = error as? URLError {
                 message = (error.code == .timedOut ? FoodServiceError.timedOut : .offline).localizedDescription
             } else {

@@ -22,6 +22,13 @@
       "when": 1790401007166,
       "tag": "0002_trial_key_entitlement_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791070894304,
+      "tag": "0003_usage_stats",
+      "breakpoints": true
     }
   ]
 }

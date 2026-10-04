@@ -107,7 +107,11 @@ import WidgetKit
     }
     @discardableResult func commit() -> Bool {
         do { try context.save(); refresh(); return true }
-        catch { context.rollback(); refresh(); self.error = "Changes couldn’t be saved. Please try again. \(error.localizedDescription)"; return false }
+        catch {
+            context.rollback(); refresh(); self.error = "Changes couldn’t be saved. Please try again. \(error.localizedDescription)"
+            UsageStats.shared.error(.save, error)
+            return false
+        }
     }
     func commonDefault(for food: CommonFood) -> CommonFoodDefault {
         commonFoodDefaults[food.id] ?? CommonFoodDefault(food.draft)
@@ -229,7 +233,10 @@ import WidgetKit
     private func reopens(_ entry: CalorieEntry, finishedAt: Date, calendar: Calendar = .current) -> Bool {
         entry.createdAt > finishedAt && calendar.isDate(entry.createdAt, inSameDayAs: finishedAt)
     }
-    func finishDay(_ now: Date = Date()) { saveFinishedDays { $0[Day.key(now)] = now } }
+    func finishDay(_ now: Date = Date()) {
+        saveFinishedDays { $0[Day.key(now)] = now }
+        UsageStats.shared.count(.doneEating, now: now)
+    }
     func reopenDay(_ date: Date = Date()) { saveFinishedDays { $0[Day.key(date)] = nil } }
     private func saveFinishedDays(_ change: (inout [String: Date]) -> Void) {
         var updated = finishedDays
@@ -321,7 +328,8 @@ import WidgetKit
             existing.payload = (try? JSONEncoder().encode(draft)) ?? existing.payload; existing.updatedAt = Date()
         } else { let food = BarcodeFood(barcode: code, draft: draft); context.insert(food); barcodes.append(food) }
     }
-    @discardableResult func add(_ drafts: [EntryDraft], message: String? = nil) -> Bool {
+    /// `method` overrides the one implied by the drafts' source, for copies and Siri.
+    @discardableResult func add(_ drafts: [EntryDraft], message: String? = nil, method: LogMethod? = nil) -> Bool {
         guard !drafts.isEmpty, drafts.allSatisfy(\.isValid) else { error = "Please enter valid calories, servings, and a date no later than now."; return false }
         let added = drafts.map { draft -> CalorieEntry in
             retainGoal(draft.timestamp)
@@ -329,25 +337,32 @@ import WidgetKit
         }
         let ids = added.map(\.id)
         guard commit() else { return false }
+        let method = method ?? LogMethod(source: drafts[0].source)
+        UsageStats.shared.itemsAdded(drafts.count, method: method)
         lastAddedID = ids.last
         feedback(message ?? "\(drafts.first!.name.isEmpty ? "Entry" : drafts.first!.name) added · \(drafts.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal") { [weak self] in
-            guard let self else { return }; self.entries.filter { ids.contains($0.id) }.forEach(self.context.delete); self.commit()
+            guard let self else { return }; self.entries.filter { ids.contains($0.id) }.forEach(self.context.delete)
+            if self.commit() { UsageStats.shared.itemsUndone(drafts.count, method: method) }
         }
         return true
     }
     func update(_ draft: EntryDraft) -> Bool {
         guard draft.isValid, let entry = entries.first(where: { $0.id == draft.entryID }) else { return false }
         retainGoal(draft.timestamp); entry.apply(draft); cacheBarcode(draft)
-        return commit()
+        guard commit() else { return false }
+        UsageStats.shared.count(.edits)
+        return true
     }
     func delete(_ entry: CalorieEntry) {
         let draft = EntryDraft(entry), id = entry.id, created = entry.createdAt
         context.delete(entry)
         guard commit() else { return }
+        UsageStats.shared.count(.deletes)
         feedback("Entry deleted") { [weak self] in
             guard let self, !self.entries.contains(where: { $0.id == id }) else { return }
             let restored = CalorieEntry(draft: draft); restored.id = id; restored.createdAt = created
-            self.context.insert(restored); self.commit()
+            self.context.insert(restored)
+            if self.commit() { UsageStats.shared.count(.undos) }
         }
     }
     func feedback(_ message: String, undo: @escaping () -> Void) {
@@ -366,9 +381,9 @@ import WidgetKit
         } else { context.insert(SavedMeal(name: name.trimmingCharacters(in: .whitespacesAndNewlines), items: items)) }
         return commit()
     }
-    func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date) -> Bool {
+    func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date, method: LogMethod = .meal) -> Bool {
         guard factor.isFinite, factor > 0 else { return false }
-        return add(meal.items.enumerated().map { $0.element.scaled(factor, at: date, meal: meal.id, order: $0.offset) }, message: "\(meal.name) added")
+        return add(meal.items.enumerated().map { $0.element.scaled(factor, at: date, meal: meal.id, order: $0.offset) }, message: "\(meal.name) added", method: method)
     }
     func deleteMeal(_ meal: SavedMeal) {
         let wasPinned = isMealPinned(meal.id)
@@ -393,7 +408,7 @@ import WidgetKit
     }
     func cloudEvent(_ notification: Notification) {
         guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else { return }
-        if event.error != nil { syncStatus = "Sync paused · saved locally" }
+        if let error = event.error { syncStatus = "Sync paused · saved locally"; UsageStats.shared.error(.iCloud, error) }
         else if event.endDate == nil { syncStatus = "Syncing with iCloud…" }
         else if event.succeeded, event.type != .setup { syncStatus = "Last synced \(event.endDate!.formatted(date: .omitted, time: .shortened))"; refresh() }
     }

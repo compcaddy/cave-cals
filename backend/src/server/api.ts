@@ -12,13 +12,15 @@ import { database } from './db';
 import { accounts } from './schema';
 import { authorizedTestAccess, ownerTestAccess } from './test-access';
 import { scanAccess, scanUsageInput, requireScanAccess } from './scan-access';
+import { statsInput, recordStats, recordServerError } from './stats';
+import { waitUntil } from '@vercel/functions';
 const nonceSchema = z.string().min(1).max(200);
 const keySchema = z.string().min(1).max(200);
 export async function api(request: Request, path: string): Promise<Response> {
   try {
     if (request.method !== 'POST') throw new APIError(405, 'method', 'Use POST.');
     if (!request.headers.get('content-type')?.startsWith('application/json')) throw new APIError(415, 'content_type', 'Use application/json.');
-    const raw = (await readLimited(request, path === 'foods/search' ? 1024 : 64 * 1024)).toString('utf8');
+    const raw = (await readLimited(request, path === 'foods/search' ? 1024 : path === 'stats' ? 256 * 1024 : 64 * 1024)).toString('utf8');
     let body: unknown;
     try { body = JSON.parse(raw); } catch { throw new APIError(400, 'invalid_json', 'Invalid request.'); }
     const ok = (value: unknown) => Response.json(value, { headers: { 'Cache-Control':'no-store' } });
@@ -37,6 +39,11 @@ export async function api(request: Request, path: string): Promise<Response> {
       await limitPublic(request);
       const input = z.object({ keyId: keySchema, nonce: nonceSchema, attestation: z.string().min(1).max(20000), trialKey: z.string().regex(trialKeyPattern).optional() }).parse(body);
       return ok(await register(input.keyId, input.nonce, input.attestation, input.trialKey));
+    }
+    if (path === 'stats') {
+      // Anonymous usage counts and error reports. Unsigned on purpose: no App Attest or account needed.
+      await recordStats(request, statsInput.parse(body));
+      return ok({ received: true });
     }
     if (path === 'apple/notifications') {
       const { signedPayload } = z.object({ signedPayload: z.string().max(60000) }).parse(body);
@@ -109,6 +116,11 @@ export async function api(request: Request, path: string): Promise<Response> {
     }
     throw new APIError(404, 'not_found', 'Not found.');
   } catch (error) {
+    if (!(error instanceof APIError) && !(error instanceof z.ZodError)) {
+      // Keep the function alive to store it after responding; a failure to record must never surface.
+      const recorded = recordServerError(path, error).catch(() => {});
+      waitUntil(recorded);
+    }
     return errorResponse(error instanceof z.ZodError ? new APIError(400, 'invalid_request', 'Some request fields are invalid.') : error);
   }
 }

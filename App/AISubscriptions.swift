@@ -51,9 +51,11 @@ import RevenueCatUI
             await connectRevenueCat()
             message = nil
             messageIsError = false
+            if let account { UsageStats.shared.noteMembership(account.active) }
         } catch {
             message = error.localizedDescription
             messageIsError = true
+            UsageStats.shared.error(.subscription, error)
         }
     }
     @discardableResult
@@ -77,6 +79,7 @@ import RevenueCatUI
         } catch {
             message = error.localizedDescription
             messageIsError = true
+            UsageStats.shared.error(.subscription, error)
             return (false, error)
         }
     }
@@ -100,6 +103,7 @@ import RevenueCatUI
         } catch {
             message = error.localizedDescription
             messageIsError = true
+            UsageStats.shared.error(.subscription, error)
             return (false, error)
         }
     }
@@ -123,11 +127,29 @@ import RevenueCatUI
     }
 }
 
+/// Reports one showing of the paywall and how it ended, whichever way the screen goes away.
+@MainActor final class PaywallStatsReport {
+    private var shown = false, finished = false
+    func show(_ trigger: PaywallTrigger) {
+        guard !shown else { return }
+        shown = true
+        UsageStats.shared.paywallShown(trigger)
+    }
+    func finish(_ trigger: PaywallTrigger, _ result: String, product: String? = nil) {
+        guard shown, !finished else { return }
+        finished = true
+        UsageStats.shared.paywallResult(trigger, result, product: product)
+    }
+}
+
 struct AIUpgradePaywall: View {
     let subscriptions: AISubscriptions
+    /// What put the paywall on screen, for the stats.
+    let trigger: PaywallTrigger
     var onAccessGranted: () -> Void = {}
     let onDismissRequested: () -> Void
     @State private var dismissalGate = PaywallDismissalGate()
+    @State private var report = PaywallStatsReport()
 
     var body: some View {
         Group {
@@ -136,14 +158,19 @@ struct AIUpgradePaywall: View {
                     guard let product = subscriptions.products.first(where: { $0.id == package.storeProduct.productIdentifier }) else {
                         return (false, AIServiceError(code: "product", message: "This subscription is unavailable. Please try again."))
                     }
+                    let trial = subscriptions.trialEligible.contains(product.id)
                     let result = await subscriptions.buy(product)
                     if result.error == nil && !result.userCancelled && subscriptions.account?.active == true {
+                        report.finish(trigger, trial ? "trial" : "purchased", product: product.id)
                         grantAccessAndDismiss()
                     }
                     return result
                 }, performRestore: {
                     let result = await subscriptions.restore()
-                    if result.success { grantAccessAndDismiss() }
+                    if result.success {
+                        report.finish(trigger, "restored")
+                        grantAccessAndDismiss()
+                    }
                     return result
                 })
                 .onRequestedDismissal { requestDismissal() }
@@ -159,6 +186,8 @@ struct AIUpgradePaywall: View {
         }
         .accessibilityIdentifier("aiUpgradePaywall")
         .navigationBarBackButtonHidden(true)
+        .onAppear { report.show(trigger) }
+        .onDisappear { report.finish(trigger, subscriptions.offering == nil ? "unavailable" : "closed") }
     }
 
     private func grantAccessAndDismiss() {
@@ -188,7 +217,7 @@ struct OnboardingUpgradeView: View {
                     ProgressView("Loading Cave Cals+…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    AIUpgradePaywall(subscriptions: subscriptions, onDismissRequested: finish)
+                    AIUpgradePaywall(subscriptions: subscriptions, trigger: .onboarding, onDismissRequested: finish)
                 }
             }
             .caveScreenBackground()

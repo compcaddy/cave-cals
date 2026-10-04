@@ -147,7 +147,10 @@ enum NutritionHealthError: LocalizedError {
             ledger.since = ledger.since ?? Calendar.current.startOfDay(for: now)
             persist()
             await sync(entries)
-        } catch { message = error.localizedDescription }
+        } catch {
+            message = error.localizedDescription
+            if case NutritionHealthError.permission = error {} else { UsageStats.shared.error(.appleHealth, error) }
+        }
     }
 
     /// Called after every diary change; bursts coalesce and the newest snapshot wins.
@@ -189,6 +192,7 @@ enum NutritionHealthError: LocalizedError {
             message = "Food is up to date in Apple Health."
         } catch {
             message = "Saved in Cave Cals. Apple Health sharing couldn’t finish. It will retry when you next open the app."
+            UsageStats.shared.error(.appleHealth, error)
         }
     }
 

@@ -102,7 +102,7 @@ struct ProfileView: View {
                 WeightEditorSheet(record: route.record, unit: weights.unit)
             }
             .navigationDestination(isPresented: $showingPaywall) {
-                AIUpgradePaywall(subscriptions: aiSubscriptions, onDismissRequested: { showingPaywall = false })
+                AIUpgradePaywall(subscriptions: aiSubscriptions, trigger: .aboutYou, onDismissRequested: { showingPaywall = false })
             }
             .task { await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
         }
@@ -178,6 +178,7 @@ struct SettingsView: View {
                     Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
                     Text("Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device. Food and weigh-ins can optionally be shared to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
+                UsageStatsSettingsSection()
                 TellTheTribeSection()
                 Section("About") {
                     Text(appVersionLabel)
@@ -192,7 +193,7 @@ struct SettingsView: View {
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) } }
             .navigationDestination(isPresented: $showingPaywall) {
-                AIUpgradePaywall(subscriptions: aiSubscriptions, onDismissRequested: { showingPaywall = false })
+                AIUpgradePaywall(subscriptions: aiSubscriptions, trigger: .settings, onDismissRequested: { showingPaywall = false })
             }
             .task { await store.checkCloud(); await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
         }
@@ -233,6 +234,24 @@ private struct TellTheTribeSection: View {
             .accessibilityIdentifier("shareApp")
             Link("Send feedback", destination: CaveCalsLinks.feedback)
                 .accessibilityIdentifier("sendFeedback")
+                .environment(\.openURL, OpenURLAction { _ in UsageStats.shared.count(.feedbackTaps); return .systemAction })
+        }
+    }
+}
+
+/// Settings → Usage stats: anonymous counts and error reports, on by default.
+private struct UsageStatsSettingsSection: View {
+    @AppStorage(UsageStats.sharingKey) private var sharing = true
+    var body: some View {
+        Section {
+            Toggle("Share anonymous usage stats", isOn: $sharing)
+                .accessibilityIdentifier("shareUsageStats")
+                .onChange(of: sharing) { _, _ in UsageStats.shared.sharingChanged() }
+        } header: {
+            Text("Usage stats")
+        } footer: {
+            Text("Sends counts like how many foods you log and which features you use, error reports, and searches that found nothing, so Cave Cals can get better. Never your diary, calories, weight, or Health data, and it isn’t linked to you.")
+                .font(.cave(.caption2))
         }
     }
 }
@@ -489,6 +508,7 @@ struct MealLinkImportSheet: View {
     @State private var showPaywall = false
     @State private var retryAfterPurchase = false
     @State private var gatedOnOpen = false
+    @State private var paywallTrigger = PaywallTrigger.recipeImportOpen
 
     var body: some View {
         NavigationStack {
@@ -544,6 +564,7 @@ struct MealLinkImportSheet: View {
                 await subscriptions.refresh()
                 if let account = subscriptions.account, !account.active, subscriptions.offering != nil {
                     gatedOnOpen = true
+                    paywallTrigger = .recipeImportOpen
                     showPaywall = true
                 }
             }
@@ -553,6 +574,7 @@ struct MealLinkImportSheet: View {
             .navigationDestination(isPresented: $showPaywall) {
                 AIUpgradePaywall(
                     subscriptions: subscriptions,
+                    trigger: paywallTrigger,
                     onAccessGranted: { retryAfterPurchase = true },
                     onDismissRequested: closePaywall
                 )
@@ -583,22 +605,29 @@ struct MealLinkImportSheet: View {
                 return
             }
             guard account.active else {
-                if subscriptions.offering != nil { showPaywall = true }
-                else { error = subscriptions.message ?? "Subscriptions could not load. Please try again." }
+                if subscriptions.offering != nil { paywallTrigger = .recipeImport; showPaywall = true }
+                else {
+                    error = subscriptions.message ?? "Subscriptions could not load. Please try again."
+                    UsageStats.shared.error(.recipe, code: "paywall_unavailable", message: error ?? "")
+                }
                 return
             }
             do {
                 let result = try await AIBackend.shared.importMeal(from: url)
                 let drafts = result.drafts(at: Date(), source: "aiLink")
+                UsageStats.shared.scan(.recipe)
                 guard !drafts.isEmpty else {
                     error = "No meal items were found at that link."
+                    UsageStats.shared.error(.recipe, code: "no_foods", message: error ?? "")
                     return
                 }
                 imported(result.mealName, drafts)
             } catch {
                 self.error = error.localizedDescription
+                UsageStats.shared.error(.recipe, error)
                 if let service = error as? AIServiceError,
                    service.code == "subscription_required", subscriptions.offering != nil {
+                    paywallTrigger = .recipeImport
                     showPaywall = true
                 }
             }

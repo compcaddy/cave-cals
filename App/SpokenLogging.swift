@@ -73,7 +73,7 @@ enum QuickEntryText {
             return save([draft], store: store, now: now)
         }
         if let meal = savedMeal(named: spoken, store: store) {
-            guard store.addMeal(meal, date: now) else { return saveFailure }
+            guard store.addMeal(meal, date: now, method: .siri) else { return saveFailure }
             return confirmation(names: [meal.name], calories: meal.calories, store: store, now: now)
         }
         if let draft = knownFood(named: spoken, store: store, now: now) {
@@ -82,13 +82,17 @@ enum QuickEntryText {
         do {
             let result = try await estimate(spoken, store.regularLogCount)
             let drafts = result.drafts(at: now, source: "aiVoice")
+            UsageStats.shared.scan(.siri)
             guard !drafts.isEmpty else {
+                UsageStats.shared.error(.siri, code: "no_foods", message: "Siri Log Food found no foods to add.")
                 return "I couldn’t find a food in that. Try naming it with its calories, like \(example)."
             }
             return save(drafts, store: store, now: now)
         } catch let error as AIServiceError where error.code == "subscription_required" {
+            UsageStats.shared.paywallShown(.siri)
             return "Your free AI logs are used up. Say the calories too, like \(example), or open Cave Cals to upgrade."
         } catch {
+            UsageStats.shared.error(.siri, error)
             return "\(error.localizedDescription) You can also say the calories, like \(example)."
         }
     }
@@ -121,7 +125,7 @@ enum QuickEntryText {
     private static let saveFailure = "Cave Cals couldn’t save that. Please try again in the app."
 
     private static func save(_ drafts: [EntryDraft], store: AppStore, now: Date) -> String {
-        guard store.add(drafts) else { return saveFailure }
+        guard store.add(drafts, method: .siri) else { return saveFailure }
         let names = drafts.map { $0.name.isEmpty ? "\($0.calories.calorieText) calories" : $0.name }
         return confirmation(names: names, calories: drafts.reduce(0) { $0 + $1.calories.rounded() }, store: store, now: now,
                             namesIncludeCalories: drafts.count == 1 && drafts[0].name.isEmpty)

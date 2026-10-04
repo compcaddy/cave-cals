@@ -73,6 +73,7 @@ private struct WeightFile: Codable {
             } catch {
                 loadFailed = true
                 self.error = "Your weigh-ins couldn’t be opened. Reopen Cave Cals to try again. Your saved file has not been changed."
+                Task { @MainActor in UsageStats.shared.error(.weights, error) }
             }
         }
     }
@@ -129,6 +130,7 @@ private struct WeightFile: Codable {
             next.records[index].revision += 1
         } else { next.records.append(WeightRecord(date: date, kilograms: kilograms)) }
         guard persist(next) else { return false }
+        if id == nil && sameDay == nil { UsageStats.shared.count(.weighIns) }
         Task { await syncHealth() }
         return true
     }
@@ -161,7 +163,10 @@ private struct WeightFile: Codable {
             var next = data; next.healthSharing = true
             guard persist(next) else { return }
             await syncHealth()
-        } catch { healthMessage = error.localizedDescription }
+        } catch {
+            healthMessage = error.localizedDescription
+            if case WeightHealthError.permission = error {} else { UsageStats.shared.error(.appleHealth, error) }
+        }
     }
 
     func syncHealth() async {
@@ -187,6 +192,7 @@ private struct WeightFile: Codable {
             if healthSharing { healthMessage = "Weigh-ins are up to date in Apple Health." }
         } catch {
             healthMessage = "Saved in Cave Cals. Apple Health sharing couldn’t finish. Try again when your device is unlocked."
+            UsageStats.shared.error(.appleHealth, error)
         }
     }
 
@@ -204,6 +210,7 @@ private struct WeightFile: Codable {
             data = next; error = nil; return true
         } catch {
             self.error = "Your weigh-in changes couldn’t be saved. Please try again."
+            UsageStats.shared.error(.weights, error)
             return false
         }
     }

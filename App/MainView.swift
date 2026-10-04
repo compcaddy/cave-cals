@@ -106,6 +106,9 @@ struct MainView: View {
     /// A weigh-in, Done eating, or a second day of logging: offer Apple Health once Home is idle.
     @State private var healthMomentPending = false
     @State private var offeredHealthThisSession = false
+    /// The search being typed, for the stats: whether it ends with an add, and whether it found nothing at all.
+    @State private var searchSession: SearchSession?
+    private struct SearchSession { var lastAddAtStart: UUID?; var unmatchedQuery: String? }
     @FocusState private var searching: Bool
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -136,6 +139,11 @@ struct MainView: View {
             .onChange(of: weights.records.count) { old, new in
                 if new > old { noteHealthMoment() }
             }
+            .onChange(of: cleanQuery) { old, new in
+                if old.isEmpty, !new.isEmpty { searchSession = SearchSession(lastAddAtStart: store.lastAddedID) }
+                else if !old.isEmpty, new.isEmpty { searchEnded(old) }
+            }
+            .onChange(of: search.emptyQuery) { _, query in noteUnmatchedSearch(query) }
             .task(id: store.entriesRevision) {
                 // Build the search index while Home is idle, so the first letter typed doesn't pay for it.
                 try? await Task.sleep(for: .seconds(2))
@@ -299,12 +307,21 @@ struct MainView: View {
             .task(id: readyToAskHowItsGoing) { if readyToAskHowItsGoing { await askHowItsGoingWhenIdle() } }
             .alert("Cave Cals good?", isPresented: $askingHowItsGoing) {
                 // Alert buttons may skip the haptic button style, so they play their own feel.
-                Button("Not really") { Haptics.play(.tap); afterAlert { offeringFeedback = true } }.hapticFeel(.none)
-                Button("Yes! Me like") { Haptics.play(.tap); afterAlert { requestReview() } }.hapticFeel(.none)
+                Button("Not really") {
+                    Haptics.play(.tap); UsageStats.shared.event("rating", ["answer": "no"])
+                    afterAlert { offeringFeedback = true }
+                }.hapticFeel(.none)
+                Button("Yes! Me like") {
+                    Haptics.play(.tap); UsageStats.shared.event("rating", ["answer": "yes"])
+                    afterAlert { requestReview() }
+                }.hapticFeel(.none)
             }
             .alert("Help fix cave?", isPresented: $offeringFeedback) {
                 Button("Not now", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)
-                Button("Send Feedback") { Haptics.play(.tap); openURL(CaveCalsLinks.feedback) }.hapticFeel(.none)
+                Button("Send Feedback") {
+                    Haptics.play(.tap); UsageStats.shared.count(.feedbackTaps)
+                    openURL(CaveCalsLinks.feedback)
+                }.hapticFeel(.none)
             } message: {
                 Text("We want Cave Cals to get better. Tell us what’s not working.")
             }
@@ -322,7 +339,7 @@ struct MainView: View {
             Button { sheet = .profile } label: {
                 CaveIcon(.person, size: 26).frame(width: 44, height: 44)
             }.accessibilityLabel("About You").accessibilityIdentifier("profile")
-            Button { sheet = .progress } label: {
+            Button { sheet = .progress; UsageStats.shared.count(.progressViews) } label: {
                 Image("CaveProgress").renderingMode(.template).resizable().scaledToFit()
                     .frame(width: 25, height: 25).frame(width: 44, height: 44)
             }.accessibilityLabel("Progress").accessibilityIdentifier("progress")
@@ -682,7 +699,7 @@ struct MainView: View {
                 let draft = EntryDraft(entry)
                 FoodRow(name: entry.foodDisplayName.isEmpty ? "\(entry.totalCalories.calorieText) calories" : entry.foodDisplayName,
                         calories: entry.totalCalories, suggestionLayout: true,
-                        add: { revealNextAddedEntry = false; add(draft) },
+                        add: { revealNextAddedEntry = false; add(draft, method: .copy) },
                         edit: { edit(draft, revealAfterSave: false) })
                     .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 28))
                     .caveCardRow()
@@ -1146,14 +1163,30 @@ struct MainView: View {
             primeSearchAfterReveal = false
         }
     }
-    @discardableResult private func add(_ input: EntryDraft, source: String? = nil) -> Bool {
+    @discardableResult private func add(_ input: EntryDraft, source: String? = nil, method: LogMethod? = nil) -> Bool {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
-        return store.add([draft])
+        return store.add([draft], method: method)
     }
     /// Logs a fresh copy of an entry on the selected day at the current time.
     private func duplicate(_ entry: CalorieEntry) {
         revealNextAddedEntry = false
-        add(EntryDraft(entry))
+        add(EntryDraft(entry), method: .copy)
+    }
+    /// A search ends when its text is cleared: by adding a result, Clear, Cancel, or leaving.
+    private func searchEnded(_ query: String) {
+        guard let session = searchSession else { return }
+        searchSession = nil
+        UsageStats.shared.count(.searches)
+        if store.lastAddedID == session.lastAddAtStart { UsageStats.shared.count(.searchesAbandoned) }
+        if session.unmatchedQuery == query.lowercased() { UsageStats.shared.searchFoundNothing(query) }
+    }
+    /// Online search finished empty; if nothing local matches either, the query found nothing anywhere.
+    private func noteUnmatchedSearch(_ emptyQuery: String?) {
+        guard let emptyQuery, emptyQuery == cleanQuery.lowercased() else { return }
+        let matches = localMatches, mealQuery = normalizedFoodName(cleanQuery)
+        guard matches.history.isEmpty, matches.common.isEmpty,
+              !store.meals.contains(where: { normalizedFoodName($0.name).contains(mealQuery) }) else { return }
+        searchSession?.unmatchedQuery = emptyQuery
     }
     private func refreshSuggestions() {
         suggestedFoods = FoodHistory.suggestions(

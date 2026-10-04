@@ -74,6 +74,7 @@ import CoreData
                let goal = Double(arguments[index + 1]) { store.saveGoal(goal) }
             #endif
             Persistence.shared = store
+            UsageStats.shared.attach(store)
             store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0) }
             _store = State(initialValue: store)
         }
@@ -120,7 +121,28 @@ struct RootView: View {
         .task { await store.checkCloud(); await weights.syncHealth(); await nutritionHealth.sync(store.entries) }
         .task { await AISubscriptions.listenForPurchases() }
         .task { LogReminders.shared.entriesChanged(store.entries); await LogReminders.shared.refreshAuthorization() }
-        .onChange(of: phase) { _, value in if value == .active { store.refresh(); Task { await store.checkCloud(); await weights.syncHealth(); await LogReminders.shared.refreshAuthorization() } } }
+        .task {
+            UsageStats.shared.traits = { [store, weights, nutritionHealth] in
+                [
+                    "goal": String(store.profile?.dailyGoal != nil), "tracksMacros": String(store.tracksMacros),
+                    "tracksWeight": String(weights.tracking), "healthWeights": String(weights.healthSharing),
+                    "intent": weights.caloriePlan.map { $0.input.intent == .lose ? "lose" : "maintain" } ?? "",
+                    "healthCalories": String(nutritionHealth.enabled), "iCloud": String(store.cloudEnabled),
+                    "reminders": String(LogReminders.shared.isEnabled && LogReminders.shared.isAllowed),
+                    "quickStart": String(UserDefaults.standard.object(forKey: AppStore.showsHomeQuickAddKey) as? Bool ?? true),
+                    "doneEatingButton": String(UserDefaults.standard.object(forKey: AppStore.showsFinishDayKey) as? Bool ?? true),
+                ]
+            }
+            UsageStats.shared.appBecameActive()
+        }
+        .onChange(of: phase) { _, value in
+            if value == .active {
+                store.refresh(); UsageStats.shared.appBecameActive()
+                Task { await store.checkCloud(); await weights.syncHealth(); await LogReminders.shared.refreshAuthorization() }
+            }
+            // Counts go out as the app leaves the screen, in one small request.
+            if value == .background { UsageStats.shared.send() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in store.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSPersistentCloudKitContainer.eventChangedNotification)) { store.cloudEvent($0) }

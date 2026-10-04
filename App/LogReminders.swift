@@ -144,6 +144,7 @@ struct LogReminderPlan {
     func requestPermission() async {
         let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
         if granted { defaults.set(true, forKey: Self.enabledKey) }
+        UsageStats.shared.event("notifications", ["allowed": String(granted)])
         await refreshAuthorization()
     }
 
@@ -208,7 +209,10 @@ final class LogReminderNotificationDelegate: NSObject, UNUserNotificationCenterD
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard await LogReminders.isReminder(response.notification) else { return }
-        await MainActor.run { LoggingActionRouter.shared.open(.add) }
+        await MainActor.run {
+            UsageStats.shared.count(.reminderTaps)
+            LoggingActionRouter.shared.open(.add)
+        }
     }
 }
 

@@ -37,6 +37,8 @@ struct OnboardingView: View {
     var isRevising = false
     var isPreview = false
     var onCompleted: () -> Void = {}
+    /// Steps already reported to the stats this time through setup.
+    @State private var reportedSteps: Set<Int> = []
 
     private var parsedHeight: Double? {
         guard let h = WeightUnit.parse(height) else { return nil }
@@ -149,7 +151,7 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingManual) {
                 SetupView(goal: isRevising ? store.profile?.dailyGoal : nil, isAdjustingGoal: true,
-                          saveAction: { saveTrackingAndGoal($0) }, onSaved: { complete() })
+                          saveAction: { saveTrackingAndGoal($0) }, onSaved: { complete(goal: "manual") })
             }
             .alert("Clear saved answers?", isPresented: $confirmingClear) {
                 // Alert buttons may skip the haptic button style, so they play their own feel.
@@ -159,12 +161,12 @@ struct OnboardingView: View {
                 Text("Removes your saved age, gender, height, and plan answers. Your calorie goal and weigh-ins stay.")
             }
             .alert("Skip plan?", isPresented: $confirmingSkip) {
-                Button("Yes, skip plan") { Haptics.play(.tap); skipPlan() }.hapticFeel(.none)
-                Button("No, me build plan") { Haptics.play(.tap); advance() }.hapticFeel(.none)
+                Button("Yes, skip plan") { Haptics.play(.tap); reportChoice("skipConfirmed"); skipPlan() }.hapticFeel(.none)
+                Button("No, me build plan") { Haptics.play(.tap); reportChoice("skipDeclined"); advance() }.hapticFeel(.none)
             } message: {
                 Text("Cave Cals help pick ideal daily calorie target to reach goal. Take under one minute.")
             }
-            .onAppear { loadSavedPlan() }
+            .onAppear { loadSavedPlan(); reportStep(step) }
             .onChange(of: unit) { old, new in
                 // Converting fills the height boxes, which must not trigger the typing jumps below.
                 if initializedUnit { field = nil; convertUnits(from: old, to: new) }
@@ -440,7 +442,7 @@ struct OnboardingView: View {
                     .accessibilityIdentifier("manualSetup")
                 Button("Start without a goal") { finishWithoutGoal() }.frame(minHeight: 44).accessibilityIdentifier("skipGoal")
             } else {
-                Button { advance() } label: {
+                Button { if step == 0 { reportChoice("buildPlan") }; advance() } label: {
                     HStack(spacing: 10) {
                         Text(step == 0 ? "Build Plan" : step == 6 ? (isRevising ? "Save my plan" : "Let’s go") : skippingPlan ? "Let’s go" : "Continue")
                             .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -449,7 +451,7 @@ struct OnboardingView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.hapticButtonStyle(.borderedProminent).hapticFeel(step == 6 || skippingPlan ? .success : .tap).disabled(!validStep || saving).accessibilityIdentifier("onboardingContinue")
                 if step == 0 && !isRevising {
-                    Button("Just start tracking") { confirmingSkip = true }.frame(minHeight: 44).padding(.top, 6)
+                    Button("Just start tracking") { reportChoice("justStart"); confirmingSkip = true }.frame(minHeight: 44).padding(.top, 6)
                         .accessibilityIdentifier("skipGoal")
                 }
                 if step == 0 && isRevising && weights.caloriePlan != nil {
@@ -546,6 +548,7 @@ struct OnboardingView: View {
     private func changeStep(_ next: Int) {
         field = nil; error = nil
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = next }
+        reportStep(next)
         // Measurements and Set Goal open with their first box ready for typing (after the step slides in).
         let first = next == 2 ? "planHeight" : next == 4 && intent == .lose ? "planGoalWeight" : nil
         guard let first else { return }
@@ -583,11 +586,26 @@ struct OnboardingView: View {
         skippingPlan = true; changeStep(5)
     }
     private func finishWithoutGoal() {
-        if saveTrackingAndGoal(nil) { complete() }
+        if saveTrackingAndGoal(nil) { complete(goal: "none") }
     }
-    private func complete() {
-        if isRevising || isPreview { dismiss() }
-        else { onCompleted() }
+    /// `goal` is plan, manual, or none, for the setup funnel.
+    private func complete(goal: String) {
+        if isRevising || isPreview { dismiss(); return }
+        UsageStats.shared.event("onboarding.finished", [
+            "goal": goal, "intent": goal == "plan" ? (intent == .lose ? "lose" : "maintain") : "",
+            "weight": String(trackWeight), "macros": String(trackMacros),
+        ])
+        onCompleted()
+    }
+    private static let stepStatNames = ["welcome", "aboutYou", "measurements", "usualWeek", "setGoal", "tracking", "target"]
+    /// New-user setup only: revisions and the developer preview aren't part of the funnel.
+    private func reportStep(_ value: Int) {
+        guard !isRevising, !isPreview, Self.stepStatNames.indices.contains(value), reportedSteps.insert(value).inserted else { return }
+        UsageStats.shared.event("onboarding.step", ["step": Self.stepStatNames[value]])
+    }
+    private func reportChoice(_ choice: String) {
+        guard !isRevising, !isPreview else { return }
+        UsageStats.shared.event("onboarding.choice", ["choice": choice])
     }
     private func saveTrackingAndGoal(_ goal: Double?) -> Bool {
         if !isRevising && !weights.setTracking(trackWeight) {
@@ -605,7 +623,7 @@ struct OnboardingView: View {
         guard weights.saveCaloriePlan(SavedCaloriePlan(input: input, calorieGoal: goal), unit: unit, trackWeight: trackWeight) else {
             error = weights.error; saving = false; return
         }
-        if store.saveGoal(goal, tracksMacros: isRevising ? nil : trackMacros) { complete() }
+        if store.saveGoal(goal, tracksMacros: isRevising ? nil : trackMacros) { complete(goal: "plan") }
         else { error = store.error }
         saving = false
     }

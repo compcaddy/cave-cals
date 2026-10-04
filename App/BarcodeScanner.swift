@@ -24,7 +24,10 @@ struct BarcodeSheet: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if permission == .authorized, cameraError == nil, !loading {
-                        CameraScanner(onCode: lookup, onError: { cameraError = $0 })
+                        CameraScanner(onCode: lookup, onError: { message in
+                            cameraError = message
+                            UsageStats.shared.error(.barcode, code: "camera", message: message)
+                        })
                             .frame(height: 250).clipShape(RoundedRectangle(cornerRadius: 20))
                             .overlay { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.8), lineWidth: 2).frame(width: 230, height: 130).allowsHitTesting(false) }
                             .accessibilityLabel("Barcode camera view")
@@ -57,6 +60,7 @@ struct BarcodeSheet: View {
         let cleaned = raw.filter(\.isNumber)
         guard (8...14).contains(cleaned.count) else { return }
         loading = true; message = nil
+        UsageStats.shared.scan(.barcode)
         task?.cancel()
         task = Task { @MainActor in
             // A product logged before goes straight into the log with Undo; Home reveals the new row.
@@ -67,13 +71,21 @@ struct BarcodeSheet: View {
             var draft = store.localBarcode(cleaned)
             if draft == nil {
                 do { draft = try await OpenFoodFacts.shared.lookup(barcode: cleaned)?.draft }
-                catch { if !Task.isCancelled { message = "Lookup is unavailable. Enter calories to save this barcode for next time." } }
+                catch {
+                    if !Task.isCancelled {
+                        message = "Lookup is unavailable. Enter calories to save this barcode for next time."
+                        UsageStats.shared.error(.barcode, error)
+                    }
+                }
             }
             guard !Task.isCancelled else { return }
             loading = false
             if var draft { draft.timestamp = date; draft.entryID = nil; draft.source = "barcode"; editor = draft }
             else {
-                if message == nil { message = "Barcode not found. Save it once to use it next time." }
+                if message == nil {
+                    message = "Barcode not found. Save it once to use it next time."
+                    UsageStats.shared.count("barcodesNotFound")
+                }
                 var manual = EntryDraft(timestamp: date); manual.barcode = cleaned; manual.source = "barcode"; editor = manual
             }
         }
