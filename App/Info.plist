@@ -5,7 +5,7 @@
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take food photos for calorie estimates and scan food barcodes.</string>
+	<string>Take food and recipe photos for calorie estimates, scan food barcodes, and take progress photos that stay on this iPhone.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -30,10 +30,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.philstarkovich.cavecals.logging</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).logging</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>cavecals</string>
+				<string>$(CAVE_URL_SCHEME)</string>
 			</array>
 		</dict>
 	</array>
@@ -41,7 +41,7 @@
 	<array>
 		<dict>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.philstarkovich.cavecals.log.voice</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).log.voice</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Voice Log</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -49,7 +49,7 @@
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.philstarkovich.cavecals.log.image</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).log.image</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Meal Scan</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -57,7 +57,7 @@
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.philstarkovich.cavecals.log.barcode</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).log.barcode</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Barcode Scan</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -65,7 +65,7 @@
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.philstarkovich.cavecals.log.add</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).log.add</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Search/Add</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>

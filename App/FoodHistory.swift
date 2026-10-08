@@ -115,7 +115,7 @@ struct SuggestionReplayMetrics: Equatable {
 
 enum FoodHistory {
     private static let day: TimeInterval = 86_400
-    private static let suggestionLimit = 10
+    static let suggestionLimit = 10
 
     private static func key(for entry: CalorieEntry) -> String {
         entry.externalID.map { "external:\($0)" } ?? "name:\(normalizedFoodName(entry.name))"
@@ -144,7 +144,7 @@ enum FoodHistory {
                 if score(a) == score(b) { return a[0].timestamp < b[0].timestamp }
                 return score(a) < score(b)
             }!.max { $0.timestamp < $1.timestamp }!
-            var draft = EntryDraft(best); draft.entryID = nil; draft.source = "historical"
+            var draft = EntryDraft(best); draft.entryID = nil; draft.source = "historical"; draft.mealType = nil
             return HistoricalFood(id: key, draft: draft, uses: recent)
         }
     }
@@ -195,7 +195,24 @@ enum FoodHistory {
         guard counts.count >= 3, counts.filter({ $0 > 1 }).count * 2 > counts.count else { return false }
         return loggedToday < counts[counts.count / 2]
     }
-    static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = [], hiddenIDs: Set<String> = []) -> [HistoricalFood] {
+    /// Home's Quick Start offers foods for starting the day at this hour: ones mostly logged from an hour
+    /// before now to three hours after. At 7 am, food usually logged after 10 am stays out; someone whose first
+    /// meal comes at noon sees what they log from noon to 3 pm. A food counts when at least a quarter of its
+    /// recent logs fall in that window, so a dinner once eaten for breakfast doesn't qualify.
+    static func startsDay(_ food: HistoricalFood, at date: Date, calendar: Calendar = .current) -> Bool {
+        let now = minuteOfDay(date, calendar: calendar)
+        let recent = food.uses.filter { $0.timestamp <= date }.prefix(30)
+        let inWindow = recent.filter { entry in
+            // Minutes after now, wrapped to -12...+12 hours so the window can cross midnight.
+            var offset = minuteOfDay(entry.timestamp, calendar: calendar) - now
+            if offset > 720 { offset -= 1_440 } else if offset <= -720 { offset += 1_440 }
+            return offset >= -60 && offset <= 180
+        }.count
+        return inWindow > 0 && inWindow * 4 >= recent.count
+    }
+    /// `limit: nil` returns every food in ranked order, for lists that filter before trimming.
+    static func suggestions(entries: [CalorieEntry], date: Date, calendar: Calendar = .current, pinnedIDs: [String] = [],
+                            hiddenIDs: Set<String> = [], limit: Int? = suggestionLimit) -> [HistoricalFood] {
         let eligible = entries
             .filter { $0.timestamp <= date && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.timestamp < $1.timestamp }
@@ -232,7 +249,7 @@ enum FoodHistory {
         let pinned = pinnedIDs.filter { !hiddenIDs.contains($0) }.compactMap { foodsByID[$0] }
         let pinnedSet = Set(pinned.map(\.id))
         let unpinned = ranked.map(\.food).filter { !pinnedSet.contains($0.id) && !hiddenIDs.contains($0.id) }
-        return Array((pinned + unpinned).prefix(suggestionLimit))
+        return Array((pinned + unpinned).prefix(limit ?? .max))
     }
 
     static func replayMetrics(entries: [CalorieEntry], maximumSamples: Int = 500, calendar: Calendar = .current) -> SuggestionReplayMetrics {
@@ -419,6 +436,7 @@ enum FoodHistory {
         var draft = EntryDraft(entry)
         draft.entryID = nil
         draft.source = "historical"
+        draft.mealType = nil
         return draft
     }
 

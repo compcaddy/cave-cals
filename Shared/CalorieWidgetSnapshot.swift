@@ -18,7 +18,7 @@ struct CalorieWidgetSnapshot: Codable, Equatable {
 }
 
 enum CalorieWidgetStorage {
-    static let groupID = "group.com.philstarkovich.cavecals"
+    static let groupID = AppEnvironment.widgetGroup
     static let kind = "QuickLogWidget"
     private static let key = "calorieWidget.snapshot.v1"
     static func read(from defaults: UserDefaults? = UserDefaults(suiteName: groupID)) -> CalorieWidgetSnapshot? {

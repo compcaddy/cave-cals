@@ -24,12 +24,12 @@ enum LoggingAction: String, CaseIterable, Identifiable {
         case .add: "plus"
         }
     }
-    var url: URL { URL(string: "cavecals://log/\(rawValue)")! }
-    var shortcutType: String { "com.philstarkovich.cavecals.log.\(rawValue)" }
+    var url: URL { URL(string: "\(AppEnvironment.urlScheme)://log/\(rawValue)")! }
+    var shortcutType: String { "\(AppEnvironment.appID).log.\(rawValue)" }
 
     init?(url: URL) {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              parts.scheme?.lowercased() == "cavecals", parts.host == "log",
+              parts.scheme?.lowercased() == AppEnvironment.urlScheme, parts.host == "log",
               parts.user == nil, parts.password == nil, parts.port == nil,
               parts.query == nil, parts.fragment == nil,
               let action = Self.allCases.first(where: { parts.path == "/\($0.rawValue)" }) else { return nil }
@@ -50,7 +50,7 @@ enum LoggingAction: String, CaseIterable, Identifiable {
         /// nil is an explicit Home request; no pending request is represented by pending == nil.
         let action: LoggingAction?
     }
-    static let homeURL = URL(string: "cavecals://home")!
+    static let homeURL = URL(string: "\(AppEnvironment.urlScheme)://home")!
     private(set) var pending: Request?
 
     func open(_ action: LoggingAction) { pending = Request(action: action) }

@@ -50,7 +50,7 @@ enum NutritionHealthError: LocalizedError {
         .fat: (HKQuantityType(.dietaryFatTotal), .gram()),
         .fiber: (HKQuantityType(.dietaryFiber), .gram()),
     ]
-    var available: Bool { HKHealthStore.isHealthDataAvailable() }
+    var available: Bool { !AppEnvironment.isDevelopment && HKHealthStore.isHealthDataAvailable() }
     var authorized: Bool { available && allowed(.energy) }
     private func allowed(_ nutrient: NutritionExport.Nutrient) -> Bool {
         store.authorizationStatus(for: Self.types[nutrient]!.type) == .sharingAuthorized
@@ -87,6 +87,7 @@ enum NutritionHealthError: LocalizedError {
         for nutrient in cleared { try await delete(export.id, nutrient) }
     }
     func delete(_ id: UUID) async throws {
+        guard !AppEnvironment.isDevelopment else { throw NutritionHealthError.unavailable }
         for nutrient in NutritionExport.Nutrient.allCases where allowed(nutrient) { try await delete(id, nutrient) }
     }
     private func delete(_ id: UUID, _ nutrient: NutritionExport.Nutrient) async throws {

@@ -18,19 +18,25 @@ struct FatSecretAttribution: View {
 
 enum MainSheet: Identifiable {
     case entry(EntryDraft), searchEntry(EntryDraft, String?), namedEntry(EntryDraft), quickEntry(EntryDraft), settings, profile, barcode(Date), meal(UUID, Date), photo, voice, calendar
+    /// A one-tap add while adding asks for a meal: the editor, filled in, with the meal choice showing.
+    case chooseMeal(EntryDraft, LogMethod?)
     case weighIn, progress, appleHealth
-    case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport
+    /// Home's Protein, Carbs, or Fat: the day's foods and their grams.
+    case macros(MacroKind)
+    case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport(RecipeImportSource)
     var id: String {
         switch self {
         case .entry(let draft): "entry-\(draft.id)"
         case .searchEntry(let draft, _): "search-entry-\(draft.id)"
         case .namedEntry(let draft): "named-entry-\(draft.id)"
         case .quickEntry(let draft): "quick-entry-\(draft.id)"
+        case .chooseMeal(let draft, _): "choose-meal-\(draft.id)"
         case .settings: "settings"
         case .profile: "profile"
         case .progress: "progress"
         case .weighIn: "weigh-in"
         case .appleHealth: "apple-health"
+        case .macros(let kind): "macros-\(kind.rawValue)"
         case .barcode: "barcode"
         case .meal(let id, _): "meal-\(id)"
         case .photo: "photo"
@@ -39,7 +45,7 @@ enum MainSheet: Identifiable {
         case .newMeal: "new-meal"
         case .mealEditor(let route): "meal-editor-\(route.id)"
         case .mealCapture(let mode): "meal-capture-\(mode == .photo ? "photo" : "voice")"
-        case .mealImport: "meal-import"
+        case .mealImport(let source): "meal-import-\(source.rawValue)"
         }
     }
 }
@@ -53,6 +59,48 @@ func monthDayLabel(_ date: Date) -> String {
     ordinal.locale = Locale(identifier: "en_US")
     ordinal.numberStyle = .ordinal
     return "\(month) \(ordinal.string(from: NSNumber(value: day)) ?? String(day))"
+}
+
+/// A hand-drawn arrow pointing down: a gentle bow with an open head. Wider frames bow more.
+private struct GuideArrow: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            let tip = CGPoint(x: rect.midX, y: rect.maxY - 1)
+            path.move(to: CGPoint(x: rect.midX - rect.width * 0.22, y: rect.minY + 1))
+            path.addQuadCurve(to: tip, control: CGPoint(x: rect.midX + rect.width * 0.3, y: rect.midY))
+            path.move(to: CGPoint(x: tip.x - 5, y: tip.y - 6))
+            path.addLine(to: tip)
+            path.addLine(to: CGPoint(x: tip.x + 5, y: tip.y - 6))
+        }
+    }
+}
+
+/// Home's first-days guide: labeled arrows pointing at search and the capture buttons.
+enum LoggingGuide {
+    /// Shown while today has nothing logged, until food has been logged on two different days;
+    /// from the third day on it's gone.
+    static func shows(entries: [CalorieEntry], today: Date, calendar: Calendar = .current) -> Bool {
+        var days = Set<Date>()
+        for entry in entries {
+            let day = calendar.startOfDay(for: entry.timestamp)
+            if calendar.isDate(day, inSameDayAs: today) { return false }
+            days.insert(day)
+            // Stops early, so a long diary costs only a few entries on each Home render.
+            if days.count >= 2 { return false }
+        }
+        return true
+    }
+    /// UI tests and screenshots start with an empty diary; they see the guide only when a DEBUG test asks.
+    static var isAllowed: Bool {
+        optedInForTesting || !ProcessInfo.processInfo.arguments.contains { $0 == "--uitesting" || $0 == "--screenshots" }
+    }
+    private static var optedInForTesting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--logging-guide")
+        #else
+        false
+        #endif
+    }
 }
 
 struct MainView: View {
@@ -81,6 +129,8 @@ struct MainView: View {
     @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDaySetting = true
     @ScaledMetric(relativeTo: .subheadline) private var quickStartRowHeight: CGFloat = 44
     @State private var suggestedFoods: [HistoricalFood] = []
+    /// Home's Quick Start pool: foods for starting the day at this hour (`FoodHistory.startsDay`), in Quick Add order.
+    @State private var quickStartFoods: [HistoricalFood] = []
     @State private var search: FoodSearchState = {
         #if DEBUG && targetEnvironment(simulator)
         if SearchLayoutFixture.isEnabled {
@@ -110,6 +160,8 @@ struct MainView: View {
     @State private var searchSession: SearchSession?
     private struct SearchSession { var lastAddAtStart: UUID?; var unmatchedQuery: String? }
     @FocusState private var searching: Bool
+    @State private var searchFieldWidth: CGFloat = 0
+    @ScaledMetric(relativeTo: .body) private var searchFontSize: CGFloat = 20
     private var loggingDate: Date { Day.loggingDate(selected) }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     // Resolve history for the current query synchronously, before any remote response or cache hit.
@@ -351,9 +403,14 @@ struct MainView: View {
         .padding(.horizontal, 20).padding(.top, 8)
         DailySummaryCard(day: selected, calories: store.total(selected), calorieGoal: store.goal(selected),
                          macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
-                         macroGoals: store.macroGoals(selected), isVisible: sheet == nil, shown: $summaryFigures)
+                         macroGoals: store.macroGoals(selected), isVisible: sheet == nil, shown: $summaryFigures,
+                         openMacro: { kind in
+                             UsageStats.shared.event("macros.breakdown", ["kind": kind.rawValue])
+                             sheet = .macros(kind)
+                         })
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
-        if !store.dayEntries(selected).isEmpty {
+        // A day sorted into meals labels each meal in the list instead.
+        if !store.dayEntries(selected).isEmpty, mealGroups == nil {
             Text(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected))
                 .font(.cave(.subheadline).bold()).foregroundStyle(Color.caveOrange)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -378,6 +435,7 @@ struct MainView: View {
         Divider().padding(.horizontal, 20).opacity(listHasRows ? 0 : 1)
     }
 
+    private static let showsLoggedPill = false
     private var listHasRows: Bool {
         switch listMode {
         case .logged: !store.dayEntries(selected).isEmpty
@@ -388,8 +446,11 @@ struct MainView: View {
 
     private var foodListPicker: some View {
         PillRowLayout {
-            foodListButton(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected),
-                           glyph: .check, mode: .logged)
+            // The Today pill is hidden for now (October 7, 2026): Home's log already re-adds and duplicates.
+            if Self.showsLoggedPill {
+                foodListButton(Calendar.current.isDate(selected, inSameDayAs: today) ? "Today" : monthDayLabel(selected),
+                               glyph: .check, mode: .logged)
+            }
             foodListButton("Quick Add", glyph: .lightning, mode: .quickAdd)
             foodListButton("Meals", glyph: .meals, mode: .meals)
         }
@@ -474,11 +535,15 @@ struct MainView: View {
             EntryEditorSheet(draft: draft, focusCaloriesOnOpen: true, blankCaloriesOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
         case .quickEntry(let draft):
             EntryEditorSheet(draft: draft, focusNameOnOpen: true, onCancel: { sheet = nil }).id(draft.id)
+        case .chooseMeal(let draft, let method):
+            EntryEditorSheet(draft: draft, onCancel: { sheet = nil }, choosesMeal: true, method: method).id(draft.id)
         case .settings: SettingsView()
         case .profile: ProfileView()
         case .progress: ProgressScreen()
         case .weighIn: WeightEditorSheet(record: weights.record(on: Date()), unit: weights.unit)
         case .appleHealth: AppleHealthOfferSheet()
+        case .macros:
+            MacroBreakdownSheet(day: selected, title: Calendar.current.isDateInToday(selected) ? "Today’s macros" : "\(monthDayLabel(selected)) macros")
         case .barcode(let date): BarcodeSheet(date: date)
         case .meal(let id, let date): MealAddSheet(mealID: id, date: date)
         case .photo: AIInputSheet(mode: .photo, date: loggingDate).id("photo")
@@ -492,9 +557,9 @@ struct MainView: View {
             AIInputSheet(mode: mode, date: loggingDate) { drafts in
                 sheet = .mealEditor(MealRoute(items: drafts))
             }.id("meal-\(mode == .photo ? "photo" : "voice")")
-        case .mealImport:
-            MealLinkImportSheet { name, drafts in
-                sheet = .mealEditor(MealRoute(name: name, items: drafts))
+        case .mealImport(let source):
+            RecipeImportSheet(source: source) { recipe in
+                sheet = .mealEditor(MealRoute(name: recipe.name, items: recipe.items, servings: recipe.servings))
             }
         case nil: EmptyView()
         }
@@ -521,6 +586,13 @@ struct MainView: View {
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { meal in
                 FoodRow(name: meal.name, calories: meal.calories, add: {
                     revealNextAddedEntry = true
+                    // Adding a saved meal that asks for a meal type goes through Add Meal to pick it.
+                    if store.mealSettings.asks {
+                        Haptics.play(.tap)
+                        searching = false
+                        sheet = .meal(meal.id, loggingDate)
+                        return
+                    }
                     primeSearchAfterReveal = true
                     if !store.addMeal(meal, date: loggingDate) {
                         revealNextAddedEntry = false
@@ -555,8 +627,15 @@ struct MainView: View {
     }
     /// The day's log sits back a little so the totals above lead.
     private static let homeLogOpacity = 0.8
+    /// The selected day's food by meal, when meal types are on and something that day has one; otherwise nil
+    /// and the day shows as one list under "Today".
+    private var mealGroups: [MealGroup<CalorieEntry>]? {
+        MealSections.group(store.dayEntries(selected), settings: store.mealSettings)
+    }
     @ViewBuilder private var loggedRows: some View {
-            if store.dayEntries(selected).isEmpty {
+            let entries = store.dayEntries(selected)
+            // The first-days guide's arrows already say what to do, so "No log yet." waits until they're gone.
+            if entries.isEmpty && !showsLoggingGuide {
                 Text(Calendar.current.isDateInToday(selected)
                      ? "No log yet."
                      : "No food logged for this day.")
@@ -566,65 +645,122 @@ struct MainView: View {
                     .padding(.top, 16)
                     .listRowSeparator(.hidden)
             }
-            Section {
-                ForEach(store.dayEntries(selected)) { entry in
-                    Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
-                            Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                .lineLimit(1).truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(entry.totalCalories.calorieText)
-                                .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
-                                .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
-                            CaveIcon(.pencil, size: 22).foregroundStyle(.secondary).padding(.leading, 6)
-                                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
-                                .accessibilityHidden(true)
-                        }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
-                        .opacity(Self.homeLogOpacity)
+            if let groups = MealSections.group(entries, settings: store.mealSettings) {
+                ForEach(groups, id: \.id) { group in
+                    Section {
+                        ForEach(group.items) { entry in loggedRow(entry) }
+                    } header: {
+                        mealHeader(group, first: group.id == groups.first?.id)
                     }
-                    .hapticButtonStyle(.plain).id(entry.id)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
-                    .caveCardRow(opacity: Self.homeLogOpacity)
-                    .accessibilityIdentifier("entry-\(entry.id)")
-                    .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
-                    .contextMenu {
-                        Button {
-                            searching = false
-                            sheet = .entry(EntryDraft(entry))
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button {
-                            duplicate(entry)
-                        } label: {
-                            Label("Duplicate", systemImage: "plus.square.on.square")
-                        }.hapticFeel(.success)
-                        Button(role: .destructive) {
-                            store.delete(entry)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                    // A full swipe deletes (rightmost action); Duplicate sits to its left.
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button("Delete", role: .destructive) { store.delete(entry) }
-                            .tint(.red)
-                        Button("Duplicate") { duplicate(entry) }
-                            .tint(.gray).hapticFeel(.success)
-                    }
+                    .listSectionSeparator(.hidden)
+                    .listSectionSpacing(0)
                 }
-            }.listSectionSeparator(.hidden)
+            } else {
+                Section {
+                    ForEach(entries) { entry in loggedRow(entry) }
+                }.listSectionSeparator(.hidden)
+            }
             if showsHomeQuickAddSetting, Calendar.current.isDate(selected, inSameDayAs: today), store.showsHomeQuickAdd(on: today),
                !store.isFinished(today) {
                 homeQuickAddRows
             }
     }
+    /// One meal's label on Home, with its calories lined up over the rows' calories.
+    private func mealHeader(_ group: MealGroup<CalorieEntry>, first: Bool) -> some View {
+        let calories = group.items.reduce(0) { $0 + $1.totalCalories.rounded() }
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(group.title).font(.cave(.subheadline).bold()).foregroundStyle(Color.caveOrange)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(calories.calorieText).font(.cave(.subheadline)).foregroundStyle(Color.secondary).monospacedDigit()
+        }
+        // The list pads a first header; pull it up toward the totals like the "Today" label. Later meals get air above.
+        .padding(.top, first ? -10 : 16).padding(.bottom, 2)
+        // Trailing inset matches the rows' card inset, padding, and pencil, so the totals align with their calories.
+        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 68))
+        .listRowSeparator(.hidden)
+        .environment(\.defaultMinListRowHeight, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(group.title), \(calories.calorieText) calories")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("mealSection-\(group.id)")
+    }
+    private func loggedRow(_ entry: CalorieEntry) -> some View {
+        Button { searching = false; sheet = .entry(EntryDraft(entry)) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(entry.timestamp, format: .dateTime.hour().minute()).font(.custom("Schoolbell-Regular", size: 14, relativeTo: .caption)).foregroundStyle(.secondary).frame(width: 55, alignment: .leading)
+                Text(entry.foodDisplayName).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                    .lineLimit(1).truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(entry.totalCalories.calorieText)
+                    .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .body)).foregroundStyle(Color.primary.opacity(0.92))
+                    .multilineTextAlignment(.trailing).fixedSize(horizontal: true, vertical: false)
+                CaveIcon(.pencil, size: 22).foregroundStyle(.secondary).padding(.leading, 6)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
+                    .accessibilityHidden(true)
+            }.padding(.horizontal, 8).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
+            .opacity(Self.homeLogOpacity)
+        }
+        .hapticButtonStyle(.plain).id(entry.id)
+        .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
+        .caveCardRow(opacity: Self.homeLogOpacity)
+        .accessibilityIdentifier("entry-\(entry.id)")
+        .accessibilityLabel("\(entry.name.isEmpty ? "Entry" : entry.name), \(entry.totalCalories.calorieText) calories, \(entry.timestamp.formatted(date: .omitted, time: .shortened))")
+        .contextMenu {
+            Button {
+                searching = false
+                sheet = .entry(EntryDraft(entry))
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            if store.mealSettings.tracks { moveToMealMenu(entry) }
+            Button {
+                duplicate(entry)
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }.hapticFeel(.success)
+            Button(role: .destructive) {
+                store.delete(entry)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        // A full swipe deletes (rightmost action); Duplicate sits to its left.
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button("Delete", role: .destructive) { store.delete(entry) }
+                .tint(.red)
+            Button("Duplicate") { duplicate(entry) }
+                .tint(.gray).hapticFeel(.success)
+        }
+    }
+    /// Long-press → Move to: files the food under another meal type, or none.
+    @ViewBuilder private func moveToMealMenu(_ entry: CalorieEntry) -> some View {
+        let settings = store.mealSettings
+        Menu {
+            ForEach(settings.visibleTypes) { type in
+                Button {
+                    withAnimation { _ = store.setMealType(type.id, for: entry) }
+                } label: {
+                    if entry.mealType == type.id { Label(type.name, systemImage: "checkmark") } else { Text(type.name) }
+                }.hapticFeel(.selection)
+            }
+            if settings.type(id: entry.mealType) != nil {
+                Button {
+                    withAnimation { _ = store.setMealType(nil, for: entry) }
+                } label: {
+                    Text("No meal")
+                }.hapticFeel(.selection)
+            }
+        } label: {
+            Label("Move to", systemImage: "fork.knife")
+        }
+        .accessibilityIdentifier("moveToMeal")
+    }
     /// Home's top Quick Add picks, so the day's first foods are one tap each. A pick leaves once added,
     /// unless it's usually logged more than once a day; the next suggestion takes its place.
     private var homeQuickAddPicks: [HistoricalFood] {
         let logged = Set(store.dayEntries(today).map(FoodHistory.foodID))
-        return Array(suggestedFoods.filter { food in
+        return Array(quickStartFoods.filter { food in
             food.id == settlingHomeQuickAddID || !logged.contains(food.id)
                 || FoodHistory.expectsAnotherToday(foodID: food.id, entries: store.entries, date: Date())
         }.prefix(10))
@@ -846,6 +982,7 @@ struct MainView: View {
             TimelineView(.everyMinute) { context in
                 if offersFinishDay(at: context.date) { finishDayReminder }
             }
+            if showsLoggingGuide { loggingGuide.transition(.opacity) }
             VStack(spacing: 0) {
                 if let toast = store.toast {
                     HStack {
@@ -884,7 +1021,10 @@ struct MainView: View {
                 HStack(spacing: 4) {
                     HStack(spacing: 8) {
                         CaveIcon(.search, size: 20).foregroundStyle(.secondary)
-                        TextField(searchExpanded ? "search food or enter cals" : "search / add", text: $query)
+                        TextField(searchExpanded ? "search food or enter cals" : Self.compactSearchPrompt, text: $query)
+                            // Beside the capture buttons the field is narrow; "search / add" shrinks to fit, never cut off.
+                            .font(searchExpanded ? .cave(.body) : .custom("Schoolbell-Regular", size: compactSearchFontSize))
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { searchFieldWidth = $0 }
                             .focused($searching).submitLabel(.search).autocorrectionDisabled()
                             // Tapping the field left ready on Home opens add mode, as a first tap would.
                             .simultaneousGesture(TapGesture().onEnded {
@@ -920,6 +1060,66 @@ struct MainView: View {
             // the keyboard slides away faster than the footer follows.
             .background { Color.caveSurface.ignoresSafeArea() }
         }
+        .animation(.easeInOut(duration: 0.22), value: showsLoggingGuide)
+    }
+    /// Cheap checks first: Home re-renders on every keystroke, and the guide never shows while typing.
+    private var showsLoggingGuide: Bool {
+        !addMode && !searching && cleanQuery.isEmpty && store.toast == nil
+            && Calendar.current.isDate(selected, inSameDayAs: today)
+            && LoggingGuide.isAllowed && LoggingGuide.shows(entries: store.entries, today: today)
+    }
+    /// The search field's note sits up top with a long arrow down to the field; the capture buttons'
+    /// labels sit just above them, each with its own short arrow. Columns match the footer below.
+    private var loggingGuide: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Manually add calories (e.g., 650)")
+                Text("or search for any food")
+            }
+            .font(.cave(.subheadline))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            HStack(alignment: .bottom, spacing: 4) {
+                Color.clear.frame(maxWidth: .infinity).frame(height: 1)
+                HStack(alignment: .bottom, spacing: 0) {
+                    guideLabel("Voice\nLog")
+                    guideLabel("Barcode\nScan")
+                    guideLabel("Meal\nScan")
+                }
+                .accessibilityHidden(true)
+            }
+            // Room above the capture labels: lifts the note clear of them and lengthens the search arrow.
+            .padding(.top, 22)
+            // The search arrow runs from under its note down past the capture labels to the field.
+            .overlay {
+                HStack(spacing: 4) {
+                    GuideArrow().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+                        .frame(width: 24).frame(maxWidth: .infinity)
+                    Color.clear.frame(width: 3 * 63)
+                }
+                .accessibilityHidden(true)
+            }
+        }
+        .foregroundStyle(.secondary)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.caveBackground)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("loggingGuide")
+    }
+    private func guideLabel(_ title: String) -> some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.cave(.footnote))
+                .multilineTextAlignment(.center)
+                .lineLimit(2).minimumScaleFactor(0.75)
+                .fixedSize(horizontal: false, vertical: true)
+            GuideArrow().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+                .frame(width: 18, height: 25)
+        }
+        .frame(width: 63)
     }
     private var weighInReminder: some View {
         reminderCard(glyph: .person, title: "Log today’s weight", navigates: true,
@@ -1050,6 +1250,14 @@ struct MainView: View {
         .background(Color.caveBackground)
     }
     private var searchExpanded: Bool { addMode || !query.isEmpty || searching }
+    private static let compactSearchPrompt = "search / add"
+    /// The body size (20 pt, following Dynamic Type), or smaller when "search / add" wouldn't fit the narrow field.
+    private var compactSearchFontSize: CGFloat {
+        let font = UIFont(name: "Schoolbell-Regular", size: searchFontSize) ?? .systemFont(ofSize: searchFontSize)
+        let needed = (Self.compactSearchPrompt as NSString).size(withAttributes: [.font: font]).width + 6
+        guard searchFieldWidth > 0, needed > searchFieldWidth else { return searchFontSize }
+        return max(searchFontSize * 0.6, (searchFontSize * searchFieldWidth / needed).rounded(.down))
+    }
     private var entryShortcuts: some View {
         HStack(spacing: 0) {
             Button {
@@ -1151,11 +1359,17 @@ struct MainView: View {
         case .today: sheet = .mealEditor(MealRoute(fromDay: Date()))
         case .photo: sheet = .mealCapture(.photo)
         case .voice: sheet = .mealCapture(.voice)
-        case .link: sheet = .mealImport
+        case .recipe(let source): sheet = .mealImport(source)
         case .manual: sheet = .mealEditor(MealRoute())
         }
     }
     private func addFromSearch(_ input: EntryDraft) {
+        // Picking a meal happens in the editor; saving there returns Home like the pencil does.
+        if store.mealSettings.asks {
+            revealNextAddedEntry = true
+            chooseMeal(input)
+            return
+        }
         revealNextAddedEntry = true
         primeSearchAfterReveal = true
         if !add(input) {
@@ -1163,9 +1377,23 @@ struct MainView: View {
             primeSearchAfterReveal = false
         }
     }
+    /// Logs a fresh copy now; its meal type comes from the time it's logged, not from the food it copies.
+    /// While adding asks for a meal, the editor opens instead (filled in, meal choice showing) and this returns false.
     @discardableResult private func add(_ input: EntryDraft, source: String? = nil, method: LogMethod? = nil) -> Bool {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
+        draft.mealType = nil
+        if store.mealSettings.asks {
+            chooseMeal(draft, method: method)
+            return false
+        }
         return store.add([draft], method: method)
+    }
+    /// One-tap adds become two taps when adding asks for a meal: pick it in the filled-in editor, then Add.
+    private func chooseMeal(_ input: EntryDraft, method: LogMethod? = nil) {
+        var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.mealType = nil
+        Haptics.play(.tap)
+        searching = false
+        sheet = .chooseMeal(draft, method)
     }
     /// Logs a fresh copy of an entry on the selected day at the current time.
     private func duplicate(_ entry: CalorieEntry) {
@@ -1189,15 +1417,20 @@ struct MainView: View {
         searchSession?.unmatchedQuery = emptyQuery
     }
     private func refreshSuggestions() {
-        suggestedFoods = FoodHistory.suggestions(
+        let ranked = FoodHistory.suggestions(
             entries: store.entries,
             date: loggingDate,
             pinnedIDs: store.pinnedFoodIDs,
-            hiddenIDs: store.hiddenQuickAddIDs()
+            hiddenIDs: store.hiddenQuickAddIDs(),
+            limit: nil
         )
+        suggestedFoods = Array(ranked.prefix(FoodHistory.suggestionLimit))
+        // Extras beyond the ten shown fill in as picks are added.
+        quickStartFoods = Array(ranked.lazy.filter { FoodHistory.startsDay($0, at: loggingDate) }.prefix(30))
     }
     private func edit(_ input: EntryDraft, source: String? = nil, focusName: Bool = false, pinFoodID: String? = nil, revealAfterSave: Bool) {
         var draft = input; draft.entryID = nil; draft.timestamp = loggingDate; draft.source = source ?? draft.source
+        draft.mealType = nil
         revealNextAddedEntry = revealAfterSave
         searching = false; sheet = focusName ? .quickEntry(draft) : .searchEntry(draft, pinFoodID)
     }

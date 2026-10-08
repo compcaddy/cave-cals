@@ -17,10 +17,30 @@ Open `CaveCals.xcodeproj`, select the **CaveCals** scheme, choose an iPhone simu
 - Simulator builds use local persistence; retain ad-hoc signing so the widget can access its App Group.
 - Choose your Apple Developer team in Signing & Capabilities to run on a physical iPhone.
 
+## Cave Cals Dev on your iPad or iPhone
+
+The shared **Cave Cals Dev** scheme builds the same app and widget source using **Dev Debug** (Run/Test) and **Dev Release** (Archive). It installs separately as `com.philstarkovich.cavecals.dev`; the existing **CaveCals** scheme remains the normal app. You can keep both installed and remain signed into the same Apple/iCloud account.
+
+1. Open `CaveCals.xcodeproj` in Xcode. Choose **Cave Cals Dev** in the scheme menu beside Run.
+2. Connect and unlock the iPad, accept **Trust This Computer** if asked, and select that iPad as the run destination. Xcode must support the iPad's installed iPadOS version.
+3. In the iPad's **Settings → Privacy & Security → Developer Mode**, enable Developer Mode and follow the restart/confirmation prompts if needed. See [Apple's Developer Mode instructions](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device).
+4. The app and **QuickLogWidget** targets use automatic signing with the existing developer team. Sign into that team in **Xcode → Settings → Accounts** if Xcode requests it. Allow Xcode to register the device/new identifiers and create provisioning profiles. Both Dev targets need the new App Group `group.com.philstarkovich.cavecals.dev`. If automatic signing cannot register it, register that group in the Apple Developer account and associate it with `com.philstarkovich.cavecals.dev` and `com.philstarkovich.cavecals.dev.QuickLogWidget`. Do not substitute the normal app's group or iCloud container.
+5. Press **Run** (Command-R). Confirm the installed app's name is **Cave Cals Dev**. It runs on iPad in the app's existing iPhone compatibility layout. For later updates, choose the same scheme and Run again; Dev's test data is retained.
+
+**Settings → Cave Cals Dev → Reset Test Data** asks for confirmation, then shows close/reopen instructions. Swipe Dev away in the app switcher and reopen it (or Stop/Run in Xcode). On that cold launch, before opening any stores, it deletes Dev's diary, meals, barcode history, goals, saved nutrition, weigh-ins, progress photos, caches, widget snapshot, applied discount code, and app preferences; setup starts again. The reset removes the contents of the standard sandbox folders, keeping the folders themselves in place because iOS protects them. A failed reset blocks opening the stores and retries at the next launch. If an older Dev build stopped with a “Caches” permission error, build and run the updated Cave Cals Dev scheme over the existing installation; it will finish the pending reset automatically. Developer connection/test-access credentials and settings are retained, as are server usage limits and iOS permissions. The normal app's data is never part of this reset.
+
+Isolation is enforced by separate bundle IDs, Keychain service, widget App Group, and `cavecals-dev://` links. Dev's SwiftData store explicitly uses its private app sandbox and disables CloudKit. Dev entitlements contain only its own App Group—no iCloud, HealthKit, push, or App Attest capability. Health export is also blocked in code, and Dev does not send anonymous usage stats. No separate cloud container has been created yet. Before testing sync, add a **Dev-only** container and adapt reset to handle Dev cloud records; never point Dev at the normal container.
+
+Manual logging, food search, barcode lookup, meals, weights, photos, and normal UI testing work locally. AI requires the existing authorized **Developer settings → Private test-access key** (with **Override subscription for testing** enabled), or the existing local backend developer connection. Without that setup Dev displays an explanation. This does not transfer a normal subscription or change backend authorization. The existing owner test API supports scans/voice/recipe imports; macro estimation still requires a separately supported backend route. Store purchases, restores, and RevenueCat setup are disabled for Dev; this build does **not** validate real subscription purchases. Private access still uses the existing service and its usage limits.
+
+Project maintenance: `scripts/configure_dev_build.rb` updates the Dev configurations from the current normal configurations without recreating targets. `scripts/generate_project.rb` also includes that setup when intentionally regenerating the project. No source fork or second app implementation is maintained.
+
 ## Features
 
-- Short optional onboarding lets users choose weight and macro tracking (both on by default), and estimates an editable calorie goal from body details, activity, and preferred pace. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
-- Progress page with calendar-based calorie/macro and weight charts, weekly comparisons, configurable week starts, and a one-page Weekly Recap PDF with six-week trends, AirPrint, and sharing. See [progress and reports](Documentation/Progress.md).
+- Short optional onboarding lets users choose weight and macro tracking (both on by default), and estimates an editable calorie goal from body details, activity, and preferred pace, with suggested protein/carbs/fat targets when macros are tracked. Manual/no-goal setup remains available. See [onboarding and calorie plans](Documentation/Onboarding.md).
+- After setup, “Where did you hear about Cave Cals?” asks once, with a box for a trainer’s or creator’s discount code. A code switches every Cave Cals+ paywall to its prices; each code has a page at CaveCals.com/<Name>, and the owner adds codes and sees their counts on `/admin/codes`. See [discount codes](Documentation/DiscountCodes.md).
+- Progress page with calendar-based calorie/macro and weight charts, weekly comparisons, configurable week starts, and a one-page Weekly Recap PDF with five-week trends, AirPrint, and sharing. See [progress and reports](Documentation/Progress.md).
+- Progress Photos: a full-screen camera with Front/Back/Left Side/Right Side or typed angles, a see-through ghost of the last photo at that angle with an opacity slider, a 10-second timer, library imports dated by when they were taken, a week-by-week browser, and side-by-side or slider comparisons with the weight change. One photo a day is free; more angles need Cave Cals+. Photos stay on the iPhone (included in its backups, never uploaded). See [progress and reports](Documentation/Progress.md#progress-photos).
 - Daily date navigation, disabled future dates, day status, and historical editing.
 - Calorie total and chronological entries; target/remaining amounts appear only when a goal is set. Goals can be enabled or removed in Settings without changing historical targets.
 - unified Logged / Quick Add screen, calorie shortcuts, barcode scanning, meal scanning and voice logging.
@@ -74,7 +94,9 @@ Optional Apple Health sharing lives in Settings: **Calories & macros** writes ea
 
 Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, a dismissible daily reminder, and opt-in Apple Health export. Graphs and editable weigh-in history live in **Progress** (the chart icon between the person and cog). Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 
-Optional protein, total-carbohydrate, and fat tracking is on by default; goals and estimates are available. Food editors also store fiber and display calculated net carbs. See [macros](Documentation/Macros.md). Water, exercise logging, meal categories, and future meal planning remain out of scope.
+Optional protein, total-carbohydrate, and fat tracking is on by default; goals and estimates are available. Food editors also store fiber and display calculated net carbs. See [macros](Documentation/Macros.md). Water, exercise logging, and future meal planning remain out of scope.
+
+Optional meal types (off by default) sort the log into Breakfast, Lunch, and other meals, set by time of day or picked each time food is added. Meal types and their times sync with the diary. See [meal types](Documentation/MealTypes.md).
 
 ## Widget calorie total
 

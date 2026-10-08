@@ -5,7 +5,6 @@ import ScreenshotCarousel from './screenshot-carousel';
 import './landing.css';
 
 const schoolbell = localFont({ src: './fonts/Schoolbell-Regular.ttf', variable: '--font-hand', display: 'swap' });
-const lacquer = localFont({ src: './fonts/Lacquer-Regular.ttf', variable: '--font-cave', display: 'swap' });
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -24,7 +23,7 @@ export default function Home() {
     ? configuredStore
     : 'https://apps.apple.com/us/app/cave-cals-ai-calorie-tracker/id6809208501';
 
-  return <div className={`landing ${schoolbell.variable} ${lacquer.variable}`}>
+  return <div className={`landing ${schoolbell.variable}`}>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header">
       <a className="wordmark" href="/" aria-label="Cave Cals home">Cave Cals<span aria-hidden="true">.</span></a>

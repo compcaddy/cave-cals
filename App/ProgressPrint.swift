@@ -31,8 +31,8 @@ struct ProgressPrintDocument {
             let muted = UIColor(white: 0.4, alpha: 1)
             let orange = UIColor(red: 0.66, green: 0.25, blue: 0.07, alpha: 1)
             let tan = UIColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
-            func text(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, size: CGFloat = 11, bold: Bool = false, color: UIColor? = nil) {
-                let style = NSMutableParagraphStyle(); style.lineBreakMode = .byWordWrapping
+            func text(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, size: CGFloat = 11, bold: Bool = false, color: UIColor? = nil, alignment: NSTextAlignment = .natural) {
+                let style = NSMutableParagraphStyle(); style.lineBreakMode = .byWordWrapping; style.alignment = alignment
                 (text as NSString).draw(in: CGRect(x: x, y: y, width: width, height: 45), withAttributes: [
                     .font: UIFont.systemFont(ofSize: size, weight: bold ? .semibold : .regular),
                     .foregroundColor: color ?? ink, .paragraphStyle: style
@@ -47,55 +47,63 @@ struct ProgressPrintDocument {
             func number(_ value: Double?, weight: Bool) -> String {
                 value.map { weight ? unit.display($0).formatted(.number.precision(.fractionLength(1))) : $0.calorieText } ?? "—"
             }
+            func dayLabel(_ date: Date) -> String {
+                date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, calendar: dates.calendar, timeZone: dates.calendar.timeZone).month(.abbreviated).day())
+            }
             guard let latest = weeks.last else { return }
             let previous = weeks.dropLast().last
             text("CAVE CALS", x: 36, y: 28, width: 540, size: 11, bold: true, color: orange)
             text("Weekly Recap", x: 36, y: 49, width: 540, size: 30, bold: true)
             text(fullWeekLabel(latest.interval), x: 36, y: 92, width: 540, size: 13, color: muted)
-            if isInProgress { text("In progress", x: 36, y: 112, width: 540, size: 10, color: orange) }
+            if isInProgress { text("In progress", x: 36, y: 94, width: 540, size: 10, bold: true, color: orange, alignment: .right) }
             for (i, isWeight) in [true, false].enumerated() {
                 let x: CGFloat = i == 0 ? 36 : 316
                 let stats = isWeight ? latest.weight : latest.calories
-                text(isWeight ? "AVERAGE WEIGHT" : "AVERAGE DAILY CALORIES", x: x, y: 132, width: 260, size: 10, bold: true, color: muted)
-                text(number(stats.average, weight: isWeight) + (isWeight ? " " + unit.rawValue : " cals"), x: x, y: 150, width: 260, size: 31, bold: true)
-                tan.setFill(); UIBezierPath(roundedRect: CGRect(x: x, y: 197, width: 260, height: 36), cornerRadius: 7).fill()
-                let comparison = isWeight
+                text(isWeight ? "AVERAGE WEIGHT" : "AVERAGE DAILY CALORIES", x: x, y: 126, width: 260, size: 10, bold: true, color: muted)
+                text(number(stats.average, weight: isWeight) + (isWeight ? " " + unit.rawValue : " cals"), x: x, y: 142, width: 260, size: 31, bold: true)
+                tan.setFill(); UIBezierPath(roundedRect: CGRect(x: x, y: 187, width: 260, height: 34), cornerRadius: 7).fill()
+                var comparison = isWeight
                     ? ProgressFormat.change(previous.flatMap { stats.change(from: $0.weight) }, unit: unit)
                     : ProgressFormat.goalChange(average: stats.average, goal: dailyGoal)
-                text(comparison, x: x + 10, y: 205, width: 240, size: 15, bold: true, color: orange)
-                text("Min \(number(stats.min, weight: isWeight))  /  Max \(number(stats.max, weight: isWeight))", x: x, y: 247, width: 260)
-                text("\(stats.count)/7 \(isWeight ? "weigh-ins" : "completed calorie days")", x: x, y: 266, width: 260, size: 10, color: muted)
-                if isWeight, let previous {
-                    text("Compared with " + dates.label(previous.interval), x: x, y: 286, width: 260, size: 9, color: muted)
-                } else if !isWeight, let dailyGoal, dailyGoal > 0 {
-                    text("Daily goal: " + dailyGoal.calorieText + " cals", x: x, y: 286, width: 260, size: 10, color: muted)
+                if !isWeight, stats.average != nil, let dailyGoal, dailyGoal > 0 { comparison += " (" + dailyGoal.calorieText + ")" }
+                var size: CGFloat = 15
+                while size > 11, (comparison as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: size, weight: .semibold)]).width > 240 { size -= 0.5 }
+                text(comparison, x: x + 10, y: 204 - size * 0.6, width: 240, size: size, bold: true, color: orange)
+                text("Min \(number(stats.min, weight: isWeight))  /  Max \(number(stats.max, weight: isWeight))", x: x, y: 231, width: 260)
+                text("\(stats.count)/7 \(isWeight ? "weigh-ins" : "completed calorie days")", x: x, y: 249, width: 260, size: 10, color: muted)
+                let chart = CGRect(x: x, y: 284, width: 260, height: 64)
+                trend(values: latest.days.map { isWeight ? $0.weight.map(unit.display) : $0.calories }, rect: chart, bars: !isWeight,
+                      smooth: true, faded: latest.days.map { !isWeight && $0.status != .complete }, context: context.cgContext, color: orange)
+                let step = chart.width / CGFloat(max(latest.days.count, 1))
+                for (d, day) in latest.days.enumerated() {
+                    text(dayLabel(day.date), x: x + CGFloat(d) * step, y: chart.maxY + 4, width: step, size: 8, color: muted, alignment: .center)
                 }
             }
-            line(318, heavy: true)
-            text("Six-Week Trends", x: 36, y: 339, width: 540, size: 24, bold: true)
-            text(dates.label(DateInterval(start: weeks.first!.interval.start, end: latest.interval.end)), x: 36, y: 373, width: 540, size: 11, color: muted)
-            text("Average weight (\(unit.rawValue))", x: 36, y: 405, width: 248)
-            text("Average daily calories", x: 328, y: 405, width: 248)
-            trend(values: weeks.map { $0.weight.average.map(unit.display) }, rect: CGRect(x: 36, y: 438, width: 248, height: 80), bars: false, context: context.cgContext, color: orange)
-            trend(values: weeks.map { $0.calories.average }, rect: CGRect(x: 328, y: 438, width: 248, height: 80), bars: true, context: context.cgContext, color: orange)
+            line(380, heavy: true)
+            text("Five-Week Trends", x: 36, y: 392, width: 540, size: 24, bold: true)
+            text(dates.label(DateInterval(start: weeks.first!.interval.start, end: latest.interval.end)), x: 36, y: 403, width: 540, size: 11, color: muted, alignment: .right)
+            text("Average weight (\(unit.rawValue))", x: 36, y: 432, width: 248)
+            text("Average daily calories", x: 328, y: 432, width: 248)
+            trend(values: weeks.map { $0.weight.average.map(unit.display) }, rect: CGRect(x: 36, y: 466, width: 248, height: 72), bars: false, smooth: true, context: context.cgContext, color: orange)
+            trend(values: weeks.map { $0.calories.average }, rect: CGRect(x: 328, y: 466, width: 248, height: 72), bars: true, context: context.cgContext, color: orange)
             let step = 248.0 / CGFloat(max(weeks.count, 1))
             for i in weeks.indices {
-                let label = weeks[i].interval.start.formatted(.dateTime.month(.abbreviated).day())
-                text(label, x: 36 + CGFloat(i) * step, y: 530, width: step, size: 8, color: muted)
-                text(label, x: 328 + CGFloat(i) * step, y: 530, width: step, size: 8, color: muted)
+                let label = dayLabel(weeks[i].interval.start)
+                text(label, x: 36 + CGFloat(i) * step, y: 542, width: step, size: 8, color: muted, alignment: .center)
+                text(label, x: 328 + CGFloat(i) * step, y: 542, width: step, size: 8, color: muted, alignment: .center)
             }
-            line(552)
+            line(562)
             let xs: [CGFloat] = [36, 146, 257, 371, 480]
             let widths: [CGFloat] = [104, 105, 108, 103, 96]
             let headers = ["Week starting", "Avg cals · change", "Calorie min–max", "Avg \(unit.rawValue) · change", "Weight min–max"]
-            for i in headers.indices { text(headers[i], x: xs[i], y: 567, width: widths[i], size: 9, bold: true, color: muted) }
+            for i in headers.indices { text(headers[i], x: xs[i], y: 574, width: widths[i], size: 9, bold: true, color: muted) }
             for (i, week) in weeks.enumerated() {
-                let y = CGFloat(591 + i * 26)
+                let y = CGFloat(596 + i * 26)
                 let isLatest = i == weeks.count - 1
                 if isLatest {
                     tan.setFill(); context.cgContext.fill(CGRect(x: 30, y: y - 4, width: 552, height: 26))
                 }
-                let fields = [week.interval.start.formatted(.dateTime.month(.abbreviated).day()),
+                let fields = [dayLabel(week.interval.start),
                     number(week.calories.average, weight: false),
                     number(week.calories.min, weight: false) + "–" + number(week.calories.max, weight: false),
                     number(week.weight.average, weight: true),
@@ -116,7 +124,7 @@ struct ProgressPrintDocument {
         }
     }
 
-    @MainActor private func trend(values: [Double?], rect: CGRect, bars: Bool, context: CGContext, color: UIColor) {
+    @MainActor private func trend(values: [Double?], rect: CGRect, bars: Bool, smooth: Bool = false, faded: [Bool] = [], context: CGContext, color: UIColor) {
         let known = values.compactMap { $0 }
         guard let highest = known.max(), let lowest = known.min() else {
             ("No recorded data" as NSString).draw(in: rect, withAttributes: [.font: UIFont.systemFont(ofSize: 11), .foregroundColor: UIColor.gray]); return
@@ -126,22 +134,56 @@ struct ProgressPrintDocument {
         context.setStrokeColor(UIColor.lightGray.cgColor); context.setLineWidth(0.5)
         context.move(to: CGPoint(x: rect.minX, y: rect.maxY)); context.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY)); context.strokePath()
         let step = rect.width / CGFloat(max(values.count, 1))
-        var previous: CGPoint?
-        for (i, value) in values.enumerated() {
-            guard let value else { previous = nil; continue }
-            let x = rect.minX + (CGFloat(i) + 0.5) * step
-            let y = rect.maxY - CGFloat((value - low) / (high - low)) * rect.height
-            context.setFillColor(color.cgColor); context.setStrokeColor(color.cgColor); context.setLineWidth(2)
-            if bars { context.fill(CGRect(x: x - step * 0.3, y: y, width: step * 0.6, height: rect.maxY - y)) }
-            else {
-                if let previous { context.move(to: previous); context.addLine(to: CGPoint(x: x, y: y)); context.strokePath() }
-                context.fillEllipse(in: CGRect(x: x - 3, y: y - 3, width: 6, height: 6))
+        let points = values.enumerated().map { i, value in
+            value.map { CGPoint(x: rect.minX + (CGFloat(i) + 0.5) * step, y: rect.maxY - CGFloat(($0 - low) / (high - low)) * rect.height) }
+        }
+        if !bars {
+            // Missing days or weeks break the line, like the in-app charts.
+            var segment: [CGPoint] = []
+            for point in points + [nil] {
+                if let point { segment.append(point); continue }
+                if segment.count > 1 {
+                    context.setStrokeColor(color.cgColor); context.setLineWidth(2); context.setLineJoin(.round); context.setLineCap(.round)
+                    context.addPath(smooth ? Self.monotonePath(segment) : Self.straightPath(segment)); context.strokePath()
+                }
+                segment = []
             }
+        }
+        for (i, value) in values.enumerated() {
+            guard let value, let point = points[i] else { continue }
+            let fill = faded.indices.contains(i) && faded[i] ? color.withAlphaComponent(0.3) : color
+            context.setFillColor(fill.cgColor)
+            if bars { context.fill(CGRect(x: point.x - step * 0.3, y: point.y, width: step * 0.6, height: rect.maxY - point.y)) }
+            else { context.fillEllipse(in: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)) }
             let label = value.formatted(.number.precision(.fractionLength(bars ? 0 : 1)))
             let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
-            (label as NSString).draw(in: CGRect(x: x - step / 2, y: y - 15, width: step, height: 15), withAttributes: [.font: UIFont.systemFont(ofSize: 8), .foregroundColor: UIColor.darkGray, .paragraphStyle: paragraph])
-            previous = CGPoint(x: x, y: y)
+            (label as NSString).draw(in: CGRect(x: point.x - step / 2, y: point.y - 15, width: step, height: 15), withAttributes: [.font: UIFont.systemFont(ofSize: 8), .foregroundColor: UIColor.darkGray, .paragraphStyle: paragraph])
         }
+    }
+
+    private static func straightPath(_ points: [CGPoint]) -> CGPath {
+        let path = CGMutablePath(); path.addLines(between: points); return path
+    }
+
+    /// A monotone cubic curve (Fritsch–Butland tangents), so the line never overshoots a recorded weight.
+    static func monotonePath(_ points: [CGPoint]) -> CGPath {
+        let path = CGMutablePath()
+        guard let first = points.first else { return path }
+        path.move(to: first)
+        guard points.count > 2 else { path.addLines(between: points); return path }
+        let slopes = zip(points, points.dropFirst()).map { ($1.y - $0.y) / ($1.x - $0.x) }
+        var tangents = [slopes[0]]
+        for k in 1..<slopes.count {
+            let (a, b) = (slopes[k - 1], slopes[k])
+            tangents.append(a * b <= 0 ? 0 : 2 * a * b / (a + b))
+        }
+        tangents.append(slopes[slopes.count - 1])
+        for k in 0..<(points.count - 1) {
+            let (p, q) = (points[k], points[k + 1]), third = (q.x - p.x) / 3
+            path.addCurve(to: q, control1: CGPoint(x: p.x + third, y: p.y + tangents[k] * third),
+                          control2: CGPoint(x: q.x - third, y: q.y - tangents[k + 1] * third))
+        }
+        return path
     }
 }
 

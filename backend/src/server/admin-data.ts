@@ -189,7 +189,7 @@ export async function loadDashboard(all: boolean) {
       select d.metric as "metric", sum(d.count)::int as "last30"
       from usage_daily d join usage_installs i on i.id = d.install_id
       where d.day > ${TODAY} - 30 and ${env}
-        and (d.metric in ('searches', 'searchesAbandoned', 'edits', 'deletes', 'undos', 'feedbackTaps', 'doneEating', 'progressViews', 'weighIns', 'reminderTaps', 'opens') or ${ITEMS})
+        and (d.metric in ('searches', 'searchesAbandoned', 'edits', 'deletes', 'undos', 'feedbackTaps', 'doneEating', 'progressViews', 'weighIns', 'progressPhotos', 'photoCompares', 'reminderTaps', 'mealMoves', 'opens') or ${ITEMS})
       group by 1`),
     rows<{ query: string; times: number; people: number; last: string }>(sql`
       select lower(trim(e.props->>'query')) as "query", count(*)::int as "times", count(distinct e.install_id)::int as "people",
@@ -208,7 +208,9 @@ export async function loadDashboard(all: boolean) {
         ${sql.join(['goal', 'tracksWeight', 'tracksMacros', 'plus', 'healthCalories', 'healthWeights', 'reminders', 'widget', 'iCloud', 'quickStart', 'doneEatingButton'].map(trait =>
           sql`count(*) filter (where i.traits->>${trait} = 'true')::int as ${sql.raw(`"${trait}"`)}`), sql`, `)},
         count(*) filter (where i.traits->>'intent' = 'lose')::int as "lose",
-        count(*) filter (where i.traits->>'intent' = 'maintain')::int as "maintain"
+        count(*) filter (where i.traits->>'intent' = 'maintain')::int as "maintain",
+        count(*) filter (where i.traits->>'mealTypes' = 'time')::int as "mealTypesTime",
+        count(*) filter (where i.traits->>'mealTypes' = 'ask')::int as "mealTypesAsk"
       from usage_installs i where ${env} and i.last_seen_at > now() - interval '30 days'`),
     rows<{ version: string; device: string; people: number }>(sql`
       select i.app_version || ' (' || coalesce(i.traits->>'build', '?') || ')' as "version", i.device as "device", count(*)::int as "people"

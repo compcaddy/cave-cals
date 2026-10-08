@@ -8,13 +8,14 @@ const methodNames: Record<string, string> = {
   manual: 'Manual (typed calories)', meal: 'Saved meals', barcode: 'Barcode Scan', mealScan: 'Meal Scan', voice: 'Voice Log',
   siri: 'Siri', copy: 'Duplicate / copy', other: 'Other',
 };
-const scanNames: Record<string, string> = { mealScan: 'Meal Scan', voice: 'Voice Log', barcode: 'Barcode Scan', recipe: 'Recipe import', siri: 'Siri Log Food' };
+const scanNames: Record<string, string> = { mealScan: 'Meal Scan', voice: 'Voice Log', barcode: 'Barcode Scan', recipe: 'Recipe import (link)', recipePhoto: 'Recipe import (photo)', recipeText: 'Recipe import (pasted text)', siri: 'Siri Log Food', voiceTyped: 'Voice Log (typed instead)' };
 const triggerNames: Record<string, string> = {
   onboarding: 'Offer after setup', mealScanOpen: 'Meal Scan opened, no scans left', mealScanAnalyze: 'Meal Scan at Analyze',
   voiceOpen: 'Voice Log opened, no scans left', voiceAnalyze: 'Voice Log at Analyze',
   newMealPhotoOpen: 'New Meal · Snap opened', newMealPhotoAnalyze: 'New Meal · Snap at Analyze',
   newMealVoiceOpen: 'New Meal · Say opened', newMealVoiceAnalyze: 'New Meal · Say at Analyze',
   recipeImportOpen: 'Import a recipe opened', recipeImport: 'Import a recipe at Import',
+  progressPhotos: 'Progress Photos, second photo of a day',
   settings: 'Cave Cals+ card in Settings', aboutYou: 'Cave Cals+ card in About You', siri: 'Siri, out of scans (spoken, no screen)',
 };
 const steps: [string, string][] = [
@@ -85,6 +86,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <Link className={`pill${all ? '' : ' on'}`} href="/admin">App Store</Link>
         <Link className={`pill${all ? ' on' : ''}`} href="/admin?env=all">All builds</Link>
         <Link className="pill" href={`/admin/errors${query}`}>Errors · {n(errors7)} this week</Link>
+        <Link className="pill" href={`/admin/codes${query}`}>Discount codes</Link>
       </nav>
     </header>
 
@@ -262,7 +264,10 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           <Tile value={n(friction.doneEating ?? 0)} label="Done eating taps" />
           <Tile value={n(friction.progressViews ?? 0)} label="Progress views" />
           <Tile value={n(friction.weighIns ?? 0)} label="Weigh-ins saved" />
+          <Tile value={n(friction.progressPhotos ?? 0)} label="Progress photos saved" />
+          <Tile value={n(friction.photoCompares ?? 0)} label="Photo comparisons opened" />
           <Tile value={n(friction.reminderTaps ?? 0)} label="Reminder notifications tapped" />
+          <Tile value={n(friction.mealMoves ?? 0)} label="Foods moved to another meal" />
         </div>
       </section>
 
@@ -295,6 +300,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           ...traitNames.map(([trait, label]) => ({ label, value: d.traits[trait] ?? 0, note: pct(d.traits[trait] ?? 0, d.traits.people) })),
           { label: 'Plan: lose', value: d.traits.lose ?? 0, note: pct(d.traits.lose ?? 0, d.traits.people) },
           { label: 'Plan: maintain', value: d.traits.maintain ?? 0, note: pct(d.traits.maintain ?? 0, d.traits.people) },
+          { label: 'Meal types, set by time of day', value: d.traits.mealTypesTime ?? 0, note: pct(d.traits.mealTypesTime ?? 0, d.traits.people) },
+          { label: 'Meal types, asks each time', value: d.traits.mealTypesAsk ?? 0, note: pct(d.traits.mealTypesAsk ?? 0, d.traits.people) },
         ]} />
       </section>
     </div>

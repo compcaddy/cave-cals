@@ -83,10 +83,15 @@ final class OnboardingUITests: XCTestCase {
     private func replaceTarget(with text: String, shows expected: String) {
         let field = app.textFields["planCalories"]
         revealField(field)
-        app.staticTexts["Tap to adjust"].tap()
+        app.buttons["planEditCalories"].tap()
         field.typeText(text)
         closeKeyboard()
         XCTAssertEqual(field.value as? String, expected)
+    }
+    /// Set Goal needs a rate before Continue; later taps on another rate still win.
+    private func goalWeight(_ text: String) {
+        let pace = app.buttons["pace-0.25"]; reveal(pace); pace.tap()
+        enter("planGoalWeight", text)
     }
     private func basics(startingWeight: String = "90") {
         next()
@@ -126,30 +131,99 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["skipOnboardingPaywall"].exists)
     }
+    /// "Where did you hear about Cave Cals?" sits between setup and the offer. A code that doesn't work says so;
+    /// one that works is applied (UI tests accept CAVETEST without the backend).
+    func testDiscoveryQuestionAppliesADiscountCode() {
+        app.terminate()
+        app.launchArguments += ["--discovery-question"]
+        app.launch()
+        XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
+        skipPlan(); next()
+        let social = app.buttons["discovery-social"]
+        XCTAssertTrue(social.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["skipOnboardingPaywall"].exists, "The question comes before the offer")
+        XCTAssertFalse(app.buttons["discoveryContinue"].isEnabled, "Continue waits for an answer")
+        capture("Discovery question")
+        social.tap()
+        let field = app.textFields["discountCode"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText("nope")
+        let apply = app.buttons["applyDiscountCode"]
+        apply.tap()
+        // A spinner shows while the code is checked.
+        XCTAssertEqual(apply.label, "Checking code")
+        XCTAssertTrue(app.staticTexts["discountCodeMessage"].waitForExistence(timeout: 5))
+        capture("Discovery question with a code that doesn't work")
+        // The red × clears the box.
+        app.buttons["clearDiscountCode"].tap()
+        XCTAssertFalse(app.staticTexts["discountCodeMessage"].exists)
+        XCTAssertFalse(app.buttons["clearDiscountCode"].exists)
+        field.typeText("cavetest")
+        XCTAssertEqual((field.value as? String)?.uppercased(), "CAVETEST", "Fast typing preserves the entire code; matching ignores capitals")
+        app.buttons["applyDiscountCode"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["discountApplied"].waitForExistence(timeout: 5))
+        let confirmation = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Code CAVETEST worked. Special discount on Cave Cals+")).firstMatch
+        XCTAssertTrue(confirmation.exists, "Code CAVETEST worked! / Special discount on Cave Cals+")
+        XCTAssertFalse(field.exists, "The box closes once the code works")
+        capture("Discovery question with a code applied")
+        app.buttons["discoveryContinue"].tap()
+        // No storefront is loaded in UI tests: a saved code must show an unavailable state,
+        // with a working code sheet, rather than offer the regular subscription.
+        XCTAssertTrue(app.staticTexts["Your code is saved, but its prices couldn’t load. Please try again."].waitForExistence(timeout: 5))
+        app.buttons["Edit code"].tap()
+        let paywallCode = app.textFields["discountCode"]
+        XCTAssertTrue(paywallCode.waitForExistence(timeout: 5))
+        paywallCode.tap(); paywallCode.typeText("cavetest")
+        app.buttons["applyDiscountCode"].tap()
+        XCTAssertTrue(app.buttons["Edit code"].waitForExistence(timeout: 5))
+        XCTAssertFalse(paywallCode.exists, "Applying a code dismisses only the code sheet")
+        skipOffer()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+    }
     func testCalculatedPlanAndWeightIntegration() {
         capture("01 Welcome")
         basics()
         XCTAssertTrue(app.buttons["pace-0.25"].label.contains("0.25 kg per week"))
-        XCTAssertTrue(app.buttons["pace-0.75"].label.contains("0.75 kg per week"))
-        enter("planGoalWeight", "80")
+        // Paces follow today's weight (0.26%, 0.52%, 0.78% of 90 kg, to the nearest 0.05 kg); losing shows a minus.
+        XCTAssertTrue(app.buttons["pace-0.25"].label.contains("−0.25 kg per week"))
+        XCTAssertTrue(app.buttons["pace-0.5"].label.contains("−0.45 kg per week"))
+        XCTAssertTrue(app.buttons["pace-0.75"].label.contains("−0.7 kg per week"))
+        goalWeight("80")
         XCTAssertEqual(app.staticTexts["planGoalWeightNote"].label, "Current: 90.0 kg")
         app.buttons["pace-0.5"].tap()
         capture("Set Goal")
         next()
         assertTrackingDefaults()
+        // Calories lead, always on; tracking macros picks targets without asking.
+        XCTAssertEqual(app.otherElements["planTrackCalories"].value as? String, "On, always")
+        XCTAssertFalse(app.switches["planSuggestMacros"].exists)
         capture("02 Tracking choices")
         next()
         XCTAssertTrue(app.textFields["planCalories"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,050")
+        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,100")
+        // Protein from the 80 kg goal weight, then fat and carbs share the rest of the 2,100 calories.
+        XCTAssertEqual(app.otherElements["planMacro-protein"].label, "Protein, at least 130 grams")
+        XCTAssertEqual(app.otherElements["planMacro-totalCarbs"].label, "Carbs, up to 240 grams")
+        XCTAssertEqual(app.otherElements["planMacro-fat"].label, "Fat, up to 70 grams")
         capture("03 Calorie plan")
         next()
         skipOffer()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,050 calories")
+        XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,100 calories")
+        XCTAssertEqual(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.label, "Protein 0 g of 130 g")
+        XCTAssertEqual(app.descendants(matching: .any)["dailyMacro-fat"].firstMatch.label, "Fat 0 g of 70 g")
         app.buttons["profile"].tap()
         XCTAssertTrue(app.buttons["todayWeight"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
-        app.buttons["caloriePlan"].tap(); next()
+        // Macro goals already hold the plan's suggestion.
+        app.buttons["macroGoals"].tap()
+        let suggestion = app.buttons["suggestMacroGoals"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
+        XCTAssertFalse(suggestion.isEnabled)
+        XCTAssertEqual(app.textFields["goal-protein"].value as? String, "130")
+        app.navigationBars["Macro goals"].buttons.firstMatch.tap()
+        app.buttons["goalWeight"].tap(); next()
         XCTAssertEqual(ageDial.value as? String, "35 years")
         next()
         XCTAssertEqual(app.textFields["planWeight"].value as? String, "90")
@@ -162,7 +236,7 @@ final class OnboardingUITests: XCTestCase {
         capture("Welcome")
         // Skipping asks first; declining starts the plan instead.
         app.buttons["skipGoal"].tap()
-        let buildPlan = app.alerts.buttons["No, me build plan"]
+        let buildPlan = app.alerts.buttons["No, me want plan"]
         XCTAssertTrue(buildPlan.waitForExistence(timeout: 5))
         XCTAssertTrue(app.alerts.buttons["Yes, skip plan"].exists)
         capture("Skip plan confirmation")
@@ -171,6 +245,8 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["onboardingBack"].tap()
         skipPlan()
         assertTrackingDefaults()
+        // Without a plan there's nothing to base macro targets on.
+        XCTAssertFalse(app.switches["planSuggestMacros"].exists)
         XCTAssertEqual(app.buttons["onboardingContinue"].label, "Let’s go")
         capture("Skip tracking choices")
         // Back from the skip route's tracking step returns to the welcome.
@@ -192,6 +268,7 @@ final class OnboardingUITests: XCTestCase {
             revealField(toggle); toggle.tap()
             XCTAssertEqual(toggle.value as? String, "0")
         }
+        XCTAssertFalse(app.switches["planSuggestMacros"].exists)
     }
     private func assertTrackingOff() {
         skipOffer()
@@ -208,9 +285,80 @@ final class OnboardingUITests: XCTestCase {
         assertTrackingOff()
     }
     func testCalculatedPlanRespectsDisabledTracking() {
-        basics(); enter("planGoalWeight", "80"); next()
+        basics(); goalWeight("80"); next()
         turnOffTrackingChoices(); next(); next()
         assertTrackingOff()
+    }
+    func testDeclinedMacroTargetsLeaveMacroGoalsBlank() {
+        basics(); goalWeight("80"); next()
+        XCTAssertTrue(app.switches["planTrackMacros"].waitForExistence(timeout: 5))
+        next()
+        XCTAssertTrue(app.textFields["planCalories"].waitForExistence(timeout: 5))
+        // Daily macros' pencil, then No daily macro goals: the macros stay, without amounts.
+        let edit = app.buttons["planEditMacros"]
+        revealField(edit); edit.tap()
+        XCTAssertTrue(app.textFields["planMacroField-protein"].waitForExistence(timeout: 5))
+        app.staticTexts["Your target"].tap()
+        let noGoals = app.switches["planNoMacroGoals"]
+        revealField(noGoals); noGoals.tap()
+        XCTAssertEqual(noGoals.value as? String, "1")
+        XCTAssertFalse(app.textFields["planMacroField-protein"].exists)
+        XCTAssertFalse(app.staticTexts["at least"].exists)
+        XCTAssertTrue(app.otherElements["planMacro-protein"].exists)
+        next()
+        skipOffer()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.label, "Protein 0 g")
+    }
+    func testEditedMacroTargetsStayPutAndSave() {
+        basics(); goalWeight("80"); next(); next()
+        XCTAssertTrue(app.textFields["planCalories"].waitForExistence(timeout: 5))
+        let edit = app.buttons["planEditMacros"]
+        revealField(edit); edit.tap()
+        let protein = app.textFields["planMacroField-protein"]
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        XCTAssertEqual(protein.value as? String, "130")
+        protein.typeText("150")
+        // A tap right on a box's digits selects its whole value, so typing replaces it.
+        let carbs = app.textFields["planMacroField-totalCarbs"]
+        carbs.tap(); carbs.typeText("200")
+        XCTAssertEqual(carbs.value as? String, "200")
+        let calories = app.textFields["planCalories"]
+        calories.tap(); calories.typeText("2200")
+        app.staticTexts["Your target"].tap()
+        XCTAssertEqual(calories.value as? String, "2,200")
+        // Typed grams no longer follow the calorie number.
+        XCTAssertEqual(protein.value as? String, "150")
+        // The projection counts the days, then the date.
+        let projection = app.staticTexts["planProjection"]
+        XCTAssertTrue(projection.label.contains("you could weigh 80 kg in "), projection.label)
+        XCTAssertTrue(projection.label.contains(" days ("), projection.label)
+        next()
+        skipOffer()
+        app.buttons["profile"].tap()
+        app.buttons["macroGoals"].tap()
+        XCTAssertTrue(app.textFields["goal-protein"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["goal-protein"].value as? String, "150")
+    }
+    /// Updating a plan never overwrites macro goals set by hand: they open in the card's boxes, ready to keep.
+    func testRevisedPlanKeepsOwnMacroGoals() {
+        basics(); goalWeight("80"); next(); next(); next()
+        skipOffer()
+        app.buttons["profile"].tap()
+        app.buttons["macroGoals"].tap()
+        let goal = app.textFields["goal-protein"]
+        XCTAssertTrue(goal.waitForExistence(timeout: 5)); goal.tap(); goal.typeText("160")
+        app.buttons["saveMacroGoals"].tap()
+        app.buttons["goalWeight"].tap()
+        for _ in 0..<5 { next() }
+        let protein = app.textFields["planMacroField-protein"]
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        XCTAssertEqual(protein.value as? String, "160")
+        XCTAssertFalse(app.switches["planSuggestMacros"].exists)
+        next()
+        app.buttons["macroGoals"].tap()
+        XCTAssertTrue(goal.waitForExistence(timeout: 5))
+        XCTAssertEqual(goal.value as? String, "160")
     }
     func testManualGoalRespectsDisabledTracking() {
         next(); app.buttons["gender-Female"].tap(); setAge(16); next()
@@ -245,7 +393,7 @@ final class OnboardingUITests: XCTestCase {
         app.navigationBars["Settings"].buttons["Done"].tap()
     }
     func testDeveloperOnboardingPreviewKeepsHistoryAndStartsFreshEachTime() {
-        basics(); enter("planGoalWeight", "80"); app.buttons["pace-0.5"].tap(); next(); next(); next()
+        basics(); goalWeight("80"); app.buttons["pace-0.5"].tap(); next(); next(); next()
         skipOffer()
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("325")
@@ -262,19 +410,34 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["previewOnboarding"].waitForExistence(timeout: 5))
         openOnboardingPreview()
         basics(startingWeight: "100")
-        enter("planGoalWeight", "80"); next()
+        goalWeight("80"); next()
         assertTrackingDefaults()
         let macros = app.switches["planTrackMacros"]
         revealField(macros); macros.tap()
         next(); next()
         XCTAssertTrue(app.buttons["previewOnboarding"].waitForExistence(timeout: 5))
         closeDeveloperSettings()
-        XCTAssertEqual(app.otherElements["calorieSummary"].label, "325 of 2,050 calories")
+        XCTAssertEqual(app.otherElements["calorieSummary"].label, "325 of 2,100 calories")
         app.buttons["profile"].tap()
         XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
         XCTAssertEqual(app.switches["trackMacros"].firstMatch.value as? String, "1")
-        app.buttons["caloriePlan"].tap(); next()
+        app.buttons["goalWeight"].tap(); next()
         XCTAssertEqual(ageDial.value as? String, "35 years")
+    }
+    /// The developer preview ends with "Where did you hear about Cave Cals?" too, then returns to Developer settings.
+    func testDeveloperOnboardingPreviewEndsWithTheDiscoveryQuestion() {
+        app.terminate()
+        app.launchArguments += ["--discovery-question", "--seed-goal", "2100"]
+        app.launch()
+        openDeveloperSettings(); openOnboardingPreview()
+        skipPlan(); next()
+        // The question is required: no Skip, but Other needs nothing typed.
+        let other = app.buttons["discovery-other"]
+        XCTAssertTrue(other.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["discoverySkip"].exists)
+        XCTAssertFalse(app.buttons["discoveryContinue"].isEnabled)
+        other.tap(); app.buttons["discoveryContinue"].tap()
+        XCTAssertTrue(app.buttons["previewOnboarding"].waitForExistence(timeout: 5))
     }
     func testDeveloperOnboardingPreviewManualGoalKeepsRealGoal() {
         skipPlan(); next()
@@ -346,7 +509,7 @@ final class OnboardingUITests: XCTestCase {
         app.segmentedControls["planUnits"].buttons["kg / cm"].tap()
         XCTAssertEqual(app.textFields["planHeight"].value as? String, "167.6")
         next(); app.buttons["activity-Mostly sitting"].tap(); next()
-        enter("planGoalWeight", "40"); next(); next()
+        goalWeight("40"); next(); next()
         XCTAssertTrue(app.buttons["manualSetup"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.textFields["planCalories"].exists)
         app.buttons["onboardingBack"].tap()
@@ -356,8 +519,8 @@ final class OnboardingUITests: XCTestCase {
     }
     func testMaintenanceCustomTargetAndForgettingDetails() {
         basics()
-        // Let Set Goal finish sliding in and focus goal weight, so the Maintain tap lands on the settled picker.
-        waitForFocus(app.textFields["planGoalWeight"], "Set Goal opens with goal weight focused")
+        // Let Set Goal finish sliding in, so the Maintain tap lands on the settled picker.
+        XCTAssertTrue(app.buttons["pace-0.25"].waitForExistence(timeout: 5)); sleep(1)
         app.segmentedControls["planIntent"].buttons["Maintain"].tap(); next(); next()
         XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,600")
         replaceTarget(with: "400", shows: "400")
@@ -367,9 +530,9 @@ final class OnboardingUITests: XCTestCase {
         next()
         skipOffer()
         app.buttons["profile"].tap()
-        // The saved goal shows under the calorie goal; its pencil reopens the calculator.
-        XCTAssertTrue(app.buttons["caloriePlan"].label.hasPrefix("Goal: stay around"))
-        app.buttons["caloriePlan"].tap()
+        // The saved goal shows in the Goal Weight row, which reopens the calculator.
+        XCTAssertTrue((app.buttons["goalWeight"].value as? String)?.hasPrefix("Stay around") == true)
+        app.buttons["goalWeight"].tap()
         let clear = app.buttons["clearSavedAnswers"]
         XCTAssertTrue(clear.waitForExistence(timeout: 5))
         clear.tap(); app.alerts.buttons["Cancel"].tap()
@@ -427,25 +590,25 @@ final class OnboardingUITests: XCTestCase {
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
         basics()
-        enter("planGoalWeight", "80")
+        goalWeight("80")
         let pace = app.buttons["pace-0.5"]
         reveal(pace); pace.tap(); next(); next()
-        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,050")
+        XCTAssertEqual(app.textFields["planCalories"].value as? String, "2,100")
         capture("06 Large text calculated target")
         next()
         skipOffer()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,050 calories")
+        XCTAssertEqual(app.otherElements["calorieSummary"].label, "0 of 2,100 calories")
     }
     func testCancelRevisedPlanKeepsAcceptedDetails() {
-        basics(); enter("planGoalWeight", "80"); app.buttons["pace-0.5"].tap(); next(); next(); next()
+        basics(); goalWeight("80"); app.buttons["pace-0.5"].tap(); next(); next(); next()
         skipOffer()
-        app.buttons["profile"].tap(); app.buttons["caloriePlan"].tap(); next()
+        app.buttons["profile"].tap(); app.buttons["goalWeight"].tap(); next()
         setAge(45)
         app.buttons["Cancel"].tap()
-        XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,050")
+        XCTAssertEqual(app.buttons["adjustGoal"].value as? String, "2,100")
         XCTAssertTrue(app.buttons["todayWeight"].label.contains("90"))
-        app.buttons["caloriePlan"].tap(); next()
+        app.buttons["goalWeight"].tap(); next()
         XCTAssertEqual(ageDial.value as? String, "35 years")
     }
     func testOversizedHeightCanBeCorrectedAfterChangingUnits() {

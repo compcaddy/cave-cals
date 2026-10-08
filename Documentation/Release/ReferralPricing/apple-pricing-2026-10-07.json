@@ -1,0 +1,84 @@
+{
+  "subscriptions": [
+    {
+      "id": "6809209344",
+      "name": "Cave Cals+ Monthly",
+      "productId": "com.philstarkovich.cavecals.ai.monthly",
+      "subscriptionPeriod": "ONE_MONTH",
+      "state": "APPROVED",
+      "groupName": "Cave Cals AI",
+      "currentPrice": {
+        "amount": "5.99",
+        "currency": "USD"
+      },
+      "proceeds": {
+        "amount": "5.09",
+        "currency": "USD"
+      },
+      "proceedsYear2": {
+        "amount": "5.09",
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "6819868378",
+      "name": "Cave Cals+ Monthly - Discount",
+      "productId": "com.philstarkovich.cavecals.ai.monthly.discount",
+      "subscriptionPeriod": "ONE_MONTH",
+      "state": "READY_TO_SUBMIT",
+      "groupName": "Cave Cals AI",
+      "currentPrice": {
+        "amount": "4.99",
+        "currency": "USD"
+      },
+      "proceeds": {
+        "amount": "4.24",
+        "currency": "USD"
+      },
+      "proceedsYear2": {
+        "amount": "4.24",
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "6809209211",
+      "name": "Cave Cals+ Yearly",
+      "productId": "com.philstarkovich.cavecals.ai.yearly",
+      "subscriptionPeriod": "ONE_YEAR",
+      "state": "APPROVED",
+      "groupName": "Cave Cals AI",
+      "currentPrice": {
+        "amount": "29.99",
+        "currency": "USD"
+      },
+      "proceeds": {
+        "amount": "25.49",
+        "currency": "USD"
+      },
+      "proceedsYear2": {
+        "amount": "25.49",
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "6819868267",
+      "name": "Cave Cals+ Yearly - Discount",
+      "productId": "com.philstarkovich.cavecals.ai.yearly.discount",
+      "subscriptionPeriod": "ONE_YEAR",
+      "state": "READY_TO_SUBMIT",
+      "groupName": "Cave Cals AI",
+      "currentPrice": {
+        "amount": "29.99",
+        "currency": "USD"
+      },
+      "proceeds": {
+        "amount": "25.49",
+        "currency": "USD"
+      },
+      "proceedsYear2": {
+        "amount": "25.49",
+        "currency": "USD"
+      }
+    }
+  ]
+}

@@ -16,7 +16,10 @@ struct OnboardingView: View {
     @State private var goalWeight = ""
     @State private var activity: PlanActivity?
     @State private var intent = PlanIntent.lose
-    @State private var pace = 0.25
+    /// Turtle (0), dog (1), or rabbit (2); the weekly amount follows today's weight (`PlanPace`).
+    @State private var paceLevel = 0
+    /// New plans start with no rate picked, so Set Goal can't continue until one is chosen.
+    @State private var paceChosen = false
     @State private var unit = WeightUnit.pounds
     @State private var loaded = false
     @State private var initializedUnit = false
@@ -24,7 +27,13 @@ struct OnboardingView: View {
     @State private var calorieGoal = ""
     @State private var trackWeight = true
     @State private var trackMacros = true
+    /// Grams typed over the suggested targets (Daily macros' pencil). Once set, calorie edits stop recalculating them.
+    @State private var editedMacros: [MacroKind: String]?
+    /// Daily macros' edit mode can drop the goals: macros are still tracked and shown, just without targets.
+    @State private var noMacroGoals = false
     @State private var showingManual = false
+    /// The developer preview ends with "Where did you hear about Cave Cals?", which follows setup.
+    @State private var previewingSource = false
     @State private var confirmingClear = false
     @State private var confirmingSkip = false
     /// "Just start tracking" still asks the tracking step, then finishes without a goal.
@@ -49,12 +58,47 @@ struct OnboardingView: View {
     private var input: CaloriePlanInput? {
         guard let gender, let cm = parsedHeight,
               let current = WeightUnit.parse(weight), let activity else { return nil }
-        let target = intent == .maintain ? current : WeightUnit.parse(goalWeight)
+        let target = intent.hasGoalWeight ? WeightUnit.parse(goalWeight) : current
         guard let target else { return nil }
-        return CaloriePlanInput(gender: gender, age: age, heightCM: cm, weightKG: unit.kilograms(current),
-                                goalKG: unit.kilograms(target), activity: activity, intent: intent, weeklyLossKG: pace)
+        let currentKG = unit.kilograms(current)
+        return CaloriePlanInput(gender: gender, age: age, heightCM: cm, weightKG: currentKG,
+                                goalKG: unit.kilograms(target), activity: activity, intent: intent,
+                                weeklyLossKG: PlanPace.weeklyKG(level: paceLevel, weightKG: currentKG, unit: unit))
     }
     private var estimate: CaloriePlanEstimate? { input.flatMap { CaloriePlanner.estimate($0, clinicianSupport: clinicianSupport) } }
+    /// Revisions skip the tracking step, so they follow About You's Track macros switch.
+    private var tracksMacros: Bool { isRevising ? store.tracksMacros : trackMacros }
+    /// Targets for the typed calorie number; only with a calculated plan, never for manual-only results.
+    private var suggestedMacros: MacroNutrients? {
+        guard tracksMacros, estimate != nil, let input, let goal = parsedCalorieGoal else { return nil }
+        return MacroPlanner.suggest(input, calories: goal)
+    }
+    /// What Let's go saves: the typed grams once Daily macros was edited, else the suggestion.
+    /// Empty (clearing the goals) with No daily macro goals on. An empty box is no goal for that macro.
+    private var savedMacros: MacroNutrients? {
+        guard let editedMacros else { return suggestedMacros }
+        guard tracksMacros else { return nil }
+        if noMacroGoals { return MacroNutrients() }
+        var macros = MacroNutrients()
+        for kind in MacroKind.primary {
+            guard let text = editedMacros[kind], !text.isEmpty else { continue }
+            // Saved goals must be above zero (`MacroNutrients.isValidGoal`).
+            guard let grams = Double(text), (1...1000).contains(grams) else { return nil }
+            macros[keyPath: kind.keyPath] = grams.rounded()
+        }
+        return macros
+    }
+    /// Updating a plan keeps macro goals the user set themselves: the card opens with them in its boxes, so saving
+    /// leaves them as they were. Blank goals, or the previous plan's own suggestion, follow the new plan instead.
+    private var ownMacroGoals: [MacroKind: String]? {
+        guard isRevising else { return nil }
+        let current = store.macroGoals
+        let previous = weights.caloriePlan.flatMap { MacroPlanner.suggest($0.input, calories: $0.calorieGoal) }
+        guard !current.sameGoals(as: MacroNutrients()), previous.map(current.sameGoals) != true else { return nil }
+        return Dictionary(uniqueKeysWithValues: MacroKind.primary.map { kind in
+            (kind, current[keyPath: kind.keyPath].map { String(Int($0.rounded())) } ?? "")
+        })
+    }
     private var manualReason: String? {
         if clinicianSupport { return "A clinician can help set a target that fits your needs. You can still log food here." }
         if !(18...80).contains(age) { return "This estimate is for adults 18–80. Use a target from your clinician instead." }
@@ -68,8 +112,10 @@ struct OnboardingView: View {
         case 1: return gender != nil
         case 2: return parsedHeight.map { (90...260).contains($0) } == true && WeightUnit.parse(weight).map { (20...400).contains(unit.kilograms($0)) } == true
         case 3: return activity != nil
-        case 4: return intent == .maintain || WeightUnit.parse(goalWeight).map { (20...400).contains(unit.kilograms($0)) } == true
+        case 4: return !intent.hasGoalWeight || (paceChosen && intent.paceLevels.contains(paceLevel)
+                    && WeightUnit.parse(goalWeight).map { (20...400).contains(unit.kilograms($0)) } == true)
         case 6: return estimate != nil && parsedCalorieGoal.map { $0 >= (gender?.minimumCalories ?? 1500) && $0 <= 6000 } == true
+            && (editedMacros == nil || savedMacros != nil)
         default: return true
         }
     }
@@ -77,15 +123,16 @@ struct OnboardingView: View {
         if step == 6 && estimate == nil { return "Start your way" }
         return ["", "Tell About You", "Measurements", "Usual Week", "Set Goal", "Tracking", "Your target"][step]
     }
-    /// When the goal weight would be reached at the typed target: the weight left to lose at 7,700 kcal/kg,
-    /// divided by the daily deficit below today's maintenance. A straight line, so it's framed as "could".
-    private var projection: (weight: String, date: String)? {
-        guard intent == .lose, let estimate, let input, let goal = parsedCalorieGoal else { return nil }
-        let deficit = estimate.maintenance - goal, toLose = input.weightKG - input.goalKG
+    /// When the goal weight would be reached at the typed target: the weight left to lose (or gain) at 7,700 kcal/kg,
+    /// divided by the daily deficit (or surplus) against today's maintenance. A straight line, so it's framed as "could".
+    private var projection: (weight: String, date: String, days: Int)? {
+        guard intent.hasGoalWeight, let estimate, let input, let goal = parsedCalorieGoal else { return nil }
+        let sign: Double = intent == .gain ? -1 : 1
+        let deficit = sign * (estimate.maintenance - goal), toLose = sign * (input.weightKG - input.goalKG)
         guard deficit > 0, toLose > 0 else { return nil }
         let days = (toLose * 7700 / deficit).rounded(.up)
         guard days <= 3 * 365, let date = Calendar.current.date(byAdding: .day, value: Int(days), to: .now) else { return nil }
-        return (WeightInput.text(input.goalKG, in: unit), Self.longDate(date))
+        return (WeightInput.text(input.goalKG, in: unit), Self.longDate(date), Int(days))
     }
     /// "November 1st, 2026"
     private static func longDate(_ date: Date) -> String {
@@ -153,6 +200,9 @@ struct OnboardingView: View {
                 SetupView(goal: isRevising ? store.profile?.dailyGoal : nil, isAdjustingGoal: true,
                           saveAction: { saveTrackingAndGoal($0) }, onSaved: { complete(goal: "manual") })
             }
+            .fullScreenCover(isPresented: $previewingSource, onDismiss: { dismiss() }) {
+                NavigationStack { DiscoverySourceView(isPreview: true) { previewingSource = false } }
+            }
             .alert("Clear saved answers?", isPresented: $confirmingClear) {
                 // Alert buttons may skip the haptic button style, so they play their own feel.
                 Button("Cancel", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)
@@ -162,7 +212,7 @@ struct OnboardingView: View {
             }
             .alert("Skip plan?", isPresented: $confirmingSkip) {
                 Button("Yes, skip plan") { Haptics.play(.tap); reportChoice("skipConfirmed"); skipPlan() }.hapticFeel(.none)
-                Button("No, me build plan") { Haptics.play(.tap); reportChoice("skipDeclined"); advance() }.hapticFeel(.none)
+                Button("No, me want plan") { Haptics.play(.tap); reportChoice("skipDeclined"); advance() }.hapticFeel(.none)
             } message: {
                 Text("Cave Cals help pick ideal daily calorie target to reach goal. Take under one minute.")
             }
@@ -210,8 +260,8 @@ struct OnboardingView: View {
                 if reduceMotion || ProcessInfo.processInfo.arguments.contains("--uitesting") {
                     Image("WelcomeLogo").resizable().scaledToFit()
                 } else {
-                    // The caveman starts scanning his drumstick on a loop once “Weight Drop.” (stage 4) slides in.
-                    WelcomeScanAnimation(isRunning: introStage >= 4)
+                    // The caveman starts scanning his drumstick as soon as he starts dropping in (stage 1).
+                    WelcomeScanAnimation(isRunning: introStage >= 1)
                 }
             }
             .creamBadgeInDarkMode()
@@ -307,28 +357,40 @@ struct OnboardingView: View {
                 option(value.rawValue, detail: value.detail, image: artwork(value), selected: activity == value, id: "activity-\(value.id)") { activity = value }
             }
         case 4:
-            if intent == .lose {
-                numberField("Goal weight", text: $goalWeight, suffix: unit.rawValue, id: "planGoalWeight", placeholder: weightPlaceholder, note: currentWeightNote)
+            if intent.hasGoalWeight {
+                // Rate comes first so the keyboard never hides that a pace must be picked.
                 Text("Rate").font(.cave(.subheadline)).padding(.bottom, -8)
-                ForEach([0.25, 0.5, 0.75], id: \.self) { speed in
-                    option(paceTitle(speed), detail: speed == 0.25 ? "An easier place to start" : speed == 0.5 ? "A moderate pace" : "A larger daily change",
-                           image: speed == 0.25 ? "PaceTurtle" : speed == 0.5 ? "PaceDog" : "PaceRabbit",
-                           selected: pace == speed, id: "pace-\(speed)") { pace = speed }
+                ForEach(intent.paceLevels, id: \.self) { level in
+                    // Identifiers keep their original names (pace-0.25/0.5/0.75) for UI tests.
+                    option(paceTitle(level), detail: paceDetail(level),
+                           image: ["PaceTurtle", "PaceDog", "PaceRabbit"][level],
+                           selected: paceChosen && paceLevel == level, id: "pace-\(["0.25", "0.5", "0.75"][level])") {
+                        paceLevel = level; paceChosen = true
+                        // Straight on to the goal weight, keyboard up.
+                        field = "planGoalWeight"
+                    }
+                    // Changing the rate while typing the goal weight keeps the keyboard up.
+                    .keyboardInputArea()
                 }
+                numberField("Goal weight", text: $goalWeight, suffix: unit.rawValue, id: "planGoalWeight", placeholder: weightPlaceholder, note: currentWeightNote)
+                    .padding(.top, 6)
                 Text("We’ll keep the target within sensible limits. Your actual pace may be slower.").font(.cave(.footnote)).foregroundStyle(.secondary)
             } else { Text("We’ll estimate a target to keep your weight steady.").foregroundStyle(.secondary) }
         case 5:
-            Text("(Calories always tracked)").foregroundStyle(.secondary)
+            // Calories first (always on), then macros, then weight. Tracking macros with a calculated plan
+            // always gets suggested targets on Your target, where Daily macros' pencil can change or drop them.
             VStack(spacing: 0) {
-                switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight") {
-                    Image("TrackWeightScale").resizable().scaledToFit().frame(width: 44, height: 44)
-                }.padding(.vertical, 10)
+                caloriesRow.padding(.vertical, 10)
                 Divider()
                 switchRow("Track macros", isOn: $trackMacros, id: "planTrackMacros") {
                     // The same protein/carbs/fat glyphs as the Home summary.
                     HStack(spacing: 10) {
                         ForEach([CaveGlyph.protein, .carbs, .fat], id: \.self) { CaveIcon($0, size: 32) }
                     }.foregroundStyle(Color.caveOrange)
+                }.padding(.vertical, 10)
+                Divider()
+                switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight") {
+                    Image("TrackWeightScale").resizable().scaledToFit().frame(width: 44, height: 44)
                 }.padding(.vertical, 10)
             }.padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
@@ -339,12 +401,11 @@ struct OnboardingView: View {
                 HStack(spacing: 10) {
                     Image("TargetArt").resizable().scaledToFit().frame(width: 96, height: 96).accessibilityHidden(true)
                     VStack(spacing: 2) {
-                        Text("Daily calories").foregroundStyle(.secondary)
+                        editLabel("Daily calories", id: "planEditCalories", spoken: "Edit daily calories") { field = "planCalories" }
                         TextField("Calories", text: $calorieGoal).keyboardType(.numberPad).focused($field, equals: "planCalories")
                             .font(.custom("Schoolbell-Regular", size: 58, relativeTo: .largeTitle)).multilineTextAlignment(.center)
                             .accessibilityLabel("Daily calorie target").accessibilityIdentifier("planCalories")
                             .selectValueOnFocus(identifier: "planCalories")
-                        Text("Tap to adjust").font(.cave(.caption)).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity)
                 }.padding(.leading, 16).padding(.trailing, 40).padding(.top, 16).padding(.bottom, 14)
                     .frame(maxWidth: .infinity).background(Color.caveOrange.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
@@ -354,21 +415,31 @@ struct OnboardingView: View {
                     Text("Enter \(Int(gender?.minimumCalories ?? 1500).formatted())–6,000 calories, or go back to change your plan.")
                         .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planTargetValidation")
                 } else if let projection {
-                    (Text("Based on your current weight and pace, you could weigh \(projection.weight) \(unit.rawValue) by ")
-                        + Text(projection.date).underline().foregroundStyle(Color.caveOrange) + Text("."))
-                        .font(.cave(.title3)).fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("planProjection")
+                    projectionSentence(projection)
                 }
                 if estimate.paceLimited { Text("We eased the pace to keep your starting target higher.").font(.cave(.subheadline)) }
+                if let suggestedMacros { macroTargets(suggestedMacros) }
+                if editedMacros != nil && !noMacroGoals && savedMacros == nil && suggestedMacros != nil {
+                    Text("Use 1–1,000 grams, or leave a box empty for no goal.")
+                        .font(.cave(.footnote)).foregroundStyle(.red).accessibilityIdentifier("planMacroValidation")
+                }
                 Text("An estimate, not a promise. Track for a few weeks and adjust with your progress.").font(.cave(.subheadline)).foregroundStyle(.secondary)
                 if isRevising {
                     switchRow("Track my weight", isOn: $trackWeight, id: "planTrackWeight")
                 }
                 DisclosureGroup("How we worked it out") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Estimated maintenance: \(estimate.maintenance.calorieText) calories. We use your age, height, weight, activity, and the Mifflin–St Jeor equation, then allow a modest deficit for weight loss. Your goal weight sets the direction, not a deadline.")
+                        Text(breakdown(estimate))
+                        Text("Your goal weight sets the direction, not a deadline.")
                         Text("Automatic targets use at least \(Int(gender?.minimumCalories ?? 1500)) calories and limit the deficit to 25% or 750 calories, whichever is smaller. These limits don’t guarantee a suitable diet for everyone.")
+                        if suggestedMacros != nil && editedMacros == nil {
+                            Text("Macros: protein is 1.6 g per kg of your goal weight (or of a healthy weight for your height, if that’s lower) to help keep muscle and fullness. Fat gets about 30% of calories and carbs the rest. Eat at least the protein; carbs and fat are limits.")
+                        }
                         Link("Calorie equation research", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/2305711/")!)
+                        if suggestedMacros != nil {
+                            Link("Protein and weight loss research", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/25926512/")!)
+                            Link("Healthy macro ranges (National Academies)", destination: URL(string: "https://nap.nationalacademies.org/catalog/10490")!)
+                        }
                         Link("NIH weight-planning guidance", destination: URL(string: "https://www.niddk.nih.gov/bwp")!)
                         Link("CDC: gradual weight loss", destination: URL(string: "https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html")!)
                     }.font(.cave(.footnote)).padding(.top, 8)
@@ -383,6 +454,119 @@ struct OnboardingView: View {
     }
     private var stepTitle: some View {
         Text(title).font(.cave(.largeTitle)).accessibilityAddTraits(.isHeader)
+    }
+    /// The suggested targets under the calorie card, with the Home summary's glyphs. Protein is a floor;
+    /// carbs and fat are limits.
+    private func macroTargets(_ macros: MacroNutrients) -> some View {
+        VStack(spacing: 12) {
+            editLabel("Daily macros", id: "planEditMacros", spoken: "Edit daily macros") { editMacros(from: macros) }
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(MacroKind.primary) { kind in
+                    let grams = (macros[keyPath: kind.keyPath] ?? 0).formatted(.number.precision(.fractionLength(0)))
+                    let bound = kind == .protein ? "at least" : "up to"
+                    VStack(spacing: 4) {
+                        CaveIcon(kind == .protein ? .protein : kind == .totalCarbs ? .carbs : .fat, size: 30)
+                            .foregroundStyle(Color.caveOrange)
+                        Text(kind.title).font(.cave(.subheadline))
+                        if noMacroGoals && editedMacros != nil {
+                            // Tracked without a goal: just the glyph and name.
+                        } else {
+                        Text(bound).font(.cave(.caption)).foregroundStyle(.secondary)
+                        if editedMacros != nil {
+                            HStack(spacing: 2) {
+                                TextField("0", text: macroBinding(kind)).keyboardType(.numberPad)
+                                    .focused($field, equals: "planMacro-\(kind.rawValue)")
+                                    .multilineTextAlignment(.center).fixedSize()
+                                    .selectValueOnFocus(identifier: "planMacroField-\(kind.rawValue)")
+                                    .accessibilityLabel("\(kind.title) grams").accessibilityIdentifier("planMacroField-\(kind.rawValue)")
+                                Text("g")
+                            }.font(.cave(.title2))
+                                .padding(.horizontal, 10).padding(.vertical, 2)
+                                .background(Color.caveOrange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                                .keyboardInputArea { field = "planMacro-\(kind.rawValue)" }
+                        } else {
+                            Text("\(grams) g").font(.cave(.title2))
+                        }
+                        }
+                    }
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: editedMacros == nil ? .ignore : .contain)
+                    .accessibilityLabel(editedMacros == nil ? "\(kind.title), \(bound) \(grams) grams" : kind.title)
+                    .accessibilityIdentifier("planMacro-\(kind.rawValue)")
+                }
+            }
+            if editedMacros != nil {
+                Divider()
+                switchRow("No daily macro goals", isOn: $noMacroGoals.animation(reduceMotion ? nil : .easeInOut(duration: 0.2)),
+                          id: "planNoMacroGoals")
+                    .font(.cave(.subheadline))
+            }
+        }
+        .padding(16).frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+    }
+    /// "…you could weigh 190 lb in **23 days** (October 24th, 2026)." The day count is bold orange so it stands out.
+    /// Schoolbell has no bold, so (like `InkBoldText`) offset copies thicken it; in the copies everything else is clear,
+    /// and identical text wraps identically.
+    private func projectionSentence(_ projection: (weight: String, date: String, days: Int)) -> some View {
+        let days = projection.days == 1 ? "1 day" : "\(projection.days.formatted()) days"
+        func sentence(daysOnly: Bool) -> Text {
+            let rest = daysOnly ? Color.clear : Color.primary
+            return Text("Based on your current weight and pace, you could weigh \(projection.weight) \(unit.rawValue) in ").foregroundStyle(rest)
+                + Text(days).foregroundStyle(Color.caveOrange)
+                + Text(" (\(projection.date)).").foregroundStyle(rest)
+        }
+        let ink: CGFloat = 0.5
+        let offsets: [CGSize] = [.init(width: ink, height: 0), .init(width: -ink, height: 0),
+                                 .init(width: 0, height: ink), .init(width: 0, height: -ink)]
+        return sentence(daysOnly: false)
+            .font(.cave(.title3)).fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("planProjection")
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(offsets.indices, id: \.self) { sentence(daysOnly: true).font(.cave(.title3)).offset(offsets[$0]) }
+                }.accessibilityHidden(true)
+            }
+    }
+    /// A card's label with an orange pencil; the label and the pencil both start editing.
+    private func editLabel(_ title: String, id: String, spoken: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title).foregroundStyle(Color.secondary)
+                CaveIcon(.pencil, size: 16).foregroundStyle(Color.caveOrange)
+            }.frame(minHeight: 32).contentShape(Rectangle())
+        }.hapticButtonStyle(.plain)
+            .keyboardInputArea()
+            .accessibilityLabel(spoken).accessibilityIdentifier(id)
+    }
+    /// Turns the suggested grams into boxes, focusing protein; later calorie changes leave them alone.
+    private func editMacros(from macros: MacroNutrients) {
+        if editedMacros == nil {
+            editedMacros = Dictionary(uniqueKeysWithValues: MacroKind.primary.map {
+                ($0, String(Int(macros[keyPath: $0.keyPath] ?? 0)))
+            })
+        }
+        field = "planMacro-\(MacroKind.protein.rawValue)"
+    }
+    private func macroBinding(_ kind: MacroKind) -> Binding<String> {
+        Binding(get: { editedMacros?[kind] ?? "" },
+                set: { editedMacros?[kind] = String($0.filter(\.isNumber).prefix(4)) })
+    }
+    /// How the target was worked out, with the numbers: resting burn, what activity adds, then the pace's change.
+    private func breakdown(_ estimate: CaloriePlanEstimate) -> String {
+        let resting = estimate.resting.calorieText, maintenance = estimate.maintenance.calorieText
+        let added = (estimate.maintenance - estimate.resting).calorieText
+        let activityName = activity.map { "“\($0.rawValue)”" } ?? "your usual week"
+        var text = "Resting burn: about \(resting) calories a day. That's what your body uses at rest, from your age, height, weight, and the Mifflin–St Jeor equation. "
+        text += "Your activity (\(activityName)) adds about \(added), for about \(maintenance) calories a day to keep your weight steady."
+        let change = abs(estimate.calories - estimate.maintenance).calorieText
+        switch intent {
+        case .lose: text += " To lose weight, we take off about \(change), for a target of \(estimate.calories.calorieText)."
+        case .gain: text += " To gain weight, we add about \(change), for a target of \(estimate.calories.calorieText)."
+        case .maintain: text += " Your target rounds that to \(estimate.calories.calorieText)."
+        }
+        return text
     }
     /// Lose/Maintain sits beside the title when it fits, leaving the step more room; otherwise it goes below.
     private var goalHeader: some View {
@@ -497,6 +681,22 @@ struct OnboardingView: View {
                 .keyboardInputArea { field = id }
         }
     }
+    /// Calories are always tracked: shown on, and it can't be turned off.
+    private var caloriesRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Track calories")
+                Text("Always on").font(.cave(.caption)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Toggle("Track calories", isOn: .constant(true)).labelsHidden().allowsHitTesting(false)
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Track calories")
+        .accessibilityValue("On, always")
+        .accessibilityIdentifier("planTrackCalories")
+    }
     /// Scroll views swallow quick taps on a bare switch, so the whole row flips it.
     /// `spoken` gives VoiceOver plain wording when the visible title is caveman talk.
     private func switchRow(_ title: String, isOn: Binding<Bool>, id: String, spoken: String? = nil) -> some View {
@@ -533,7 +733,11 @@ struct OnboardingView: View {
                 if let image {
                     Image(image).resizable().scaledToFit().frame(width: 48, height: 48).accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 3) { Text(title); if let detail { Text(detail).font(.cave(.caption)).foregroundStyle(.secondary) } }
+                VStack(alignment: .leading, spacing: 3) { Text(title); if let detail {
+                    // One line at normal sizes (shrinking a little if needed); large text wraps freely.
+                    Text(detail).font(.cave(.caption)).foregroundStyle(.secondary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.75)
+                } }
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.caveOrange : .secondary)
             }.padding(16).frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
@@ -541,16 +745,25 @@ struct OnboardingView: View {
                 .contentShape(Rectangle())
         }.hapticButtonStyle(.plain).hapticFeel(.selection).accessibilityAddTraits(selected ? .isSelected : []).accessibilityIdentifier(id)
     }
-    private func paceTitle(_ kg: Double) -> String {
+    private func paceDetail(_ level: Int) -> String {
+        if intent == .gain { return level == 0 ? "A lean, steady gain" : "A faster gain" }
+        return ["An easier place to start", "A moderate pace", "A larger daily change"][level]
+    }
+    /// "−1 lb per week" when losing, "+0.5 lb per week" when gaining, from today's weight (90 kg until it's typed).
+    private func paceTitle(_ level: Int) -> String {
+        let currentKG = WeightUnit.parse(weight).map(unit.kilograms) ?? 90
+        let kg = PlanPace.weeklyKG(level: level, weightKG: currentKG, unit: unit)
         let precision = unit == .kilograms ? 2 : 1
-        return "\(unit.display(kg).formatted(.number.precision(.fractionLength(0...precision)))) \(unit.rawValue) per week"
+        let amount = unit.display(kg).formatted(.number.precision(.fractionLength(0...precision)))
+        return "\(intent == .gain ? "+" : "−")\(amount) \(unit.rawValue) per week"
     }
     private func changeStep(_ next: Int) {
         field = nil; error = nil
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = next }
         reportStep(next)
-        // Measurements and Set Goal open with their first box ready for typing (after the step slides in).
-        let first = next == 2 ? "planHeight" : next == 4 && intent == .lose ? "planGoalWeight" : nil
+        // Measurements opens with its first box ready for typing (after the step slides in).
+        // Set Goal starts with Rate, so nothing is focused there until a rate is picked (the keyboard would hide it).
+        let first = next == 2 ? "planHeight" : nil
         guard let first else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
@@ -568,7 +781,7 @@ struct OnboardingView: View {
             resultBackStep = 1; error = nil; changeStep(isRevising ? 6 : 5); return
         }
         if step == 4 {
-            resultBackStep = 4; calorieGoal = estimate.map { formattedCalories($0.calories) } ?? ""
+            resultBackStep = 4; editedMacros = ownMacroGoals; noMacroGoals = false; calorieGoal = estimate.map { formattedCalories($0.calories) } ?? ""
             changeStep(isRevising ? 6 : 5); return
         }
         changeStep(step + 1)
@@ -590,10 +803,21 @@ struct OnboardingView: View {
     }
     /// `goal` is plan, manual, or none, for the setup funnel.
     private func complete(goal: String) {
-        if isRevising || isPreview { dismiss(); return }
+        if isRevising { dismiss(); return }
+        // Nothing is recorded or saved in the preview's question either. UI tests skip it, like the real one.
+        if isPreview {
+            guard DiscoverySourceView.shouldAsk else { dismiss(); return }
+            Task { @MainActor in
+                // The manual-goal sheet finishes closing first.
+                if goal == "manual" { try? await Task.sleep(for: .milliseconds(600)) }
+                previewingSource = true
+            }
+            return
+        }
         UsageStats.shared.event("onboarding.finished", [
-            "goal": goal, "intent": goal == "plan" ? (intent == .lose ? "lose" : "maintain") : "",
+            "goal": goal, "intent": goal == "plan" ? intent.statName : "",
             "weight": String(trackWeight), "macros": String(trackMacros),
+            "macroTargets": String(goal == "plan" && savedMacros?.hasValues == true),
         ])
         onCompleted()
     }
@@ -623,19 +847,28 @@ struct OnboardingView: View {
         guard weights.saveCaloriePlan(SavedCaloriePlan(input: input, calorieGoal: goal), unit: unit, trackWeight: trackWeight) else {
             error = weights.error; saving = false; return
         }
-        if store.saveGoal(goal, tracksMacros: isRevising ? nil : trackMacros) { complete(goal: "plan") }
-        else { error = store.error }
+        let macros = savedMacros
+        if store.saveGoal(goal, tracksMacros: isRevising ? nil : trackMacros, macroGoals: macros) {
+            // Suggested (or adjusted) targets, not goals a revision simply kept.
+            if macros?.hasValues == true && !isPreview && (editedMacros == nil || editedMacros != ownMacroGoals) {
+                UsageStats.shared.event("macroTargets.saved", ["from": isRevising ? "plan" : "setup"])
+            }
+            complete(goal: "plan")
+        } else { error = store.error }
         saving = false
     }
     private func loadSavedPlan() {
         guard !loaded else { return }; loaded = true
         unit = weights.unit
         initializedUnit = unit == .pounds
-        if isRevising { trackWeight = weights.tracking }
+        if isRevising {
+            trackWeight = weights.tracking
+        }
         guard isRevising, let saved = weights.caloriePlan else { return }
         let p = saved.input
         // A saved choice that setup no longer shows (No Say) is picked again.
-        gender = PlanGender.choices.contains(p.gender) ? p.gender : nil; age = AgeDial.range.clamped(p.age); activity = p.activity; intent = p.intent; pace = p.weeklyLossKG
+        gender = PlanGender.choices.contains(p.gender) ? p.gender : nil; age = AgeDial.range.clamped(p.age); activity = p.activity; intent = p.intent; paceChosen = true
+        paceLevel = PlanPace.level(for: p.weeklyLossKG, weightKG: p.weightKG, unit: unit, in: p.intent.paceLevels)
         weight = WeightInput.text(weights.records.first?.kilograms ?? p.weightKG, in: unit)
         goalWeight = WeightInput.text(p.goalKG, in: unit)
         setHeight(p.heightCM, unit: unit)
@@ -644,7 +877,7 @@ struct OnboardingView: View {
     private func clearSavedAnswers() {
         guard weights.forgetCaloriePlan() else { error = weights.error; return }
         gender = nil; age = 30; height = ""; inches = ""; weight = ""; goalWeight = ""
-        activity = nil; intent = .lose; pace = 0.25; clinicianSupport = false; calorieGoal = ""
+        activity = nil; intent = .lose; paceLevel = 0; paceChosen = false; clinicianSupport = false; calorieGoal = ""
     }
     private func setHeight(_ cm: Double, unit: WeightUnit) {
         if unit == .kilograms { height = cm.formatted(.number.grouping(.never).precision(.fractionLength(0...1))); inches = "" }

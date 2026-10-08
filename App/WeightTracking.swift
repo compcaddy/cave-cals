@@ -225,3 +225,22 @@ enum WeightWeek {
         return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
     }
 }
+
+/// Where the weigh-in dial starts for a day without its own weigh-in.
+enum WeighInStart {
+    /// The day's own weigh-in, else the latest one before it, else the earliest one after it.
+    /// Nil only when there are no weigh-ins at all, so the first one is typed.
+    static func reference(for date: Date, in records: [WeightRecord], calendar: Calendar = .current) -> WeightRecord? {
+        let day = calendar.startOfDay(for: date)
+        if let same = records.first(where: { calendar.isDate($0.date, inSameDayAs: day) }) { return same }
+        let before = records.filter { $0.date < day }.max { $0.date < $1.date }
+        return before ?? records.filter { $0.date > day }.min { $0.date < $1.date }
+    }
+    /// The dial's span in tenths of the display unit: 30 units around every weigh-in, within valid weights.
+    static func tenths(around records: [WeightRecord], including value: Int?, unit: WeightUnit) -> ClosedRange<Int> {
+        let shown = records.map { Int((unit.display($0.kilograms) * 10).rounded()) } + [value].compactMap { $0 }
+        let lowest = Int((unit.display(1) * 10).rounded(.up)), highest = Int((unit.display(700) * 10).rounded(.down))
+        guard let low = shown.min(), let high = shown.max() else { return lowest...highest }
+        return max(lowest, low - 300)...min(highest, high + 300)
+    }
+}

@@ -12,7 +12,7 @@ import { authenticate,challenge } from '../../backend/src/server/auth';
 import { consume,tomorrow } from '../../backend/src/server/rate-limit';
 import { requirePaid } from '../../backend/src/server/apple';
 import { api } from '../../backend/src/server/api';
-import { analyze } from '../../backend/src/server/analysis';
+import { analyze,importRecipeUploads } from '../../backend/src/server/analysis';
 import { localPath,deleteUpload,localUpload } from '../../backend/src/server/storage';
 nextEnv.loadEnvConfig(process.cwd(),true);
 const env=process.env as Record<string,string|undefined>;
@@ -129,9 +129,8 @@ test('food search is free, returns normalized restaurant results, and uses share
   }
 });
 
-async function scanFixture(identity: Awaited<ReturnType<typeof account>>, kind = 'image') {
+async function scanFixture(identity: Awaited<ReturnType<typeof account>>, kind = 'image', bytes = Buffer.from('fixture')) {
   const id = randomUUID(); uploadIds.push(id);
-  const bytes = Buffer.from('fixture');
   await database().insert(uploads).values({ id, accountId: identity.accountId, pathname: `temporary/${id}`, kind,
     mime: kind === 'image' ? 'image/jpeg' : 'audio/mp4', byteLength: bytes.length,
     sha256: createHash('sha256').update(bytes).digest('hex'), storage: 'local', expiresAt: tomorrow() });
@@ -140,6 +139,24 @@ async function scanFixture(identity: Awaited<ReturnType<typeof account>>, kind =
 }
 const scanResult = { items: [{ name: 'Egg', calories: 80, portion: '1 egg', servingSize: '1 egg', servings: 1, confidence: 'medium' as const, macros: null }], notes: 'Fixture' };
 const codeIs = (code: string) => (e: unknown) => (e as { code: string }).code === code;
+
+test('recipe photo imports read pages in order once, stay private, and replay the saved result', async () => {
+  const identity = await account(), other = await account();
+  const first = await scanFixture(identity, 'image', Buffer.from('page one')), second = await scanFixture(identity, 'image', Buffer.from('page two'));
+  const recipe = { mealName: 'Couscous', recipeServings: 7, ...scanResult };
+  let calls = 0, pages: string[] = [];
+  const model = async (images: Buffer[]) => { calls++; pages = images.map(String); await new Promise(r => setTimeout(r, 100)); return recipe; };
+  await assert.rejects(importRecipeUploads(other, [first, second], model), codeIs('not_found')); assert.equal(calls, 0);
+  const results = await Promise.allSettled([importRecipeUploads(identity, [second, first], model), importRecipeUploads(identity, [second, first], model)]);
+  assert.ok(results.some(r => r.status === 'fulfilled')); assert.equal(calls, 1);
+  assert.deepEqual(pages, ['page two', 'page one']);
+  assert.deepEqual(await importRecipeUploads(identity, [second, first], model), recipe); assert.equal(calls, 1);
+  const broken = await scanFixture(identity);
+  await assert.rejects(importRecipeUploads(identity, [broken], async () => { throw new Error('fixture failure'); }), codeIs('ai_unavailable'));
+  await assert.rejects(importRecipeUploads(identity, [broken], model), codeIs('failed'));
+  await assert.rejects(importRecipeUploads(identity, [await scanFixture(identity, 'audio')], model), codeIs('not_found'));
+  assert.equal(calls, 1);
+});
 
 test('ten combined photo/audio scans are free; eleventh is gated and tenth replay is free', async () => {
   const identity = { ...await account(), development: false };

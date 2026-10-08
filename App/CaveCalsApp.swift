@@ -6,9 +6,17 @@ import CoreData
     @UIApplicationDelegateAdaptor(QuickActionAppDelegate.self) private var appDelegate
     @State private var store: AppStore?
     @State private var failure: String?
-    @State private var weights = WeightStore(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots") || ProgressPreferences.isPreview)
+    @State private var weights: WeightStore
     @State private var nutritionHealth: NutritionHealthSync
+    @State private var progressPhotos: ProgressPhotoStore
+    @AppStorage(DevTestData.pendingKey) private var pendingReset = false
     init() {
+        var resetFailure: Error?
+        do { try DevTestData.prepareForLaunch() } catch { resetFailure = error }
+        let temporary = resetFailure != nil || ProcessInfo.processInfo.arguments.contains("--uitesting")
+            || ProcessInfo.processInfo.arguments.contains("--screenshots") || ProgressPreferences.isPreview
+        _weights = State(initialValue: WeightStore(inMemory: temporary))
+        _progressPhotos = State(initialValue: ProgressPhotoStore(inMemory: temporary))
         let navFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 20)!)
         UINavigationBar.appearance().titleTextAttributes = [.font: navFont]
         UINavigationBar.appearance().largeTitleTextAttributes = [.font: UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: UIFont(name: "Schoolbell-Regular", size: 36)!)]
@@ -25,9 +33,10 @@ import CoreData
             _weights = State(initialValue: preview)
         }
         #endif
-        let nutrition = NutritionHealthSync(inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting") || ProcessInfo.processInfo.arguments.contains("--screenshots") || ProgressPreferences.isPreview)
+        let nutrition = NutritionHealthSync(inMemory: temporary)
         _nutritionHealth = State(initialValue: nutrition)
         do {
+            if let resetFailure { throw resetFailure }
             var screenshots = false
             #if DEBUG && targetEnvironment(simulator)
             screenshots = ProcessInfo.processInfo.arguments.contains("--screenshots")
@@ -48,6 +57,9 @@ import CoreData
                 }
                 store.commit()
                 _weights = State(initialValue: ProgressPreview.weights())
+                let photos = ProgressPhotoStore(inMemory: true)
+                photos.addSamples()
+                _progressPhotos = State(initialValue: photos)
             }
             if screenshots {
                 store.saveGoal(2100)
@@ -72,6 +84,29 @@ import CoreData
             let arguments = ProcessInfo.processInfo.arguments
             if let index = arguments.firstIndex(of: "--seed-goal"), arguments.indices.contains(index + 1),
                let goal = Double(arguments[index + 1]) { store.saveGoal(goal) }
+            // `--meal-types time` or `--meal-types ask` starts UI tests with meal types on (after the seeded goal's profile).
+            if let index = arguments.firstIndex(of: "--meal-types"), arguments.indices.contains(index + 1) {
+                store.saveMealSettings(MealSettings(tracks: true, byTime: arguments[index + 1] != "ask"))
+            }
+            #if targetEnvironment(simulator)
+            // `--meal-types-sample` logs a day of food at set times (yesterday, and today up to now) for previews.
+            if arguments.contains("--meal-types-sample") {
+                let sample: [(String, Double, Int, Int)] = [
+                    ("Oatmeal", 300, 7, 10), ("Coffee", 5, 7, 15), ("Banana", 105, 9, 45), ("Turkey sandwich", 450, 12, 20),
+                    ("Chips", 160, 12, 25), ("Greek yogurt", 130, 15, 0), ("Salmon", 420, 18, 30), ("Rice", 210, 18, 35),
+                    ("Popcorn", 110, 21, 15),
+                ]
+                for daysAgo in [1, 0] {
+                    let day = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
+                    let drafts = sample.compactMap { name, calories, hour, minute -> EntryDraft? in
+                        let time = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
+                        return time <= Date() ? EntryDraft(name: name, calories: calories, timestamp: time) : nil
+                    }
+                    if !drafts.isEmpty { store.add(drafts) }
+                }
+                store.toast = nil
+            }
+            #endif
             #endif
             Persistence.shared = store
             UsageStats.shared.attach(store)
@@ -83,8 +118,11 @@ import CoreData
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     var body: some Scene {
         WindowGroup {
-            if let store {
+            if AppEnvironment.isDevelopment && pendingReset && failure == nil {
+                DevResetPendingView()
+            } else if let store {
                 RootView().font(.cave(.body)).environment(store).environment(LoggingActionRouter.shared).environment(weights).environment(nutritionHealth)
+                    .environment(progressPhotos)
                     .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
                     // Every button taps back; explicit styles use `.hapticButtonStyle(_:)` to keep it.
                     .hapticButtonStyle(.automatic)
@@ -126,11 +164,12 @@ struct RootView: View {
                 [
                     "goal": String(store.profile?.dailyGoal != nil), "tracksMacros": String(store.tracksMacros),
                     "tracksWeight": String(weights.tracking), "healthWeights": String(weights.healthSharing),
-                    "intent": weights.caloriePlan.map { $0.input.intent == .lose ? "lose" : "maintain" } ?? "",
+                    "intent": weights.caloriePlan.map { $0.input.intent.statName } ?? "",
                     "healthCalories": String(nutritionHealth.enabled), "iCloud": String(store.cloudEnabled),
                     "reminders": String(LogReminders.shared.isEnabled && LogReminders.shared.isAllowed),
                     "quickStart": String(UserDefaults.standard.object(forKey: AppStore.showsHomeQuickAddKey) as? Bool ?? true),
                     "doneEatingButton": String(UserDefaults.standard.object(forKey: AppStore.showsFinishDayKey) as? Bool ?? true),
+                    "mealTypes": store.mealSettings.statsMode,
                 ]
             }
             UsageStats.shared.appBecameActive()

@@ -187,8 +187,15 @@ struct MacroSettingsSection: View {
 
 struct MacroGoalsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(WeightStore.self) private var weights
     @Environment(\.dismiss) private var dismiss
     @State var goals: MacroNutrients
+    @State private var usedSuggestion = false
+    /// From the saved calorie plan and today's calorie goal, when the calculator can suggest them.
+    private var suggestion: MacroNutrients? {
+        guard let plan = weights.caloriePlan, let calories = store.profile?.dailyGoal else { return nil }
+        return MacroPlanner.suggest(plan.input, calories: calories)
+    }
     var body: some View {
         HapticForm {
             Section {
@@ -196,17 +203,45 @@ struct MacroGoalsView: View {
                     MacroAmountField(title: kind.title, value: Binding(get: { goals[keyPath: kind.keyPath] }, set: { goals[keyPath: kind.keyPath] = $0 }), placeholder: "None", identifier: "goal-\(kind.rawValue)")
                 }
             } footer: { Text("Daily goals. Leave blank for none.") }
+            if let suggestion {
+                let applied = goals.sameGoals(as: suggestion)
+                Section {
+                    Button {
+                        for kind in MacroKind.primary { goals[keyPath: kind.keyPath] = suggestion[keyPath: kind.keyPath] }
+                        usedSuggestion = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(applied ? "Using suggested targets" : "Use suggested targets")
+                                .foregroundStyle(applied ? Color.secondary : Color.caveOrange)
+                            Text(Self.summary(suggestion)).font(.cave(.caption)).foregroundStyle(Color.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .disabled(applied)
+                    .accessibilityIdentifier("suggestMacroGoals")
+                } footer: {
+                    Text("From your calorie plan and daily calorie goal: protein from your goal weight, fat about 30% of calories, carbs the rest.")
+                }
+            }
         }.caveScreenBackground()
         .tapOutsideClosesKeyboard()
         .navigationTitle("Macro goals").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { if store.saveMacroGoals(goals) { dismiss() } }
+                Button("Save") {
+                    guard store.saveMacroGoals(goals) else { return }
+                    if usedSuggestion, let suggestion, goals.sameGoals(as: suggestion) { UsageStats.shared.event("macroTargets.saved", ["from": "goals"]) }
+                    dismiss()
+                }
                     .hapticButtonStyle(.automatic).hapticFeel(.success)
                     .disabled(!goals.isValidGoal)
                     .accessibilityIdentifier("saveMacroGoals")
             }
         }
+    }
+    /// "At least 130 g protein · up to 235 g carbs · up to 65 g fat"
+    private static func summary(_ macros: MacroNutrients) -> String {
+        func grams(_ value: Double?) -> String { (value ?? 0).formatted(.number.precision(.fractionLength(0))) }
+        return "At least \(grams(macros.protein)) g protein · up to \(grams(macros.totalCarbs)) g carbs · up to \(grams(macros.fat)) g fat"
     }
 }
 
@@ -273,6 +308,8 @@ struct DailySummaryCard: View {
     /// False while a sheet covers Home; a new total waits to count until the sheet goes away.
     let isVisible: Bool
     @Binding var shown: SummaryFigures?
+    /// Tapping Protein, Carbs, or Fat opens the day's breakdown (`MacroBreakdownSheet`).
+    var openMacro: ((MacroKind) -> Void)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Fast at first, then slowing as it settles onto the final number. The rumble reads the same curve.
@@ -346,9 +383,15 @@ struct DailySummaryCard: View {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(MacroKind.primary) { kind in
                         let total = macros.total(kind)
-                        CountingValue(value: figures.grams[kind] ?? total.grams ?? 0) { grams in
-                            macroColumn(kind, total: total, shownGrams: grams, goal: macroGoals[keyPath: kind.keyPath])
+                        Button { openMacro?(kind) } label: {
+                            CountingValue(value: figures.grams[kind] ?? total.grams ?? 0) { grams in
+                                macroColumn(kind, total: total, shownGrams: grams, goal: macroGoals[keyPath: kind.keyPath])
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .hapticButtonStyle(.plain)
+                        .disabled(openMacro == nil)
+                        .accessibilityHint("Shows each food's \(kind.title.lowercased())")
                     }
                 }
                 .padding(.top, 8)
@@ -412,5 +455,367 @@ struct DailySummaryCard: View {
         case .totalCarbs: .carbs
         default: .fat
         }
+    }
+}
+
+/// Home's macro breakdown, opened from Protein, Carbs, or Fat: the day's foods with their grams, blank where a food
+/// has no amount (that's what the "+" on Home means), each editable in place. A tapped box selects its value and
+/// tints its row; an edit saves when the box loses focus or the sheet closes, and a typed amount isn't an estimate.
+struct MacroBreakdownSheet: View {
+    let day: Date
+    let title: String
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var texts: [Cell: String] = [:]
+    /// The box being typed in, kept past the focus change so closing the sheet still saves it.
+    @State private var editing: Cell?
+    /// What the focused box held when it was tapped: unchanged means nothing to save, and it can still be refreshed.
+    @State private var focusStart: (cell: Cell, text: String)?
+    @State private var message: String?
+    /// "Also filled 3 other Banana entries."
+    @State private var note: String?
+    /// Foods waiting on an AI estimate (requests run one at a time through `AIBackend`'s gate).
+    @State private var estimating: Set<UUID> = []
+    @FocusState private var focused: Cell?
+
+    struct Cell: Hashable { let entry: UUID; let kind: MacroKind }
+    private static let columnWidth: CGFloat = 60, columnSpacing: CGFloat = 6
+    private static var boxesWidth: CGFloat { columnWidth * 3 + columnSpacing * 2 }
+
+
+    private var entries: [CalorieEntry] { store.dayEntries(day).sorted { $0.timestamp < $1.timestamp } }
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                // The estimate button and column labels stay put; only the foods scroll.
+                if !entries.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !estimating.isEmpty || entries.contains(where: hasBlanks) { estimateAllButton }
+                        header
+                    }
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
+                    .background(Color.caveBackground)
+                    .zIndex(1)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if entries.isEmpty {
+                            Text("Nothing logged on this day yet.").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                        } else {
+                            VStack(spacing: 6) {
+                                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                    row(entry, index: index).id(entry.id)
+                                }
+                            }
+                            totals
+                        }
+                        if let message {
+                            Text(message).font(.cave(.footnote)).foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("macroBreakdownMessage")
+                        }
+                        if let note {
+                            Text(note).font(.cave(.footnote)).foregroundStyle(Color.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("macroBreakdownNote")
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                }
+                .onChange(of: focused) { old, new in
+                    if let old { commit(old) }
+                    editing = new
+                    focusStart = new.map { ($0, texts[$0] ?? "") }
+                    guard let new else { return }
+                    // Once the keyboard is up, bring the row being edited into view.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation { proxy.scrollTo(new.entry, anchor: .center) }
+                    }
+                }
+            }
+            .caveScreenBackground()
+            .tapOutsideClosesKeyboard()
+            .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { if let editing { commit(editing) }; dismiss() }
+                        .hapticButtonStyle(.automatic).accessibilityIdentifier("macroBreakdownDone")
+                }
+            }
+        }
+        .onAppear(perform: load)
+        .onDisappear { if let editing { commit(editing) } }
+    }
+
+    /// Fills every blank box with AI estimates. Requests start together and finish one by one.
+    private var estimateAllButton: some View {
+        let busy = !estimating.isEmpty
+        return Button { estimate(entries.filter(hasBlanks).map(\.id), scope: "all") } label: {
+            // A solid orange button, a little tighter than usual.
+            HStack(spacing: 6) {
+                Text(busy ? "Estimating…" : "Estimate all missing values")
+                if busy { ProgressView().controlSize(.small).tint(.white) } else { Image(systemName: "sparkles") }
+            }
+            .font(.cave(.subheadline)).foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .background(Color.caveOrange, in: Capsule())
+            .opacity(busy ? 0.8 : 1)
+            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+        }
+        .hapticButtonStyle(.plain)
+        .disabled(busy)
+        .accessibilityLabel(busy ? "Estimating" : "Estimate all missing values with AI")
+        .accessibilityIdentifier("macroEstimateAll")
+    }
+
+    private var header: some View {
+        HStack(alignment: .bottom, spacing: Self.columnSpacing) {
+            Spacer(minLength: 0)
+            // Column labels with Home's glyphs; no column is highlighted.
+            ForEach(MacroKind.primary) { kind in
+                VStack(spacing: 2) {
+                    CaveIcon(Self.glyph(kind), size: 22).foregroundStyle(Color.caveOrange)
+                    Text(kind.title).font(.cave(.caption)).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .frame(width: Self.columnWidth, height: 44)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("macroBreakdownColumn-\(kind.rawValue)")
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func row(_ entry: CalorieEntry, index: Int) -> some View {
+        let active = editing?.entry == entry.id
+        return VStack(alignment: .trailing, spacing: 4) {
+        HStack(spacing: Self.columnSpacing) {
+            VStack(alignment: .leading, spacing: 2) {
+                // Calories typed into search have no name; Home leaves them blank.
+                Text(entry.foodDisplayName.isEmpty ? "Quick calories" : entry.foodDisplayName)
+                    .font(.cave(.body)).lineLimit(2)
+                    .foregroundStyle(entry.foodDisplayName.isEmpty ? Color.secondary : Color.primary)
+                Text("\(entry.timestamp.formatted(date: .omitted, time: .shortened)) · \(entry.totalCalories.calorieText) cals")
+                    .font(.cave(.caption)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(MacroKind.primary) { kind in cell(entry, kind: kind, index: index) }
+        }
+        if estimating.contains(entry.id) || hasBlanks(entry) { estimateButton(entry, index: index) }
+        }
+        .padding(.vertical, 8).padding(.horizontal, 12)
+        .background(active ? Color.caveOrange.opacity(0.12) : Color.caveSurface, in: RoundedRectangle(cornerRadius: 14))
+        .animation(.easeInOut(duration: 0.15), value: active)
+    }
+
+    /// Small, centered under the boxes: fills this food's blanks with an AI estimate from its name and calories.
+    private func estimateButton(_ entry: CalorieEntry, index: Int) -> some View {
+        let busy = estimating.contains(entry.id)
+        return Button { estimate([entry.id], scope: "row") } label: {
+            HStack(spacing: 4) {
+                Text(busy ? "Estimating…" : "Estimate missing")
+                if busy { ProgressView().controlSize(.mini).tint(Color.caveOrange) } else { Image(systemName: "sparkles") }
+            }
+            .font(.cave(.caption)).foregroundStyle(Color.caveOrange)
+            .frame(width: Self.boxesWidth, height: 28).contentShape(Rectangle())
+        }
+        .hapticButtonStyle(.plain)
+        .disabled(busy)
+        .accessibilityLabel(busy ? "Estimating" : "Estimate missing values with AI")
+        .accessibilityIdentifier("macroEstimate-\(index)")
+    }
+
+    private func cell(_ entry: CalorieEntry, kind: MacroKind, index: Int) -> some View {
+        let cell = Cell(entry: entry.id, kind: kind)
+        let identifier = "macroCell-\(kind.rawValue)-\(index)"
+        return TextField("", text: Binding(get: { texts[cell] ?? "" }, set: { texts[cell] = Self.clean($0) }))
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.center)
+            .font(.cave(.body))
+            .focused($focused, equals: cell)
+            // A tap selects the whole value, so typing replaces it.
+            .selectValueOnFocus(identifier: identifier)
+            .accessibilityLabel("\(kind.title) grams, \(entry.foodDisplayName)")
+            .accessibilityIdentifier(identifier)
+            .frame(width: Self.columnWidth, height: 40)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                // Only the box being typed in is outlined.
+                RoundedRectangle(cornerRadius: 10).strokeBorder(focused == cell ? Color.caveOrange : .clear, lineWidth: 2)
+            }
+            .keyboardInputArea { focused = cell }
+    }
+
+    /// Follows the boxes as they're typed in, before anything is saved.
+    private var totals: some View {
+        HStack(spacing: Self.columnSpacing) {
+            Text("Total").font(.cave(.headline)).frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(MacroKind.primary) { kind in
+                let known = entries.compactMap { typedAmount($0, kind) }
+                Text(known.isEmpty ? "" : known.reduce(0, +).macroText + (known.count < entries.count ? "+" : ""))
+                    .font(.cave(.headline)).lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(width: Self.columnWidth)
+                    .accessibilityIdentifier("macroBreakdownTotal-\(kind.rawValue)")
+            }
+        }
+        .padding(.horizontal, 12).padding(.top, 4)
+    }
+
+    /// Grams for the whole entry (per serving × servings), or nil when unknown.
+    private func amount(_ entry: CalorieEntry, _ kind: MacroKind) -> Double? {
+        MacroNutrients.decode(entry.macrosPerServingData)?[keyPath: kind.keyPath].map { $0 * entry.servings }
+    }
+
+    /// What its box shows now (typed, maybe not saved yet), falling back to the saved amount before loading.
+    private func typedAmount(_ entry: CalorieEntry, _ kind: MacroKind) -> Double? {
+        guard let text = texts[Cell(entry: entry.id, kind: kind)] else { return amount(entry, kind) }
+        return Self.parse(text)
+    }
+
+    private func hasBlanks(_ entry: CalorieEntry) -> Bool {
+        MacroKind.primary.contains { typedAmount(entry, $0) == nil }
+    }
+
+    /// Asks for estimates for these foods and fills only their blanks; amounts already there (or typed meanwhile) stay.
+    private func estimate(_ ids: [UUID], scope: String) {
+        let ids = ids.filter { !estimating.contains($0) }
+        guard !ids.isEmpty else { return }
+        // Save what's being typed first, so it isn't treated as blank.
+        if let editing { commit(editing) }
+        focused = nil
+        message = nil
+        estimating.formUnion(ids)
+        UsageStats.shared.event("macros.estimate", ["scope": scope, "foods": String(ids.count)])
+        for id in ids {
+            Task { @MainActor in
+                defer { estimating.remove(id) }
+                guard let entry = store.entries.first(where: { $0.id == id }) else { return }
+                let snapshot = EntryDraft(entry)
+                do {
+                    let estimate = try await AIBackend.shared.estimateMacros(for: snapshot)
+                    fill(id, with: estimate, from: snapshot)
+                } catch is CancellationError {
+                } catch {
+                    message = error.localizedDescription
+                    UsageStats.shared.error(.macroEstimate, error)
+                }
+            }
+        }
+    }
+
+    private func fill(_ id: UUID, with estimate: MacroNutrients, from snapshot: EntryDraft) {
+        guard let entry = store.entries.first(where: { $0.id == id }) else { return }
+        var draft = EntryDraft(entry)
+        let name = entry.foodDisplayName.isEmpty ? "this food" : entry.foodDisplayName
+        // The food may have been edited while the request ran.
+        guard draft.name == snapshot.name, draft.calories == snapshot.calories, draft.servings == snapshot.servings else {
+            message = "\(name) changed while estimating. Try again."; return
+        }
+        let totals = (draft.totalMacros ?? MacroNutrients()).fillingMissing(from: estimate)
+        guard totals.isValid else { message = "The estimate for \(name) conflicts with its carbs or fiber."; return }
+        guard totals != draft.totalMacros else {
+            if !estimate.hasValues { message = "Couldn’t estimate \(name). Try a more specific name." }
+            return
+        }
+        draft.macrosPerServing = totals.scaled(1 / max(draft.servings, 0.0001))
+        let before = EntryDraft(entry).totalMacros
+        guard store.update(draft) else { message = store.error ?? "Couldn’t save the estimate. Try again."; return }
+        share(from: entry, previous: before)
+    }
+
+    /// The same food on other days gets these macros too (blanks and estimates only); boxes refresh to match.
+    private func share(from entry: CalorieEntry, previous: MacroNutrients?) {
+        let others = store.shareMacros(from: entry, previous: previous)
+        if others > 0 {
+            let name = entry.foodDisplayName.isEmpty ? "this food" : entry.foodDisplayName
+            note = "Also filled \(others) other \(name) \(others == 1 ? "entry" : "entries")."
+        }
+        for entry in entries {
+            for kind in MacroKind.primary {
+                let cell = Cell(entry: entry.id, kind: kind)
+                let text = Self.text(amount(entry, kind))
+                if focused != cell || focusStart?.cell != cell {
+                    texts[cell] = text
+                } else if texts[cell] == focusStart?.text {
+                    // Focused but not typed in yet: show the shared value and treat it as the starting point.
+                    texts[cell] = text
+                    focusStart = (cell, text)
+                }
+            }
+        }
+    }
+
+    private func load() {
+        for entry in entries {
+            for kind in MacroKind.primary {
+                let cell = Cell(entry: entry.id, kind: kind)
+                if texts[cell] == nil { texts[cell] = Self.text(amount(entry, kind)) }
+            }
+        }
+    }
+
+    /// Saves a box's grams as that food's amount, spread back over its servings. An emptied box clears it.
+    private func commit(_ cell: Cell) {
+        guard let entry = store.entries.first(where: { $0.id == cell.entry }) else { return }
+        let stored = amount(entry, cell.kind)
+        let typed = texts[cell] ?? ""
+        // Untouched since it was tapped (it may have been filled from another entry meanwhile).
+        if let focusStart, focusStart.cell == cell, focusStart.text == typed { return }
+        guard typed != Self.text(stored) else { return }
+        let grams: Double?
+        if typed.isEmpty { grams = nil }
+        else {
+            guard let parsed = Self.parse(typed), parsed.isFinite, parsed >= 0, parsed <= 10_000 else {
+                texts[cell] = Self.text(stored); message = "Enter grams from 0 to 10,000."; return
+            }
+            grams = parsed
+        }
+        var draft = EntryDraft(entry)
+        var macros = draft.macrosPerServing ?? MacroNutrients()
+        macros[keyPath: cell.kind.keyPath] = grams.map { $0 / max(entry.servings, 0.0001) }
+        // Typed by hand, so no longer an estimate.
+        macros[keyPath: cell.kind.estimateKeyPath] = nil
+        guard macros.isValid else {
+            texts[cell] = Self.text(stored)
+            message = "Carbs can’t be less than this food’s fiber. Edit the food to change its fiber."
+            return
+        }
+        draft.macrosPerServing = macros.hasValues ? macros : nil
+        let before = EntryDraft(entry).totalMacros
+        if store.update(draft) {
+            message = nil
+            texts[cell] = Self.text(amount(entry, cell.kind))
+            share(from: entry, previous: before)
+        } else {
+            texts[cell] = Self.text(stored)
+            message = store.error ?? "Couldn’t save that amount. Try again."
+        }
+    }
+
+    private static func text(_ grams: Double?) -> String { grams?.macroText ?? "" }
+    private static func parse(_ text: String) -> Double? {
+        Double(text.replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: "."))
+    }
+    /// Digits and one decimal mark, at most one decimal place.
+    private static func clean(_ text: String) -> String {
+        let separator = Locale.current.decimalSeparator ?? "."
+        var result = "", seenSeparator = false, decimals = 0
+        for character in text {
+            if character.isNumber {
+                if seenSeparator { guard decimals < 1 else { continue }; decimals += 1 }
+                result.append(character)
+            } else if String(character) == separator || character == ".", !seenSeparator {
+                seenSeparator = true; result += separator
+            }
+        }
+        return String(result.prefix(7))
+    }
+    private static func glyph(_ kind: MacroKind) -> CaveGlyph {
+        switch kind { case .protein: .protein; case .totalCarbs: .carbs; default: .fat }
     }
 }

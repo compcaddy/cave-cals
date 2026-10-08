@@ -112,6 +112,19 @@ final class WeightTrackingUITests: XCTestCase {
         app.navigationBars["Progress"].buttons["Done"].tap()
         openProfile()
         app.buttons["todayWeight"].tap()
+        // With a weigh-in on record the weight is dialed; one step down is 180.4.
+        let dial = app.descendants(matching: .any)["weightDial"]
+        XCTAssertTrue(dial.waitForExistence(timeout: 5))
+        XCTAssertEqual(dial.value as? String, "180.5 pounds")
+        stepDial(dial, by: -1)
+        XCTAssertEqual(dial.value as? String, "180.4 pounds")
+        app.buttons["saveWeight"].tap()
+        XCTAssertTrue(app.buttons["todayWeight"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["todayWeight"].label.contains("180.4"))
+        // Typing is still offered for a big change.
+        app.buttons["todayWeight"].tap()
+        XCTAssertTrue(app.buttons["typeWeight"].waitForExistence(timeout: 5))
+        app.buttons["typeWeight"].tap()
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap()
         let old = amount.value as? String ?? ""
@@ -134,7 +147,8 @@ final class WeightTrackingUITests: XCTestCase {
         amount.tap(); amount.typeText("180.5")
         app.buttons["saveWeight"].tap()
         app.buttons["todayWeight"].tap()
-        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        let dial = app.descendants(matching: .any)["weightDial"]
+        XCTAssertTrue(dial.waitForExistence(timeout: 5))
         let today = Calendar.current.startOfDay(for: Date())
         func dayButton(_ date: Date) -> XCUIElement {
             let c = Calendar.current.dateComponents([.era, .year, .month, .day], from: date)
@@ -146,30 +160,39 @@ final class WeightTrackingUITests: XCTestCase {
             if dayButton(future).exists { XCTAssertFalse(dayButton(future).isEnabled) }
         }
         app.buttons["previousWeightWeek"].tap()
-        XCTAssertTrue(["", "Weight"].contains(amount.value as? String ?? "unexpected value"))
+        // A day without a weigh-in starts from the nearest one (here the later one), ready to save as is.
+        XCTAssertEqual(dial.value as? String, "180.5 pounds")
+        XCTAssertTrue(app.buttons["saveWeight"].isEnabled)
         XCTAssertFalse(app.buttons["deleteWeight"].exists)
         XCTAssertTrue(app.buttons["nextWeightWeek"].isEnabled)
         let prior = Calendar.current.date(byAdding: .day, value: -7, to: today)!
         XCTAssertEqual(dayButton(prior).value as? String, "No weigh-in")
-        amount.tap(); amount.typeText("181.2")
+        stepDial(dial, by: 4); stepDial(dial, by: 3)
+        XCTAssertEqual(dial.value as? String, "181.2 pounds")
         app.buttons["nextWeightWeek"].tap()
         XCTAssertTrue(app.buttons["Save and switch"].waitForExistence(timeout: 3))
         app.buttons["Save and switch"].tap()
-        XCTAssertEqual(amount.value as? String, "180.5")
+        XCTAssertEqual(dial.value as? String, "180.5 pounds")
         XCTAssertTrue(app.buttons["deleteWeight"].exists)
         app.buttons["previousWeightWeek"].tap()
-        XCTAssertEqual(amount.value as? String, "181.2")
+        XCTAssertEqual(dial.value as? String, "181.2 pounds")
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Weigh-in week picker"; attachment.lifetime = .keepAlways; add(attachment)
         // A changed amount must stay on its own date when another day is selected.
-        amount.tap(); amount.typeText("3")
+        stepDial(dial, by: 1)
         let neighboring = Calendar.current.date(byAdding: .day, value: Calendar.current.component(.weekday, from: prior) == 7 ? -1 : 1, to: prior)!
         dayButton(neighboring).tap()
         XCTAssertTrue(app.buttons["Discard changes"].waitForExistence(timeout: 3))
         app.buttons["Discard changes"].tap()
-        XCTAssertTrue(["", "Weight"].contains(amount.value as? String ?? "unexpected value"))
+        XCTAssertFalse(app.buttons["deleteWeight"].exists)
         dayButton(prior).tap()
-        XCTAssertEqual(amount.value as? String, "181.2")
+        XCTAssertEqual(dial.value as? String, "181.2 pounds")
+    }
+
+    /// Taps the tick `steps` tenths from the caret (ticks are 30 pt apart at the default text size).
+    private func stepDial(_ dial: XCUIElement, by steps: Int) {
+        dial.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)).withOffset(CGVector(dx: 30 * steps, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 0.5)
     }
 
     func testSavingFromProfileRefreshesGraphAndPeriodBrowsing() {

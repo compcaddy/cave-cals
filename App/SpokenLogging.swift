@@ -118,7 +118,7 @@ enum QuickEntryText {
             .max { $0.uses.count < $1.uses.count }
         guard var draft = history?.draft ?? CommonFoods.matching(words)?.draft else { return nil }
         draft = store.applyingCommonDefault(to: draft)
-        draft.entryID = nil; draft.timestamp = now
+        draft.entryID = nil; draft.timestamp = now; draft.mealType = nil
         return draft
     }
 

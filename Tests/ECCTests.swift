@@ -282,6 +282,25 @@ import SwiftData
         XCTAssertTrue(store.tracksMacros)
     }
 
+    func testCalculatedPlanSavesSuggestedMacroGoalsWithTheCalorieGoal() throws {
+        let store = try makeStore()
+        let suggested = MacroNutrients(protein: 130, totalCarbs: 225, fat: 70)
+        XCTAssertFalse(store.saveGoal(2050, tracksMacros: true, macroGoals: MacroNutrients(protein: 0)))
+        XCTAssertNil(store.profile)
+        // A brand-new profile gets them in the same save, and so does today's goal record.
+        XCTAssertTrue(store.saveGoal(2050, tracksMacros: true, macroGoals: suggested))
+        XCTAssertTrue(store.macroGoals.sameGoals(as: suggested))
+        XCTAssertTrue(store.macroGoals(Date()).sameGoals(as: suggested))
+        // A later goal change without targets keeps them; a revised plan's targets replace today's only.
+        XCTAssertTrue(store.saveGoal(2200))
+        XCTAssertTrue(store.macroGoals(Date()).sameGoals(as: suggested))
+        let revised = MacroNutrients(protein: 130, totalCarbs: 260, fat: 70)
+        XCTAssertTrue(store.saveGoal(2250, macroGoals: revised))
+        XCTAssertTrue(store.macroGoals(Date()).sameGoals(as: revised))
+        XCTAssertFalse(store.macroGoals(yesterday()).sameGoals(as: revised))
+        XCTAssertEqual(store.goal(Date()), 2250)
+    }
+
     func testOnboardingPreviewUsesFreshStoresAndKeepsExistingData() throws {
         let store = try makeStore()
         XCTAssertTrue(store.saveGoal(2100, tracksMacros: false))
@@ -518,6 +537,67 @@ import SwiftData
         store.undo(); XCTAssertTrue(store.entries.isEmpty)
         XCTAssertEqual(store.meals.count, 1)
     }
+    func testRecipeMealsSaveOneServingAndRebuildTheWholeRecipe() throws {
+        let store = try makeStore()
+        var chicken = EntryDraft(name: "Chicken thighs", calories: 1400)
+        chicken.servingDescription = "1 lb chicken thighs"; chicken.servings = 2; chicken.perServing = 700
+        chicken.macrosPerServing = MacroNutrients(protein: 90, totalCarbs: 0, fiber: 0, fat: 36)
+        let couscous = EntryDraft(name: "Couscous", calories: 650)
+        XCTAssertTrue(store.saveMeal(nil, name: "Southwest Chicken Couscous", items: RecipeServings.share([chicken, couscous], servings: 7)))
+        let meal = store.meals[0]
+        // The meal is one serving everywhere it's added; the editor gets the whole recipe back exactly.
+        XCTAssertEqual(meal.recipeServings, 7)
+        XCTAssertEqual(meal.calories, 200 + 93)
+        XCTAssertEqual(meal.recipeItems.map(\.calories), [1400, 650])
+        XCTAssertEqual(meal.recipeItems.map(\.servings), [2, 1])
+        XCTAssertEqual(meal.recipeItems.map(\.perServing), [700, 650])
+        XCTAssertTrue(meal.recipeItems.allSatisfy { $0.recipeServings == nil })
+        XCTAssertTrue(store.addMeal(meal, date: Date()))
+        let logged = store.entries.sorted { $0.componentOrder < $1.componentOrder }
+        XCTAssertEqual(logged.map(\.totalCalories), [200, 93])
+        XCTAssertEqual(logged[0].servings, 2.0 / 7, accuracy: 0.000001)
+        XCTAssertEqual(MacroSummary([EntryDraft(logged[0])]).total(.protein).grams ?? 0, 180.0 / 7, accuracy: 0.01)
+        XCTAssertTrue(store.addMeal(meal, factor: 2, date: Date()))
+        XCTAssertEqual(store.total(Date()), 293 + 400 + 186)
+        // Changing the serving count re-divides the same whole recipe.
+        XCTAssertTrue(store.saveMeal(meal, name: meal.name, items: RecipeServings.share(meal.recipeItems, servings: 8)))
+        XCTAssertEqual(meal.recipeServings, 8)
+        XCTAssertEqual(meal.calories, 175 + 81)
+        XCTAssertTrue(store.saveMeal(meal, name: meal.name, items: RecipeServings.share(meal.recipeItems, servings: 1)))
+        XCTAssertEqual(meal.recipeServings, 1)
+        XCTAssertEqual(meal.items.map(\.calories), [1400, 650])
+        XCTAssertTrue(meal.items.allSatisfy { $0.recipeServings == nil })
+    }
+    func testMealsSavedBeforeRecipeServingsAreOneServing() throws {
+        // Components written by earlier versions (or re-saved by one) carry no serving count.
+        let json = #"[{"id":"6F1C1D2E-7A1B-4C3D-9E8F-0A1B2C3D4E5F","name":"Soup","calories":240,"timestamp":0,"servings":1,"perServing":240,"servingDescription":"","source":"manual","order":0}]"#
+        let items = try JSONDecoder().decode([EntryDraft].self, from: Data(json.utf8))
+        XCTAssertEqual(RecipeServings.count(of: items), 1)
+        XCTAssertEqual(RecipeServings.whole(items).map(\.calories), [240])
+        let shared = RecipeServings.share(items, servings: 4)
+        let encoded = try XCTUnwrap(String(data: JSONEncoder().encode(shared), encoding: .utf8))
+        XCTAssertTrue(encoded.contains(#""recipeServings":4"#))
+        XCTAssertFalse(String(data: try JSONEncoder().encode(items), encoding: .utf8)!.contains("recipeServings"))
+        XCTAssertEqual(RecipeServings.count(of: RecipeServings.share(items, servings: 500)), 100)
+        XCTAssertEqual(RecipeServings.count(of: RecipeServings.share(items, servings: 0)), 1)
+    }
+    func testRecipeImportInputs() throws {
+        XCTAssertEqual(RecipeImportInput.link("example.com/chili")?.absoluteString, "https://example.com/chili")
+        XCTAssertEqual(RecipeImportInput.link("http://example.com/chili")?.absoluteString, "https://example.com/chili")
+        XCTAssertNil(RecipeImportInput.link("chili"))
+        XCTAssertEqual(RecipeImportInput.pastedLink("  https://example.com/chili\n")?.absoluteString, "https://example.com/chili")
+        XCTAssertNil(RecipeImportInput.pastedLink("2 cups rice, 1/2 cup beans"))
+        XCTAssertNil(RecipeImportInput.pastedLink("1/2"))
+        XCTAssertNil(RecipeImportInput.pastedLink("Serves 4."))
+        XCTAssertEqual(RecipeImportInput.pastedLink("www.example.com")?.absoluteString, "https://www.example.com")
+        XCTAssertEqual(RecipeImportInput.cleanText(String(repeating: "🍗", count: 15_000)).utf16.count, 20_000)
+        XCTAssertEqual(RecipeImportInput.cleanText(" 2 cups rice\u{0}\n\t1 lb beans\u{7f} "), "2 cups rice\n\t1 lb beans")
+        let decode = { (json: String) in try JSONDecoder().decode(AIMealImportResult.self, from: Data(json.utf8)) }
+        XCTAssertEqual(try decode(#"{"mealName":"Chili","items":[],"notes":""}"#).servingCount, 1)
+        XCTAssertEqual(try decode(#"{"mealName":"Chili","items":[],"notes":"","recipeServings":6}"#).servingCount, 6)
+        XCTAssertEqual(try decode(#"{"mealName":"Chili","items":[],"notes":"","recipeServings":0}"#).servingCount, 1)
+        XCTAssertEqual(try decode(#"{"mealName":"Chili","items":[],"notes":"","recipeServings":400}"#).servingCount, 100)
+    }
     func testCreatingAndDeletingMealDoesNotChangeHistory() throws {
         let store = try makeStore()
         store.add([EntryDraft(name: "Coffee", calories: 120)])
@@ -724,6 +804,45 @@ import SwiftData
         let afternoon = FoodHistory.suggestions(entries: entries, date: suggestionDate(day: 0, hour: 15, minute: 40, calendar: calendar), calendar: calendar)
         XCTAssertEqual(morning.first?.draft.calories, 80)
         XCTAssertEqual(afternoon.first?.draft.calories, 30)
+    }
+    func testQuickStartKeepsToFoodsForThisTimeOfDay() {
+        let calendar = suggestionCalendar()
+        var entries: [CalorieEntry] = []
+        for day in -14 ... -1 {
+            entries.append(suggestionEntry("Coffee", calories: 80, at: suggestionDate(day: day, hour: 6, minute: 30, calendar: calendar)))
+            entries.append(suggestionEntry("Yogurt", calories: 150, at: suggestionDate(day: day, hour: 9, minute: 30, calendar: calendar)))
+            entries.append(suggestionEntry("Sandwich", calories: 450, at: suggestionDate(day: day, hour: 12, minute: 30, calendar: calendar)))
+            entries.append(suggestionEntry("Pizza", calories: 700, at: suggestionDate(day: day, hour: 19, minute: 0, calendar: calendar)))
+        }
+        // Leftover pizza for breakfast once doesn't make it a morning food.
+        entries.append(suggestionEntry("Pizza", calories: 700, at: suggestionDate(day: -3, hour: 8, minute: 0, calendar: calendar)))
+        func quickStart(hour: Int) -> Set<String> {
+            let date = suggestionDate(day: 0, hour: hour, minute: 0, calendar: calendar)
+            return Set(FoodHistory.suggestions(entries: entries, date: date, calendar: calendar, limit: nil)
+                .filter { FoodHistory.startsDay($0, at: date, calendar: calendar) }.map(\.draft.name))
+        }
+        // At 7 am: nothing usually logged after 10 am, but the 6:30 coffee still counts.
+        XCTAssertEqual(quickStart(hour: 7), ["Coffee", "Yogurt"])
+        // Starting at noon: what's logged from noon to 3 pm (and the hour before).
+        XCTAssertEqual(quickStart(hour: 12), ["Sandwich"])
+        // Late at night the window wraps past midnight.
+        let lateSnack = [suggestionEntry("Cereal", calories: 200, at: suggestionDate(day: -1, hour: 0, minute: 30, calendar: calendar))]
+        let late = suggestionDate(day: 0, hour: 23, minute: 0, calendar: calendar)
+        XCTAssertEqual(FoodHistory.suggestions(entries: lateSnack, date: late, calendar: calendar, limit: nil)
+            .filter { FoodHistory.startsDay($0, at: late, calendar: calendar) }.map(\.draft.name), ["Cereal"])
+    }
+    func testLoggingGuideShowsUntilFoodIsLoggedOnTwoDays() {
+        let calendar = suggestionCalendar()
+        let today = suggestionDate(day: 0, hour: 8, minute: 0, calendar: calendar)
+        func entry(day: Int) -> CalorieEntry {
+            suggestionEntry("Toast", calories: 100, at: suggestionDate(day: day, hour: 8, minute: 0, calendar: calendar))
+        }
+        XCTAssertTrue(LoggingGuide.shows(entries: [], today: today, calendar: calendar))
+        // A second day (one earlier day logged) still shows it until something's logged today.
+        XCTAssertTrue(LoggingGuide.shows(entries: [entry(day: -1), entry(day: -1)], today: today, calendar: calendar))
+        XCTAssertFalse(LoggingGuide.shows(entries: [entry(day: -1), entry(day: 0)], today: today, calendar: calendar))
+        // Two days logged: gone from the third day on.
+        XCTAssertFalse(LoggingGuide.shows(entries: [entry(day: -5), entry(day: -1)], today: today, calendar: calendar))
     }
     func testSuggestionReplayMetricsMeasureKnownRoutine() {
         let calendar = suggestionCalendar()
@@ -994,7 +1113,74 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+@MainActor final class ServingCountTests: XCTestCase {
+    func testOneCountableThingShowsTheTotal() {
+        XCTAssertEqual(ServingCount.text(serving: "1 slice", servings: 2), "2 slices")
+        XCTAssertEqual(ServingCount.text(serving: "1 banana", servings: 3), "3 bananas")
+        XCTAssertEqual(ServingCount.text(serving: "1 side salad", servings: 2), "2 side salads")
+        XCTAssertEqual(ServingCount.text(serving: "1 slice of pizza", servings: 2), "2 slices of pizza")
+        XCTAssertEqual(ServingCount.text(serving: "1 sandwich", servings: 2), "2 sandwiches")
+        XCTAssertEqual(ServingCount.text(serving: "1 patty", servings: 2), "2 patties")
+        XCTAssertEqual(ServingCount.text(serving: "1 slice", servings: 1.5), "1.5 slices")
+    }
+    func testOneServingShowsJustTheServing() {
+        XCTAssertEqual(ServingCount.text(serving: "1 plate", servings: 1), "1 plate")
+        XCTAssertEqual(ServingCount.text(serving: "", servings: 1), "1 serving")
+        XCTAssertEqual(ServingCount.text(serving: "", servings: 2), "2 servings")
+    }
+    func testMeasuredServingsKeepTheirSizeAndCount() {
+        XCTAssertEqual(ServingCount.text(serving: "1 cup (240 ml)", servings: 2), "1 cup (240 ml) × 2")
+        XCTAssertEqual(ServingCount.text(serving: "100 g", servings: 1.5), "100 g × 1.5")
+        XCTAssertEqual(ServingCount.text(serving: "1 cup", servings: 2), "1 cup × 2")
+        XCTAssertEqual(ServingCount.text(serving: "2 tbsp", servings: 2), "2 tbsp × 2")
+    }
+}
+
 @MainActor final class MacroTests: XCTestCase {
+    func testSharingMacrosFillsTheSameFoodOnOtherDays() throws {
+        let container = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let store = AppStore(container: container, publishesWidget: false, persistsUsage: false, persistsFoodDefaults: false)
+        let day = 86_400.0
+        var typed = EntryDraft(name: "Banana", calories: 105, timestamp: Date().addingTimeInterval(-3 * day))
+        typed.macrosPerServing = MacroNutrients(protein: 5)
+        XCTAssertTrue(store.add([typed,
+                                 EntryDraft(name: "banana", calories: 105, timestamp: Date().addingTimeInterval(-2 * day)),
+                                 EntryDraft(name: "Banana", calories: 210, timestamp: Date().addingTimeInterval(-day)),
+                                 EntryDraft(name: "Apple", calories: 95, timestamp: Date().addingTimeInterval(-day)),
+                                 EntryDraft(name: "Banana", calories: 105)]))
+        func banana(daysAgo: Double) -> CalorieEntry? {
+            store.entries.first { $0.name.lowercased() == "banana" && Calendar.current.isDate($0.timestamp, inSameDayAs: Date().addingTimeInterval(-daysAgo * day)) }
+        }
+        let source = try XCTUnwrap(banana(daysAgo: 0))
+        var draft = EntryDraft(source)
+        var before = draft.totalMacros
+        draft.macrosPerServing = MacroNutrients(protein: 1.3, totalCarbs: 27, estimatedTotalCarbs: true)
+        XCTAssertTrue(store.update(draft))
+        XCTAssertEqual(store.shareMacros(from: source, previous: before), 3)
+        func totals(_ entry: CalorieEntry?) -> MacroNutrients? { entry.flatMap { MacroNutrients.decode($0.macrosPerServingData)?.scaled($0.servings) } }
+        // Scaled by calories, with the source's estimate marks.
+        XCTAssertEqual(totals(banana(daysAgo: 1))?.protein ?? 0, 2.6, accuracy: 0.001)
+        XCTAssertEqual(totals(banana(daysAgo: 1))?.totalCarbs ?? 0, 54, accuracy: 0.001)
+        XCTAssertEqual(totals(banana(daysAgo: 1))?.estimatedTotalCarbs, true)
+        XCTAssertEqual(totals(banana(daysAgo: 2))?.protein ?? 0, 1.3, accuracy: 0.001)
+        // A typed amount stays; its blank carbs fill.
+        XCTAssertEqual(totals(banana(daysAgo: 3))?.protein, 5)
+        XCTAssertEqual(totals(banana(daysAgo: 3))?.totalCarbs ?? 0, 27, accuracy: 0.001)
+        XCTAssertNil(store.entries.first { $0.name == "Apple" }?.macrosPerServingData)
+        // Quick Add rebuilds the food from history, so adding it again carries the macros.
+        let food = FoodHistory.foods(store.entries).first { $0.id == FoodHistory.foodID(for: source) }
+        XCTAssertEqual(food?.draft.totalMacros?.protein ?? 0, food?.draft.calories == 210 ? 2.6 : 1.3, accuracy: 0.001)
+
+        // Correcting the source corrects what it filled, but not the amount typed elsewhere.
+        draft = EntryDraft(source)
+        before = draft.totalMacros
+        draft.macrosPerServing = MacroNutrients(protein: 1, totalCarbs: 27, estimatedTotalCarbs: true)
+        XCTAssertTrue(store.update(draft))
+        XCTAssertEqual(store.shareMacros(from: source, previous: before), 2)
+        XCTAssertEqual(totals(banana(daysAgo: 1))?.protein ?? 0, 2, accuracy: 0.001)
+        XCTAssertEqual(totals(banana(daysAgo: 3))?.protein, 5)
+    }
+
     private func food() -> EntryDraft {
         var draft = EntryDraft(name: "Egg", calories: 70)
         draft.macrosPerServing = MacroNutrients(protein: 6.25, totalCarbs: 0, fiber: 0, fat: 5)
@@ -1297,6 +1483,35 @@ private final class FoodSearchURLProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertFalse(FoodHistory.expectsAnotherToday(foodID: "name:banana", entries: store.entries, date: now))
         XCTAssertTrue(store.add([EntryDraft(name: "Coffee", calories: 40, timestamp: later)]))
         XCTAssertFalse(FoodHistory.expectsAnotherToday(foodID: "name:coffee", entries: store.entries, date: now))
+    }
+
+    func testUnmatchedSpokenFoodUsesAIAndPreservesNutritionThenReusesHistory() async throws {
+        let store = try Persistence.make(inMemory: true)
+        let macros = MacroNutrients(protein: 2.4, totalCarbs: 30.8, fiber: 6.2, fat: 0.4)
+        var estimates = 0
+        let reply = await SpokenFoodLogger.log("two naval oranges", store: store) { text, _ in
+            estimates += 1
+            XCTAssertEqual(text, "two naval oranges")
+            return AIResult(items: [AIFoodEstimate(name: "Navel orange", calories: 124,
+                portion: "2 medium oranges", servingSize: "1 medium orange", servings: 2,
+                confidence: "medium", macros: macros)], notes: "Interpreted naval as navel.")
+        }
+        XCTAssertTrue(reply.hasPrefix("Logged Navel orange, 124 calories."))
+        let entry = try XCTUnwrap(store.dayEntries(Date()).first)
+        let draft = EntryDraft(entry)
+        XCTAssertEqual(draft.servings, 2)
+        XCTAssertEqual(draft.servingDescription, "1 medium orange")
+        XCTAssertEqual(draft.perServing, 62)
+        XCTAssertEqual(draft.totalMacros, macros.markedEstimated())
+        XCTAssertEqual(draft.source, "aiVoice")
+
+        _ = await SpokenFoodLogger.log("navel orange", store: store) { _, _ in
+            estimates += 1
+            return AIResult(items: [], notes: "Should reuse history.")
+        }
+        XCTAssertEqual(estimates, 1)
+        XCTAssertEqual(store.dayEntries(Date()).count, 2)
+        XCTAssertEqual(EntryDraft(store.dayEntries(Date())[1]).totalMacros, macros.markedEstimated())
     }
 
     func testSpokenDescriptionsUseAIAndExplainWhenScansRunOut() async throws {

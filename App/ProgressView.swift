@@ -5,15 +5,18 @@ struct ProgressScreen: View {
     @Environment(AppStore.self) private var store
     @Environment(WeightStore.self) private var weights
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(ProgressCalendar.weekStartKey, store: ProgressPreferences.defaults) private var firstWeekday = 2
+    /// Synced on the profile (`ProgressSettings`), like the rest of Progress's settings.
+    private var firstWeekday: Int { store.progressSettings.firstWeekday }
     @State private var reviewDate: Date?
     @State private var printReport: ProgressPrintDocument?
     @State private var showPrint = false
     private var data: ProgressData {
         ProgressData(drafts: store.entries.map(EntryDraft.init), records: weights.records,
-                     finishedDays: store.finishedDates(), firstWeekday: firstWeekday)
+                     finishedDays: store.finishedDates(), firstWeekday: firstWeekday, goal: { store.goal($0) })
     }
     private var selectedReviewDate: Date { reviewDate ?? data.currentWeekStart }
+    /// “How averages work” is hidden for now (October 6, 2026); this was its text, for when it returns.
+    static let averagesExplanation = "Calories average only completed days. A day below 70% of that day's calorie goal is marked incomplete unless you marked it done eating; without a goal, the reference is your usual completed-day calories over the prior 28 days. Today is still in progress. Weight averages use recorded weigh-ins only. Missing days never count as zero."
 
     var body: some View {
         let data = data
@@ -34,19 +37,22 @@ struct ProgressScreen: View {
                                 .font(.cave(.footnote)).foregroundStyle(Color.secondary)
                         }
                     }.progressCard()
+                    ProgressPhotosCard(firstWeekday: firstWeekday)
                     VStack(alignment: .leading, spacing: 12) {
-                        Picker("Week starts on", selection: $firstWeekday) {
-                            ForEach(1...7, id: \.self) { day in
-                                Text(Calendar.current.weekdaySymbols[day - 1]).tag(day)
-                            }
-                        }.hapticSelection(on: firstWeekday).accessibilityIdentifier("progressWeekStart")
-                        Text("Applies to charts, weekly recaps, and printed reports.")
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) { Text("Weekday Start"); Spacer(minLength: 0); weekStartPicker }
+                            VStack(alignment: .leading, spacing: 4) { Text("Weekday Start"); weekStartPicker }
+                        }
+                        Text("Applies to charts, weekly recaps, photos, and printed reports.")
                             .font(.cave(.footnote)).foregroundStyle(Color.secondary)
-                        DisclosureGroup("How averages work") {
-                            Text("Calories average only completed days. A day below 60% of your usual completed-day calories is marked incomplete. The reference uses the prior 28 days with low logs filtered out; without earlier logs, the first logged day is included. Today is still in progress. Weight averages use recorded weigh-ins only. Missing days never count as zero.")
-                                .font(.cave(.footnote)).foregroundStyle(Color.secondary).padding(.top, 8)
-                        }.accessibilityIdentifier("progressMethod")
                     }.progressCard()
+                    ProgressTrendsCard(data: data, foods: store.entries.map {
+                        ProgressTrends.Food(timestamp: $0.timestamp, createdAt: $0.createdAt, calories: $0.totalCalories)
+                    })
+                    ProgressHabitsCard(data: data, foods: store.entries.map { entry in
+                        HabitFood(timestamp: entry.timestamp, createdAt: entry.createdAt, calories: entry.totalCalories,
+                                  name: entry.foodDisplayName, macros: MacroNutrients.decode(entry.macrosPerServingData)?.scaled(entry.servings))
+                    }, goal: { store.goal($0) })
                 }.padding(20)
             }
             .background(Color.caveBackground)
@@ -55,26 +61,42 @@ struct ProgressScreen: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        let weeks = data.sixWeeks(endingAt: selectedReviewDate)
+                        let weeks = data.fiveWeeks(endingAt: selectedReviewDate)
                         printReport = ProgressPrintDocument(weeks: weeks, dates: data.dates, unit: weights.unit,
                             dailyGoal: store.goal(Date()), priorWeek: weeks.first.map { data.week(containing: data.dates.move($0.interval.start, by: -1, period: .week)) },
                             isInProgress: weeks.last.map { $0.interval.end > data.today } ?? false)
                         showPrint = true
                     } label: { Image(systemName: "printer").frame(minWidth: 44, minHeight: 44) }
                     .hapticButtonStyle(.automatic)
-                    .accessibilityLabel("Print weekly recap and six-week trends").accessibilityIdentifier("printProgress")
+                    .accessibilityLabel("Print weekly recap and five-week trends").accessibilityIdentifier("printProgress")
                 }
             }
             .sheet(isPresented: $showPrint) {
                 if let printReport { ProgressPrintPreview(document: printReport) }
             }
-            .onChange(of: firstWeekday) { _, _ in reviewDate = nil }
+            .onChange(of: store.progressSettings.firstWeekday) { _, _ in reviewDate = nil }
         }
+    }
+
+    private var weekStartPicker: some View {
+        Picker("Weekday Start", selection: Binding(get: { store.progressSettings.firstWeekday }, set: { weekday in
+            var settings = store.progressSettings
+            settings.firstWeekday = weekday
+            store.saveProgressSettings(settings)
+        })) {
+            ForEach(1...7, id: \.self) { day in
+                Text(Calendar.current.weekdaySymbols[day - 1]).tag(day)
+            }
+        }
+        .labelsHidden()
+        .frame(minHeight: 44)
+        .hapticSelection(on: firstWeekday)
+        .accessibilityIdentifier("progressWeekStart")
     }
 }
 
 extension View {
-    fileprivate func progressCard() -> some View {
+    func progressCard() -> some View {
         padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 18))
     }
@@ -513,4 +535,171 @@ struct ProgressWeightChart: View {
         .onChange(of: date) { _, _ in selection = nil }
     }
     private func segment(at index: Int, in buckets: [ProgressBucket]) -> Int { buckets.prefix(index).filter { $0.weight == nil }.count }
+}
+
+/// Progress → Trends: average calories by weekday and by hour of the day, over complete days in the chosen range.
+struct ProgressTrendsCard: View {
+    let data: ProgressData
+    let foods: [ProgressTrends.Food]
+    @Environment(AppStore.self) private var store
+    /// Synced with the other Progress settings.
+    private var range: ProgressTrendRange { store.progressSettings.trendsRange }
+    @State private var hourMode: HourMode = .calories
+    @State private var selectedWeekday: String?
+    @State private var selectedHour: String?
+
+    enum HourMode: String, CaseIterable, Identifiable {
+        case calories = "Calories", share = "% of day"
+        var id: Self { self }
+    }
+
+    var body: some View {
+        let trends = ProgressTrends(foods: foods, data: data, range: range)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Trends").font(.cave(.title2)).bold()
+            Picker("Range", selection: Binding(get: { range }, set: { value in
+                var settings = store.progressSettings
+                settings.trendsRange = value
+                store.saveProgressSettings(settings)
+            })) {
+                ForEach(ProgressTrendRange.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented).hapticSelection(on: range)
+            .accessibilityIdentifier("trendsRange")
+
+            Text("By day of the week").font(.cave(.headline)).padding(.top, 4)
+            if trends.weekdayDays == 0 {
+                emptyNote
+            } else {
+                weekdayChart(trends)
+                Text(weekdayDetail(trends)).font(.cave(.subheadline))
+                    .accessibilityIdentifier("trendsWeekdayDetail")
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("By time of day").font(.cave(.headline))
+                Spacer(minLength: 8)
+                Picker("Show", selection: $hourMode) {
+                    ForEach(HourMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).fixedSize().hapticSelection(on: hourMode)
+                .accessibilityIdentifier("trendsHourMode")
+            }
+            .padding(.top, 8)
+            if trends.hourDays == 0 {
+                emptyNote
+            } else {
+                hourChart(trends)
+                Text(hourDetail(trends)).font(.cave(.subheadline))
+                    .accessibilityIdentifier("trendsHourDetail")
+                Text("Food added on a later day is left out here, since its time isn’t when it was eaten.")
+                    .font(.cave(.caption)).foregroundStyle(Color.secondary)
+            }
+        }
+        .progressCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("progressTrends")
+        .onChange(of: range) { _, new in
+            selectedWeekday = nil; selectedHour = nil
+            UsageStats.shared.event("progress.trends", ["range": new.statName])
+        }
+        .onChange(of: hourMode) { _, new in
+            UsageStats.shared.event("progress.trends", ["hours": new == .calories ? "calories" : "share"])
+        }
+    }
+
+    private var emptyNote: some View {
+        Text("Not enough complete days in this range yet.")
+            .font(.cave(.subheadline)).foregroundStyle(Color.secondary)
+    }
+
+    // MARK: Weekdays
+
+    private func short(_ weekday: Int) -> String { data.dates.calendar.shortWeekdaySymbols[weekday - 1] }
+
+    private func weekdayChart(_ trends: ProgressTrends) -> some View {
+        Chart(trends.weekdays) { day in
+            BarMark(x: .value("Day", short(day.weekday)), y: .value("Calories", day.average ?? 0))
+                .foregroundStyle(Color.caveOrange.opacity(selectedWeekday == nil || selectedWeekday == short(day.weekday) ? 1 : 0.35))
+                .cornerRadius(4)
+                .accessibilityLabel(data.dates.calendar.weekdaySymbols[day.weekday - 1])
+                .accessibilityValue(day.average.map { "\($0.calorieText) calories on average, \(day.days) days" } ?? "No complete days")
+        }
+        .chartXScale(domain: trends.weekdays.map { short($0.weekday) })
+        .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) }
+        .chartXSelection(value: $selectedWeekday)
+        .chartGesture { proxy in SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) } }
+        .onChange(of: selectedWeekday) { _, value in if value != nil { Haptics.play(.selection) } }
+        .frame(height: 180)
+        .accessibilityIdentifier("trendsWeekdayChart")
+    }
+
+    private func weekdayDetail(_ trends: ProgressTrends) -> String {
+        if let selectedWeekday, let day = trends.weekdays.first(where: { short($0.weekday) == selectedWeekday }) {
+            let name = data.dates.calendar.weekdaySymbols[day.weekday - 1]
+            guard let average = day.average else { return "\(name): no complete days" }
+            return "\(name): \(average.calorieText) cals on average · \(day.days) \(day.days == 1 ? "day" : "days")"
+        }
+        return "Average calories on complete days · based on \(trends.weekdayDays) \(trends.weekdayDays == 1 ? "day" : "days"). Tap a bar."
+    }
+
+    // MARK: Hours
+
+    private static let hourLabels = ["0": "12a", "6": "6a", "12": "12p", "18": "6p"]
+
+    private func hourValue(_ hour: ProgressTrends.Hour) -> Double { hourMode == .calories ? hour.calories : hour.share * 100 }
+
+    private func hourChart(_ trends: ProgressTrends) -> some View {
+        Chart(trends.hours) { hour in
+            BarMark(x: .value("Hour", String(hour.hour)), y: .value(hourMode.rawValue, hourValue(hour)))
+                .foregroundStyle(Color.caveOrange.opacity(selectedHour == nil || selectedHour == String(hour.hour) ? 1 : 0.35))
+                .cornerRadius(2)
+                .accessibilityLabel(hourRange(hour.hour))
+                .accessibilityValue(hourText(hour))
+        }
+        .chartXScale(domain: (0..<24).map(String.init))
+        .chartXAxis {
+            AxisMarks(values: ["0", "6", "12", "18"]) { value in
+                AxisGridLine()
+                // The first label sits at the chart's edge; never shorten it to "…".
+                AxisValueLabel(collisionResolution: .disabled) {
+                    Text(value.as(String.self).flatMap { Self.hourLabels[$0] } ?? "").fixedSize()
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
+                AxisValueLabel { Text(value.as(Double.self).map { hourMode == .calories ? $0.calorieText : "\(Int($0))%" } ?? "") }
+            }
+        }
+        .chartXSelection(value: $selectedHour)
+        .chartGesture { proxy in SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) } }
+        .onChange(of: selectedHour) { _, value in if value != nil { Haptics.play(.selection) } }
+        .frame(height: 180)
+        .accessibilityIdentifier("trendsHourChart")
+    }
+
+    private func hourText(_ hour: ProgressTrends.Hour) -> String {
+        hourMode == .calories ? "\(hour.calories.calorieText) cals a day"
+            : "\((hour.share * 100).formatted(.number.precision(.fractionLength(0))))% of the day’s calories"
+    }
+
+    /// "12 PM – 1 PM"
+    private func hourRange(_ hour: Int) -> String {
+        func label(_ hour: Int) -> String {
+            let date = data.dates.calendar.date(bySettingHour: hour % 24, minute: 0, second: 0, of: data.today) ?? data.today
+            return date.formatted(.dateTime.hour())
+        }
+        return "\(label(hour)) – \(label(hour + 1))"
+    }
+
+    private func hourDetail(_ trends: ProgressTrends) -> String {
+        if let selectedHour, let hour = trends.hours.first(where: { String($0.hour) == selectedHour }) {
+            return "\(hourRange(hour.hour)): \(hourText(hour))"
+        }
+        let days = "\(trends.hourDays) \(trends.hourDays == 1 ? "day" : "days")"
+        return (hourMode == .calories ? "Average calories in each hour" : "Share of the day’s calories in each hour")
+            + " · based on \(days). Tap a bar."
+    }
 }

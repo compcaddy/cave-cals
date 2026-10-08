@@ -67,7 +67,7 @@ final class ECCUITests: XCTestCase {
         assertFooterPosition()
         app.buttons["profile"].tap()
         XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
-        XCUIDevice.shared.system.open(URL(string: "cavecals://home")!)
+        XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://home")!)
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         assertFooterPosition()
         let shot = XCTAttachment(screenshot: app.screenshot())
@@ -226,12 +226,12 @@ final class ECCUITests: XCTestCase {
     func testWidgetSearchLinkFocusesSearchAndBackgroundLinkReturnsHome() {
         app.buttons["profile"].tap()
         XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
-        XCUIDevice.shared.system.open(URL(string: "cavecals://log/add")!)
+        XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://log/add")!)
         XCTAssertTrue(app.buttons["Quick Add"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["About You"].exists)
         app.textFields["foodSearch"].typeText("Banana")
-        XCUIDevice.shared.system.open(URL(string: "cavecals://home")!)
+        XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://home")!)
         XCTAssertTrue(app.otherElements["calorieSummary"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         XCTAssertFalse(app.buttons["Quick Add"].exists)
@@ -239,7 +239,7 @@ final class ECCUITests: XCTestCase {
 
     func testColdWidgetSearchLinkFocusesSearch() {
         app.terminate()
-        app.open(URL(string: "cavecals://log/add")!)
+        app.open(URL(string: "\(testAppURLScheme)://log/add")!)
         XCTAssertTrue(app.buttons["Quick Add"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         app.textFields["foodSearch"].typeText("123")
@@ -289,7 +289,9 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(onHome)
         XCTAssertTrue(app.buttons["Voice entry"].exists)
     }
-    func testAddModeTodayListRepeatsOrEditsWithoutChangingTheOriginal() {
+    func testAddModeTodayListRepeatsOrEditsWithoutChangingTheOriginal() throws {
+        // The Today pill is hidden for now (October 7, 2026).
+        throw XCTSkip("Add mode's Today pill is hidden")
         quickAdd("140")
         openAddMode("Logged")
         let again = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add 140 calories", "foodDetails-140 calories")).firstMatch
@@ -506,6 +508,70 @@ final class ECCUITests: XCTestCase {
         assertSummary("360 of 2,100 calories") // Original 250 is intact; future add uses catalog's 110.
     }
 
+    /// Tapping Protein on Home lists the day's foods: blank where a food has no protein (the "+"), editable in place,
+    /// with AI estimates for the blanks.
+    func testMacroBreakdownFillsMissingAmounts() throws {
+        app.terminate()
+        app.launchArguments += ["--macro-estimate-fixture"]
+        app.launch()
+        let search = app.textFields["foodSearch"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("Banana")
+        let add = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Add Banana", "foodDetails-Banana")).firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
+        closeSearchDrawer()
+        quickAdd("140")
+        let protein = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        XCTAssertTrue(protein.label.hasPrefix("Protein 1+ g"), protein.label)
+        protein.tap()
+        // Only foods with blanks offer an estimate; the top button fills them all.
+        XCTAssertTrue(app.buttons["macroEstimateAll"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["macroEstimate-1"].exists)
+        XCTAssertFalse(app.buttons["macroEstimate-0"].exists)
+        let blank = app.textFields["macroCell-protein-1"]
+        XCTAssertEqual(blank.value as? String ?? "", "")
+        blank.tap(); blank.typeText("20")
+        // A tap selects the whole value, so typing replaces it.
+        let banana = app.textFields["macroCell-protein-0"]
+        XCTAssertEqual(banana.value as? String, "1")
+        banana.tap(); banana.typeText("3")
+        XCTAssertEqual(banana.value as? String, "3")
+        // The total follows what's typed, before it's saved.
+        XCTAssertEqual(app.staticTexts["macroBreakdownTotal-protein"].label, "23")
+        // The estimate fills only the blanks; the typed 20 g of protein stays.
+        app.buttons["macroEstimate-1"].tap()
+        let carbs = app.textFields["macroCell-totalCarbs-1"]
+        XCTAssertTrue(NSPredicate(format: "value == '12'").evaluate(with: carbs) || XCTWaiter.wait(for: [expectation(for: NSPredicate(format: "value == '12'"), evaluatedWith: carbs)], timeout: 5) == .completed)
+        XCTAssertEqual(app.textFields["macroCell-fat-1"].value as? String, "2")
+        XCTAssertEqual(blank.value as? String, "20")
+        XCTAssertTrue(app.buttons["macroEstimate-1"].waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["macroEstimateAll"].exists)
+        app.buttons["macroBreakdownDone"].tap()
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        XCTAssertTrue(protein.label.hasPrefix("Protein 23 g"), protein.label)
+        let carbsTotal = app.descendants(matching: .any)["dailyMacro-totalCarbs"].firstMatch
+        XCTAssertTrue(carbsTotal.label.hasPrefix("Carbs ≈"), carbsTotal.label)
+    }
+
+    /// Macros typed for one food fill the same food's other entries, even a box just tapped.
+    func testMacroBreakdownSharesMacrosWithTheSameFood() {
+        quickAdd("pizza 300")
+        quickAdd("pizza 300")
+        let protein = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        protein.tap()
+        let first = app.textFields["macroCell-protein-0"], second = app.textFields["macroCell-protein-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        first.tap(); first.typeText("12")
+        second.tap()
+        XCTAssertTrue(app.staticTexts["macroBreakdownNote"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["macroBreakdownNote"].label.hasPrefix("Also filled 1 other"), app.staticTexts["macroBreakdownNote"].label)
+        XCTAssertEqual(second.value as? String, "12")
+        app.buttons["macroBreakdownDone"].tap()
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        XCTAssertTrue(protein.label.hasPrefix("Protein 24 g"), protein.label)
+    }
     func testMacroEntryGoalsAndOptionalDisplay() {
         let search = app.textFields["foodSearch"]
         search.tap(); search.typeText("Banana")
@@ -770,6 +836,47 @@ final class ECCUITests: XCTestCase {
         closeSearchDrawer()
         XCTAssertTrue(onHome)
         XCTAssertTrue(app.staticTexts["180"].waitForExistence(timeout: 4))
+    }
+    func testRecipeImportChoicesAndServingsSplitAMeal() {
+        closeSearchDrawer()
+        openAddMode("Meals"); app.buttons["newMeal"].tap()
+        XCTAssertTrue(app.buttons["newMealLink"].waitForExistence(timeout: 3))
+        app.buttons["newMealLink"].tap()
+        XCTAssertTrue(app.buttons["recipeFromLink"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["recipeFromPhoto"].exists)
+        XCTAssertTrue(app.buttons["recipeFromClipboard"].exists)
+        app.buttons["recipeFromClipboard"].tap()
+        let recipeText = app.textViews["recipeText"]
+        XCTAssertTrue(recipeText.waitForExistence(timeout: 4))
+        XCTAssertFalse(app.buttons["importMeal"].isEnabled)
+        recipeText.tap(); recipeText.typeText("2 lb ground beef, 2 cans beans, 1 onion. Serves 6.")
+        XCTAssertTrue(app.buttons["importMeal"].isEnabled)
+        app.navigationBars["Paste Recipe"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["newMeal"].waitForExistence(timeout: 4)); app.buttons["newMeal"].tap()
+        XCTAssertTrue(app.buttons["newMealManual"].waitForExistence(timeout: 3)); app.buttons["newMealManual"].tap()
+        let mealName = app.textFields["mealName"]
+        XCTAssertTrue(mealName.waitForExistence(timeout: 3)); mealName.tap(); mealName.typeText("Family chili")
+        app.buttons["Add food"].tap()
+        app.buttons["Create manual item"].tap()
+        let calories = app.textFields["entryCalories"]
+        XCTAssertTrue(calories.waitForExistence(timeout: 3)); calories.tap(); calories.typeText(XCUIKeyboardKey.delete.rawValue + "1400")
+        let name = app.textFields["entryName"]; name.tap(); name.typeText("Chili pot")
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["mealPickerDone"].waitForExistence(timeout: 4)); app.buttons["mealPickerDone"].tap()
+        let servings = app.textFields["recipeServings"]
+        XCTAssertTrue(servings.waitForExistence(timeout: 4))
+        servings.tap(); servings.typeText("7")
+        XCTAssertTrue(app.staticTexts["200 cal"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["1,400 cal"].exists)
+        app.buttons["Save Meal"].tap()
+        let add = app.buttons["Add Family chili"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        add.tap()
+        XCTAssertTrue(app.staticTexts["Recipe makes 7 servings."].waitForExistence(timeout: 3))
+        app.buttons["Add Meal"].tap()
+        XCTAssertTrue(app.buttons["cancelAddMode"].waitForExistence(timeout: 4))
+        closeSearchDrawer()
+        XCTAssertTrue(app.staticTexts["200"].waitForExistence(timeout: 4))
     }
 }
 

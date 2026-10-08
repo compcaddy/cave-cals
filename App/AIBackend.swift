@@ -58,6 +58,13 @@ struct AIMealImportResult: Codable {
     var mealName: String
     var items: [AIFoodEstimate]
     var notes: String
+    /// How many servings the imported items make together. Missing from older backends, whose items are one serving.
+    var recipeServings: Double?
+
+    var servingCount: Int {
+        guard let recipeServings, recipeServings.isFinite, recipeServings >= 1 else { return 1 }
+        return min(RecipeServings.range.upperBound, Int(recipeServings.rounded()))
+    }
 
     func drafts(at date: Date, source: String) -> [EntryDraft] {
         AIResult(items: items, notes: notes, transcript: nil).drafts(at: date, source: source)
@@ -71,6 +78,7 @@ struct AIServiceError: LocalizedError {
 enum AIConfiguration {
     static let productionURL = URL(string: "https://cavecals.vercel.app")!
     static var developerSettingsAvailable: Bool {
+        if AppEnvironment.isDevelopment { return true }
         #if DEBUG
         return true
         #else
@@ -110,7 +118,7 @@ enum AIConfiguration {
 
 }
 enum KeychainValue {
-    private static let service = "com.philstarkovich.cavecals.backend"
+    private static let service = AppEnvironment.appID + ".backend"
     static func read(_ key: String) -> String? {
         let query: [String: Any] = [kSecClass as String:kSecClassGenericPassword, kSecAttrService as String:service, kSecAttrAccount as String:key, kSecReturnData as String:true, kSecMatchLimit as String:kSecMatchLimitOne]
         var value: CFTypeRef?
@@ -154,19 +162,29 @@ actor AIBackend {
         let uploadId: String
         if let existingUpload { uploadId = existingUpload }
         else {
-            struct Upload: Decodable { let uploadId: String; let uploadURL: URL; let contentType: String }
-            let upload: Upload = try await signed("uploads/sign", fields: ["regularLogCount":regularLogCount,"kind":kind,"mime":mime,"byteLength":data.count,"sha256":SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined()])
-            var request = URLRequest(url:upload.uploadURL);request.httpMethod="PUT"
-            request.setValue(upload.contentType, forHTTPHeaderField:"Content-Type")
-            if let base = AIConfiguration.baseURL, upload.uploadURL.host == base.host, upload.uploadURL.port == base.port, let token = AIConfiguration.developerToken { request.setValue("Bearer \(token)", forHTTPHeaderField:"Authorization") }
-            let (_, response) = try await session.upload(for:request,from:data)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AIServiceError(code:"upload_failed",message:"The upload failed. Please try again.") }
-            uploadId=upload.uploadId
+            uploadId = try await upload(data, kind: kind, mime: mime, regularLogCount: regularLogCount)
             await onUpload(uploadId)
         }
         return try await signed("food/analyze",fields:["uploadId":uploadId,"regularLogCount":regularLogCount])
     }
+    private func upload(_ data: Data, kind: String, mime: String, regularLogCount: Int) async throws -> String {
+        struct Upload: Decodable { let uploadId: String; let uploadURL: URL; let contentType: String }
+        let upload: Upload = try await signed("uploads/sign", fields: ["regularLogCount":regularLogCount,"kind":kind,"mime":mime,"byteLength":data.count,"sha256":SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined()])
+        var request = URLRequest(url:upload.uploadURL);request.httpMethod="PUT"
+        request.setValue(upload.contentType, forHTTPHeaderField:"Content-Type")
+        if let base = AIConfiguration.baseURL, upload.uploadURL.host == base.host, upload.uploadURL.port == base.port, let token = AIConfiguration.developerToken { request.setValue("Bearer \(token)", forHTTPHeaderField:"Authorization") }
+        let (_, response) = try await session.upload(for:request,from:data)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AIServiceError(code:"upload_failed",message:"The upload failed. Please try again.") }
+        return upload.uploadId
+    }
     func estimateMacros(for draft: EntryDraft) async throws -> MacroNutrients {
+        #if DEBUG
+        // UI tests never reach the backend: a fixed estimate stands in.
+        if ProcessInfo.processInfo.arguments.contains("--macro-estimate-fixture") {
+            try await Task.sleep(for: .milliseconds(400))
+            return MacroNutrients(protein: 5, totalCarbs: 12, fiber: 1, fat: 2).markedEstimated()
+        }
+        #endif
         let result: MacroNutrients = try await signed("food/macros", fields: [
             "name": draft.name, "calories": draft.calories,
             "servingSize": draft.servingDescription, "servings": draft.servings
@@ -174,8 +192,40 @@ actor AIBackend {
         guard result.isValid else { throw AIServiceError(code: "invalid_estimate", message: "Couldn’t estimate macros. Try a clearer food name.") }
         return result.markedEstimated()
     }
+    /// Progress → Cave Coach (Cave Cals+): the on-device good-vs-over summary in, three tips out. Tips already
+    /// shown go along so new ones differ.
+    func coach(_ summary: [String: Any], previousTips: [String] = []) async throws -> CoachResult {
+        #if DEBUG
+        // UI tests never reach the backend: fixed tips stand in.
+        if ProcessInfo.processInfo.arguments.contains("--coach-fixture") {
+            try await Task.sleep(for: .milliseconds(400))
+            let round = previousTips.isEmpty ? "" : " again"
+            return CoachResult(tips: [
+                .init(title: "Eat breakfast by 9\(round)", detail: "Good days start about an hour earlier."),
+                .init(title: "Plan a 3 PM snack", detail: "It heads off evening grazing."),
+                .init(title: "Close the kitchen at 8", detail: "Over days run later."),
+            ])
+        }
+        #endif
+        return try await signed("insights/coach", fields: ["summary": summary, "format": "tips",
+                                                         "previousTips": Array(previousTips.map { String($0.prefix(300)) }.prefix(9))])
+    }
+    /// Recipe imports return the whole recipe and how many servings it makes (see `RecipeServings`).
     func importMeal(from url: URL) async throws -> AIMealImportResult {
-        try await signed("meal/import", fields: ["url": url.absoluteString])
+        try await signed("meal/import", fields: ["url": url.absoluteString, "wholeRecipe": true])
+    }
+    func importMeal(text: String) async throws -> AIMealImportResult {
+        try await signed("meal/import", fields: ["text": text])
+    }
+    /// Uploads each recipe page (prepared JPEGs, in order), then reads them together as one recipe.
+    func importMeal(pages: [Data], regularLogCount: Int = 0, onPageUploaded: @Sendable (Int) async -> Void = { _ in }) async throws -> AIMealImportResult {
+        var uploadIds: [String] = []
+        for page in pages {
+            try Task.checkCancellation()
+            uploadIds.append(try await upload(page, kind: "image", mime: "image/jpeg", regularLogCount: regularLogCount))
+            await onPageUploaded(uploadIds.count)
+        }
+        return try await signed("meal/import", fields: ["uploadIds": uploadIds])
     }
     /// Estimates foods from what the person said (Siri/Shortcuts). Uses one scan, like a voice recording.
     func describe(text: String, regularLogCount: Int = 0) async throws -> AIResult {
@@ -265,6 +315,9 @@ actor AIBackend {
     private func credentialName(_ base: URL) -> String { "ai.attest." + base.absoluteString }
     private static func trialKeyName(_ base: URL) -> String { "ai.trial." + base.absoluteString }
     private func deviceKey(base: URL) async throws -> String {
+        guard !AppEnvironment.isDevelopment else {
+            throw AIServiceError(code: "dev_setup", message: "AI in Cave Cals Dev needs a private test-access key in Developer settings. Normal app subscriptions are separate.")
+        }
         let service = DCAppAttestService.shared
         guard service.isSupported else { throw AIServiceError(code:"unsupported_device",message:"Secure AI logging requires a supported physical iPhone. Use local developer settings for Simulator testing.") }
         if let key = KeychainValue.read(credentialName(base)) { return key }

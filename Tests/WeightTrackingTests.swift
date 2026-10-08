@@ -27,6 +27,21 @@ import XCTest
         XCTAssertEqual(spring[1].timeIntervalSince(spring[0]), 23 * 60 * 60)
     }
 
+    func testWeighInDialStartsFromNearestEarlierThenLaterWeighIn() {
+        let early = WeightRecord(date: date(2026, 9, 10, 7), kilograms: 80)
+        let middle = WeightRecord(date: date(2026, 9, 14, 7), kilograms: 81)
+        let late = WeightRecord(date: date(2026, 9, 18, 7), kilograms: 82)
+        let records = [late, early, middle]
+        XCTAssertNil(WeighInStart.reference(for: date(), in: [], calendar: calendar))
+        XCTAssertEqual(WeighInStart.reference(for: date(2026, 9, 18, 20), in: records, calendar: calendar), late)
+        XCTAssertEqual(WeighInStart.reference(for: date(2026, 9, 16), in: records, calendar: calendar), middle)
+        XCTAssertEqual(WeighInStart.reference(for: date(2026, 9, 30), in: records, calendar: calendar), late)
+        XCTAssertEqual(WeighInStart.reference(for: date(2026, 9, 1), in: records, calendar: calendar), early)
+        XCTAssertEqual(WeighInStart.tenths(around: [early, late], including: nil, unit: .kilograms), 500...1120)
+        XCTAssertEqual(WeighInStart.tenths(around: [WeightRecord(date: date(), kilograms: 2)], including: nil, unit: .kilograms), 10...320)
+        XCTAssertEqual(WeighInStart.tenths(around: [], including: nil, unit: .kilograms), 10...7000)
+    }
+
     func testUnitsValidationAndLocaleInput() {
         XCTAssertEqual(WeightUnit.pounds.kilograms(200), 90.718474, accuracy: 0.000001)
         XCTAssertEqual(WeightUnit.pounds.display(90.718474), 200, accuracy: 0.000001)

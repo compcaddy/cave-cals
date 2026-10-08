@@ -21,6 +21,54 @@ struct CaptureCancelButton: View {
     }
 }
 
+/// How much was eaten, in one phrase. One countable thing becomes the total ("1 slice" eaten twice reads
+/// "2 slices"); a measured serving keeps its size and the count ("1 cup (240 ml) × 2", "100 g × 1.5"), since
+/// adding those up would hide the unit the estimate was based on. One serving shows just the serving.
+enum ServingCount {
+    static func text(serving: String, servings: Double) -> String {
+        let count = servings.formatted(.number.precision(.fractionLength(0...2)))
+        let serving = serving.trimmingCharacters(in: .whitespacesAndNewlines)
+        if serving.isEmpty { return servings == 1 ? "1 serving" : "\(count) servings" }
+        if servings == 1 { return serving }
+        if let unit = countableUnit(serving) { return "\(count) \(plural(unit))" }
+        return "\(serving) × \(count)"
+    }
+    /// "slice" from "1 slice": a short name of one thing, with no amounts, sizes in parentheses, or units of measure.
+    private static func countableUnit(_ serving: String) -> String? {
+        guard serving.hasPrefix("1 ") else { return nil }
+        let unit = String(serving.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        let words = unit.split(separator: " ")
+        guard !unit.isEmpty, words.count <= 4, unit.rangeOfCharacter(from: .decimalDigits) == nil,
+              unit.rangeOfCharacter(from: CharacterSet(charactersIn: "()/,")) == nil,
+              let first = words.first, !measures.contains(first.lowercased()) else { return nil }
+        return unit
+    }
+    /// Units whose totals would read oddly or mean something else ("2 g" is not two servings of a gram).
+    private static let measures: Set<String> = [
+        "g", "gram", "grams", "kg", "oz", "ounce", "ounces", "lb", "lbs", "pound", "pounds", "ml", "l", "liter",
+        "litre", "fl", "tbsp", "tsp", "tablespoon", "teaspoon", "cup", "cups", "pint", "quart", "serving",
+    ]
+    /// Pluralizes the thing counted: the word before "of" ("slices of pizza"), else the last word ("side salads").
+    static func plural(_ unit: String) -> String {
+        var words = unit.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        let head = words.firstIndex { $0.lowercased() == "of" }.map { $0 - 1 } ?? words.count - 1
+        guard words.indices.contains(head) else { return unit }
+        words[head] = pluralWord(words[head])
+        return words.joined(separator: " ")
+    }
+    private static let irregular = ["leaf": "leaves", "loaf": "loaves", "half": "halves", "knife": "knives",
+                                    "potato": "potatoes", "tomato": "tomatoes", "fish": "fish", "piece": "pieces"]
+    private static func pluralWord(_ word: String) -> String {
+        let lower = word.lowercased()
+        if let plural = irregular[lower] { return word.first?.isUppercase == true ? plural.capitalized : plural }
+        if ["ss", "sh", "ch"].contains(where: lower.hasSuffix) || lower.hasSuffix("x") || lower.hasSuffix("z") { return word + "es" }
+        // Already plural ("fries", "chips").
+        if lower.hasSuffix("s") { return word }
+        if lower.hasSuffix("y"), let before = lower.dropLast().last, !"aeiou".contains(before) { return word.dropLast() + "ies" }
+        return word + "s"
+    }
+}
+
 struct AIInputSheet: View {
     enum Mode: Equatable { case photo, voice }
     @Environment(AppStore.self) private var store
@@ -39,6 +87,8 @@ struct AIInputSheet: View {
     @State private var drafts: [EntryDraft] = []
     @State private var addedDraftIDs: Set<UUID> = []
     @State private var undoDraftID: UUID?
+    /// The meal picked for this scan's foods, when adding asks for one.
+    @State private var mealType: String?
     @State private var showScanDetails = false
     @State private var editing: EntryDraft?
     @State private var error: String?
@@ -57,6 +107,14 @@ struct AIInputSheet: View {
     @State private var mealRoute: MealRoute?
     @State private var gatedOnOpen = false
     @State private var paywallTrigger = PaywallTrigger.mealScanOpen
+    /// Voice Log's "Type instead": a typed or pasted description replaces the recording, for places
+    /// where speaking out loud doesn't work. "Record voice instead" switches back and starts listening.
+    @State private var typing = false
+    @State private var typedText = ""
+    @State private var resultWasTyped = false
+    @FocusState private var typedFocused: Bool
+    /// The backend's `food/describe` limit, in UTF-16 units like its JavaScript check.
+    static let typedLimit = 2000
     private var statsArea: StatsErrorArea { mode == .photo ? .mealScan : .voice }
 
     var body: some View {
@@ -67,19 +125,20 @@ struct AIInputSheet: View {
                         Section { photoControls }
                             .listRowSeparator(.hidden, edges: .all)
                     } else {
-                        Section { voiceControls }
+                        Section { voiceControls } footer: { voiceSwitch }
                             .listRowSeparator(.hidden, edges: .all)
                     }
                 } else { review }
                 if let error { Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("aiError") } }
             }.caveScreenBackground()
+            .tapOutsideClosesKeyboard()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
                     reviewUndoBanner
                     CaptureCancelButton(action: cancel)
                 }
             }
-            .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : "Speak Food") : "Review Scan")
+            .navigationTitle(result == nil ? (mode == .photo ? "Meal Scan" : typing ? "Type Food" : "Speak Food") : "Review Scan")
             .navigationBarTitleDisplayMode(.inline)
             .task { autoStartRecordingIfReady() }
             .task { await gateAccessOnOpen() }
@@ -121,8 +180,24 @@ struct AIInputSheet: View {
                 if done { finishRecording(analyzeAfter: false) }
             }
             .onDisappear { operation?.cancel(); recorder.cancel() }
+            #if DEBUG && targetEnvironment(simulator)
+            .task { showReviewFixtureIfRequested() }
+            #endif
         }.presentationDetents([.large])
     }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// `--review-scan-fixture` opens straight to Review Scan with two foods, for UI tests without the AI backend.
+    private func showReviewFixtureIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("--review-scan-fixture"), onMealDrafts == nil, result == nil else { return }
+        let fixture = AIResult(items: [
+            AIFoodEstimate(name: "Grilled chicken", calories: 280, portion: "1 breast", confidence: "high"),
+            AIFoodEstimate(name: "Side salad", calories: 90, portion: "1 bowl", confidence: "medium"),
+        ], notes: "Sample scan.")
+        result = fixture
+        drafts = fixture.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
+    }
+    #endif
 
     @ViewBuilder private var photoControls: some View {
         ZStack(alignment: .topTrailing) {
@@ -181,6 +256,76 @@ struct AIInputSheet: View {
     }
 
     @ViewBuilder private var voiceControls: some View {
+        if typing { typedControls } else { spokenControls }
+    }
+
+    /// Small, centered, right below the card: switches between speaking and typing.
+    @ViewBuilder private var voiceSwitch: some View {
+        if !working {
+            Button {
+                if typing { switchToVoice() } else { switchToTyping() }
+            } label: {
+                Text(typing ? "Record voice instead" : "Type instead")
+                    .font(.cave(.subheadline)).foregroundStyle(Color.caveOrange)
+                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            }
+            .hapticButtonStyle(.plain)
+            .accessibilityHint(typing ? "Stops typing and starts recording" : "Stops recording so you can type or paste what you ate")
+            .accessibilityIdentifier(typing ? "recordVoiceInstead" : "typeInstead")
+        }
+    }
+
+    @ViewBuilder private var typedControls: some View {
+        VStack(spacing: 14) {
+            CaveIcon(.pencil, size: 56).foregroundStyle(Color.accentColor)
+            Text(working ? "Analyzing your meal…" : "You Type. App Read.").font(.cave(.title))
+            Text(working ? "Finding foods and calories." : "Tell what you eat and how much.").foregroundStyle(.secondary)
+            // A text editor, not a vertical text field: Return adds a line and pasted lists keep theirs.
+            TextEditor(text: $typedText)
+                .font(.cave(.body))
+                .focused($typedFocused)
+                .disabled(working)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 120, maxHeight: 220)
+                .overlay(alignment: .topLeading) {
+                    if typedText.isEmpty {
+                        Text("Two scrambled eggs, toast with butter, and a coffee with milk.")
+                            .font(.cave(.body)).foregroundStyle(.tertiary)
+                            .padding(.top, 8).padding(.leading, 5)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(Color.caveBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .keyboardInputArea { typedFocused = true }
+                .accessibilityLabel("What you ate")
+                .accessibilityIdentifier("aiTypedText")
+                .onChange(of: typedText) { _, text in
+                    if text.utf16.count > Self.typedLimit { typedText = Self.trimmed(text, to: Self.typedLimit) }
+                }
+            if typedText.utf16.count > Self.typedLimit - 200 {
+                Text("\(typedText.utf16.count.formatted()) / \(Self.typedLimit.formatted())")
+                    .font(.cave(.caption)).monospacedDigit().foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }.frame(maxWidth: .infinity).padding(.top, 20).padding(.bottom, 8)
+        if working {
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 64)
+                .accessibilityIdentifier("aiProcessing")
+        } else {
+            Button { requestTextAnalysis() } label: {
+                Text("Analyze").frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .hapticButtonStyle(.borderedProminent)
+            .tint(.caveOrange)
+            .disabled(typedDescription.count < 2)
+            .accessibilityIdentifier("aiAnalyzeText")
+        }
+    }
+
+    @ViewBuilder private var spokenControls: some View {
         VStack(spacing: 18) {
             CaveIcon(.voice, size: 72)
                 .foregroundStyle(Color.accentColor)
@@ -230,14 +375,29 @@ struct AIInputSheet: View {
         return "\(whole / 60):" + String(format: "%02d", whole % 60)
     }
 
+    /// Adding asks for a meal type (and this scan is being logged, not building a saved meal).
+    private var choosesMeal: Bool { store.mealSettings.asks && onMealDrafts == nil }
+
+    static func servingDetail(_ draft: EntryDraft) -> String {
+        ServingCount.text(serving: draft.servingDescription, servings: draft.servings)
+    }
+
     @ViewBuilder private var review: some View {
         if let result {
+            if choosesMeal, !drafts.isEmpty {
+                // One scan is usually one meal, so its foods share the choice.
+                Section("Meal type") {
+                    MealTypePicker(types: store.mealSettings.visibleTypes, selection: $mealType)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Color.clear)
+            }
             Section {
                 ForEach(drafts) { draft in
                     FoodRow(
                         name: draft.name,
                         calories: draft.calories,
-                        detail: draft.servingDescription,
+                        detail: Self.servingDetail(draft),
                         macros: MacroSummary([draft]),
                         suggestionLayout: true,
                         added: addedDraftIDs.contains(draft.id),
@@ -250,7 +410,8 @@ struct AIInputSheet: View {
                 }.onDelete(perform: removeDrafts)
                 if drafts.isEmpty { Text("No foods to add. Try a clearer photo or description.") }
             }
-            if drafts.count > 1 {
+            // Always shown, even for one food: one big button adds whatever is listed and moves on.
+            if !drafts.isEmpty {
                 Section {
                     Button {
                         addRemainingDrafts()
@@ -269,6 +430,7 @@ struct AIInputSheet: View {
                     .accessibilityLabel("Add All")
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    if drafts.count > 1 {
                     Button {
                         mealRoute = MealRoute(items: drafts)
                     } label: {
@@ -284,6 +446,7 @@ struct AIInputSheet: View {
                     .accessibilityIdentifier("aiSaveMeal")
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    }
                 }
             }
             Section {
@@ -320,7 +483,7 @@ struct AIInputSheet: View {
                         Text(result.notes).font(.cave(.subheadline)).foregroundStyle(.secondary)
                     }
                     if let transcript = result.transcript {
-                        Text("You said: \(transcript)").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                        Text("\(resultWasTyped ? "You wrote" : "You said"): \(transcript)").font(.cave(.subheadline)).foregroundStyle(.secondary)
                     }
                     if result.notes.isEmpty, result.transcript == nil {
                         Text("No additional scan details.").font(.cave(.subheadline)).foregroundStyle(.secondary)
@@ -358,6 +521,8 @@ struct AIInputSheet: View {
     private func add(_ draft: EntryDraft) {
         guard !addedDraftIDs.contains(draft.id), draft.isValid else { return }
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var draft = draft
+        draft.mealType = choosesMeal ? mealType : nil
         guard store.add([draft], message: "\(name.isEmpty ? "Food" : name) added") else { return }
         addedDraftIDs.insert(draft.id)
         undoDraftID = draft.id
@@ -374,7 +539,8 @@ struct AIInputSheet: View {
     private func addRemainingDrafts() {
         let remaining = remainingDrafts
         guard !remaining.isEmpty, remaining.allSatisfy(\.isValid) else { return }
-        guard store.add(remaining, message: "Added estimated foods") else { return }
+        let chosen = choosesMeal ? mealType : nil
+        guard store.add(remaining.map { var draft = $0; draft.mealType = chosen; return draft }, message: remaining.count == 1 ? "\(remaining[0].name.isEmpty ? "Food" : remaining[0].name) added" : "Added estimated foods") else { return }
         addedDraftIDs.formUnion(remaining.map(\.id))
         dismiss()
     }
@@ -400,6 +566,36 @@ struct AIInputSheet: View {
               !ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
         started = true
         startRecording()
+    }
+    /// Stops listening (dropping anything recorded) and opens the keyboard for a typed description.
+    private func switchToTyping() {
+        operation?.cancel()
+        recorder.cancel(); media = nil; uploadId = nil; error = nil
+        typing = true
+        UsageStats.shared.event("voice.typeInstead")
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            if typing { typedFocused = true }
+        }
+    }
+    /// Back to speaking: the typed text stays for a later switch, and listening starts right away.
+    private func switchToVoice() {
+        typedFocused = false
+        typing = false; error = nil
+        // UI tests skip starting the microphone, as they do when the screen opens.
+        if !ProcessInfo.processInfo.arguments.contains("--uitesting") { startRecording() }
+    }
+    /// What's sent: trimmed, with stray control characters (not line breaks or tabs) turned into spaces.
+    private var typedDescription: String {
+        String(String.UnicodeScalarView(typedText.unicodeScalars.map { scalar in
+            CharacterSet.controlCharacters.contains(scalar) && !"\n\r\t".unicodeScalars.contains(scalar) ? " " : scalar
+        })).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    /// Drops whole characters from the end until the text fits `limit` UTF-16 units.
+    nonisolated static func trimmed(_ text: String, to limit: Int) -> String {
+        var result = text
+        while result.utf16.count > limit { result.removeLast() }
+        return result
     }
     private func startRecording() {
         guard !startingRecording && !working else { return }
@@ -443,19 +639,8 @@ struct AIInputSheet: View {
             do {
                 let response = try await AIBackend.shared.identify(data: media, kind: mode == .photo ? "image" : "audio", mime: mode == .photo ? "image/jpeg" : "audio/mp4", existingUpload: uploadId, regularLogCount: store.regularLogCount, onUpload: { id in await MainActor.run { uploadId = id } })
                 try Task.checkCancellation()
-                let generatedDrafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
                 UsageStats.shared.scan(mode == .photo ? .mealScan : .voice)
-                if generatedDrafts.isEmpty { UsageStats.shared.error(statsArea, code: "no_foods", message: "The scan found no foods to add.") }
-                if let onMealDrafts {
-                    self.media = nil; image = nil
-                    onMealDrafts(generatedDrafts)
-                    return
-                }
-                result = response
-                drafts = generatedDrafts
-                addedDraftIDs.removeAll()
-                undoDraftID = nil
-                self.media = nil; image = nil
+                present(response, typed: false)
             } catch is CancellationError {} catch {
                 self.error = error.localizedDescription
                 UsageStats.shared.error(statsArea, error)
@@ -465,6 +650,59 @@ struct AIInputSheet: View {
                 }
             }
         }
+    }
+
+    /// Typed descriptions go to `food/describe`, which charges one scan like a recording.
+    private func requestTextAnalysis() {
+        let text = typedDescription
+        guard text.count >= 2, !working else { return }
+        typedFocused = false
+        working = true; error = nil
+        operation = Task { @MainActor in
+            defer { working = false }
+            await subscriptions.refresh(regularLogCount: store.regularLogCount)
+            guard !Task.isCancelled else { return }
+            guard let account = subscriptions.account else {
+                error = subscriptions.message ?? "Could not check access. Please try again."
+                return
+            }
+            guard account.canScan else {
+                if subscriptions.offering != nil { openPaywall(onOpen: false) }
+                else {
+                    error = subscriptions.message ?? "Subscriptions could not load. What you typed is still here; please try again."
+                    UsageStats.shared.error(.voice, code: "paywall_unavailable", message: error ?? "")
+                }
+                return
+            }
+            do {
+                let response = try await AIBackend.shared.describe(text: text, regularLogCount: store.regularLogCount)
+                try Task.checkCancellation()
+                UsageStats.shared.scan(.voiceTyped)
+                present(response, typed: true)
+            } catch is CancellationError {} catch {
+                self.error = error.localizedDescription
+                UsageStats.shared.error(.voice, error)
+                if let service = error as? AIServiceError, service.code == "subscription_required", subscriptions.offering != nil {
+                    openPaywall(onOpen: false)
+                }
+            }
+        }
+    }
+
+    /// Shows an estimate in Review Scan, or hands it to the New Meal editor.
+    private func present(_ response: AIResult, typed: Bool) {
+        let generatedDrafts = response.drafts(at: date, source: mode == .photo ? "aiPhoto" : "aiVoice")
+        if generatedDrafts.isEmpty { UsageStats.shared.error(statsArea, code: "no_foods", message: "The scan found no foods to add.") }
+        media = nil; image = nil
+        if let onMealDrafts {
+            onMealDrafts(generatedDrafts)
+            return
+        }
+        result = response
+        resultWasTyped = typed
+        drafts = generatedDrafts
+        addedDraftIDs.removeAll()
+        undoDraftID = nil
     }
 
     /// Runs alongside the camera/microphone start so paying users see no delay. When scans are used up,
@@ -506,12 +744,13 @@ struct AIInputSheet: View {
         gatedOnOpen = false
         Task { @MainActor in
             await Task.yield()
-            if media != nil { requestAnalysis() }
+            if typing { requestTextAnalysis() }
+            else if media != nil { requestAnalysis() }
             else if mode == .voice { startRecording() }
         }
     }
 
-    static func preparePhoto(_ data: Data, maximumBytes: Int = 2 * 1024 * 1024) throws -> Data {
+    nonisolated static func preparePhoto(_ data: Data, maximumBytes: Int = 2 * 1024 * 1024) throws -> Data {
         guard maximumBytes > 0, let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw AIServiceError(code: "photo", message: "This photo could not be read.")
         }

@@ -101,3 +101,27 @@ export const errorResolutions = pgTable('error_resolutions', {
   fingerprint: text('fingerprint').primaryKey(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Creator and trainer discount codes, added by the owner on /admin/codes. Each has a page at CaveCals.com/<code>.
+export const discountCodes = pgTable('discount_codes', {
+  // Capital letters and digits (SARAH). Links and typed codes ignore capitals.
+  code: text('code').primaryKey(),
+  // Who shares it, shown on the code's page: "Sarah".
+  name: text('name').notNull(),
+  // App Store Connect campaign token (`ct`) on the page's App Store link.
+  campaign: text('campaign').notNull(),
+  // The RevenueCat offering the app shows once the code is applied.
+  offering: text('offering').notNull().default('discount'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+// Totals per code and Pacific day: page visits, App Store button taps, and codes applied in the app.
+// Counts only; no IPs, cookies, or device identifiers are kept.
+export const discountCodeDaily = pgTable('discount_code_daily', {
+  code: text('code').notNull().references(() => discountCodes.code, { onDelete: 'cascade' }),
+  day: date('day').notNull(),
+  visits: integer('visits').notNull().default(0),
+  storeTaps: integer('store_taps').notNull().default(0),
+  applies: integer('applies').notNull().default(0),
+}, t => [primaryKey({ columns: [t.code, t.day] })]);

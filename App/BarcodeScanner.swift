@@ -6,6 +6,8 @@ struct BarcodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     let date: Date
     @State private var editor: EntryDraft?
+    /// A product logged before, opened in the editor only to pick its meal (adding asks for one).
+    @State private var editorChoosesMeal = false
     @State private var loading = false
     @State private var message: String?
     @State private var permission: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -13,7 +15,7 @@ struct BarcodeSheet: View {
     @State private var task: Task<Void, Never>?
     var body: some View {
         if let editor {
-            EntryEditorSheet(draft: editor).id(editor.id)
+            EntryEditorSheet(draft: editor, choosesMeal: editorChoosesMeal).id(editor.id)
         } else {
             scanner
         }
@@ -36,9 +38,9 @@ struct BarcodeSheet: View {
                         ContentUnavailableView { Label { Text("Camera unavailable") } icon: { CaveIcon(.camera, size: 48) } } description: { Text("Make sure you have granted this app access to your camera.") }
                         if permission == .denied { Button("Open Camera Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } } }
                     }
-                    if loading { ProgressView("Looking up barcode…") }
+                    if loading { ProgressView("Looking up barcode…").frame(height: 250) }
                     if let message { Text(message).font(.cave(.subheadline)).foregroundStyle(.secondary) }
-                }.padding(20)
+                }.frame(maxWidth: .infinity).padding(20)
             }.caveScreenBackground()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CaptureCancelButton {
@@ -65,7 +67,11 @@ struct BarcodeSheet: View {
         task = Task { @MainActor in
             // A product logged before goes straight into the log with Undo; Home reveals the new row.
             if var known = store.localBarcode(cleaned) {
-                known.timestamp = date; known.entryID = nil; known.source = "barcode"
+                known.timestamp = date; known.entryID = nil; known.source = "barcode"; known.mealType = nil
+                // Adding asks for a meal: the filled-in editor replaces the scanner, with the meal choice showing.
+                if store.mealSettings.asks {
+                    loading = false; editorChoosesMeal = true; editor = known; return
+                }
                 if store.add([known]) { loading = false; dismiss(); return }
             }
             var draft = store.localBarcode(cleaned)

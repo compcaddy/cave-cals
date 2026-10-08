@@ -97,4 +97,6 @@ scheme.set_launch_target(app)
 scheme.add_test_target(tests)
 scheme.add_test_target(ui)
 scheme.save_as(project.path, 'CaveCals', true)
+require_relative 'configure_dev_build'
+CaveCalsDevBuild.configure(project)
 project.save

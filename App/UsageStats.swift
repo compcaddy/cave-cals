@@ -23,7 +23,12 @@ enum LogMethod: String, CaseIterable {
 }
 
 /// A capture that returned a result; one scan can log several items.
-enum ScanKind: String { case mealScan, voice, barcode, recipe, siri }
+/// `recipe` is a link import; `recipePhoto` and `recipeText` are recipe photos and pasted recipe text.
+enum ScanKind: String {
+    case mealScan, voice, barcode, recipe, recipePhoto, recipeText, siri
+    /// Voice Log's "Type instead": a typed or pasted description.
+    case voiceTyped
+}
 
 /// What put the Cave Cals+ paywall on screen.
 enum PaywallTrigger: String {
@@ -31,15 +36,27 @@ enum PaywallTrigger: String {
     case mealScanOpen, mealScanAnalyze, voiceOpen, voiceAnalyze
     case newMealPhotoOpen, newMealPhotoAnalyze, newMealVoiceOpen, newMealVoiceAnalyze
     case recipeImportOpen, recipeImport
+    /// A second progress photo on one day (more angles are Cave Cals+).
+    case progressPhotos
+    /// Progress → Good Days vs. Over Days → Cave Coach.
+    case coach
 }
 
 /// Where an error reached someone, so the admin page can show how often each feature fails.
 enum StatsErrorArea: String {
-    case mealScan, voice, barcode, recipe, siri, search, macroEstimate, subscription, save, iCloud, appleHealth, weights
+    case mealScan, voice, barcode, recipe, siri, search, macroEstimate, subscription, save, iCloud, appleHealth, weights, progressPhotos
+    /// Checking a discount code failed (not a code that doesn't work).
+    case discountCode
+    /// Cave Coach couldn't write insights.
+    case coach
 }
 
 enum UsageCounter: String {
     case opens, searches, searchesAbandoned, edits, deletes, undos, doneEating, progressViews, weighIns, feedbackTaps, reminderTaps
+    /// Progress photos saved, and times the Compare screen opened.
+    case progressPhotos, photoCompares
+    /// Logged food moved to another meal type (long-press Move to, or the editor's meal row).
+    case mealMoves
 }
 
 /// Anonymous usage counts and error reports for the admin page (`backend/src/app/admin`).
@@ -47,7 +64,8 @@ enum UsageCounter: String {
 /// Counts are kept per local calendar day in a small file and sent in one batch when the app goes to the
 /// background (or on opening, if it's been a while). Nothing here touches the diary beyond counting entries;
 /// food names, calories, weights, and Health data never leave the iPhone. The only typed text sent is a
-/// search that found nothing anywhere. Settings → "Share anonymous usage stats" turns all of it off.
+/// search that found nothing anywhere, the "Other" answer to "Where did you hear about Cave Cals?", and a discount
+/// code that worked. Settings → "Share anonymous usage stats" turns all of it off.
 @MainActor final class UsageStats {
     static let shared = UsageStats()
     /// Settings → "Share anonymous usage stats" (on by default).
@@ -118,7 +136,7 @@ enum UsageCounter: String {
     /// UI tests, screenshots, previews, and unit tests never record or send anything.
     nonisolated static var recordingAllowed: Bool {
         let arguments = ProcessInfo.processInfo.arguments
-        return !arguments.contains("--uitesting") && !arguments.contains("--screenshots") && !ProgressPreferences.isPreview
+        return !AppEnvironment.isDevelopment && !arguments.contains("--uitesting") && !arguments.contains("--screenshots") && !ProgressPreferences.isPreview
             && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
     }
     nonisolated static var defaultFileURL: URL? {
@@ -158,11 +176,17 @@ enum UsageCounter: String {
         self.count(.undos, now: now)
     }
     func scan(_ kind: ScanKind, now: Date = Date()) { count("scans.\(kind.rawValue)", now: now) }
-    func paywallShown(_ trigger: PaywallTrigger) { event("paywall.shown", ["trigger": trigger.rawValue]) }
+    /// `code` is the discount code applied at the time, so the admin page can count purchases per code.
+    func paywallShown(_ trigger: PaywallTrigger, code: String? = nil) {
+        var props = ["trigger": trigger.rawValue]
+        if let code { props["code"] = code }
+        event("paywall.shown", props)
+    }
     /// `result` is closed, trial, purchased, restored, or unavailable.
-    func paywallResult(_ trigger: PaywallTrigger, _ result: String, product: String? = nil) {
+    func paywallResult(_ trigger: PaywallTrigger, _ result: String, product: String? = nil, code: String? = nil) {
         var props = ["trigger": trigger.rawValue, "result": result]
         if let product { props["product"] = String(product.prefix(100)) }
+        if let code { props["code"] = code }
         event("paywall.result", props)
     }
     /// A search that found nothing in past foods, saved meals, built-in foods, or online.

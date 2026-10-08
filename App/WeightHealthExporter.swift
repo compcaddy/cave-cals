@@ -23,7 +23,7 @@ enum WeightHealthError: LocalizedError {
 @MainActor final class WeightHealthExporter: WeightHealthExporting {
     private let store = HKHealthStore()
     private let type = HKQuantityType(.bodyMass)
-    var available: Bool { HKHealthStore.isHealthDataAvailable() }
+    var available: Bool { !AppEnvironment.isDevelopment && HKHealthStore.isHealthDataAvailable() }
     var authorized: Bool { available && store.authorizationStatus(for: type) == .sharingAuthorized }
     func authorize() async throws {
         guard available else { throw WeightHealthError.unavailable }

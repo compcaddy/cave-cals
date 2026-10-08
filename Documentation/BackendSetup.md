@@ -61,9 +61,13 @@ The current installation limit is five. Reinstallations may consume another devi
 | `CRON_SECRET` | A separately generated random secret of at least 32 characters |
 | `ADMIN_PASSWORD` | Password for the `/admin` stats and errors pages (any user name; ten wrong tries lock an IP out for an hour); without it they're a 404. Changing it needs a redeploy. See [Usage stats](UsageStats.md) |
 | `APP_STORE_URL` | Optional `https://apps.apple.com/...` override; the home page defaults to Cave Cals' verified public listing |
+| `APP_STORE_PROVIDER_TOKEN` | The provider token (`pt`, digits) from App Store Connect → Analytics → Acquisition → Campaigns. Discount-code pages add it with each code's campaign token so App Analytics reports their downloads; without it they link to the plain listing. See [Discount codes](DiscountCodes.md) |
+| `DISCOUNT_CHECK_DAILY_LIMIT` | Optional, defaults to 20,000 discount-code checks per UTC day across everyone |
 | `AI_DAILY_LIMIT` | Optional, defaults to 30 attempts per user per UTC day |
 | `AI_MONTHLY_LIMIT` | Optional, defaults to 300 attempts per user per UTC calendar month |
 | `AI_GLOBAL_DAILY_LIMIT` | Optional, defaults to 1,000 attempts across the service per UTC day |
+| `COACH_DAILY_LIMIT` | Optional, defaults to 3 Cave Coach write-ups per user per UTC day (`insights/coach`, Cave Cals+ only; also counts toward the AI limits above) |
+| `OPENAI_COACH_MODEL` | Optional model for Cave Coach; defaults to `OPENAI_IDENTIFICATION_MODEL` |
 
 `backend/vercel.json` chooses Ohio (`cle1`) near your Neon Ohio database and schedules `/api/cron/cleanup` daily. Verify the cron job runs successfully after deployment. It requires `CRON_SECRET`.
 
@@ -142,4 +146,4 @@ Group: **Cave Cals AI**, Apple ID `22363962`. Both products have level 1 and the
 
 Apple equalized prices are configured for 175 storefronts. The September 25 price decreases are scheduled in App Store Connect without preserving the former prices. The client reads localized prices and trial eligibility from StoreKit. Product IDs are configured in `APPLE_PRODUCT_IDS`. Subscription review screenshots, final review metadata, sandbox purchase testing, and Apple approval remain release requirements.
 
-RevenueCat project: **Cave Cals**, project ID `783afc8e`. App `app7a4868ae0e`, entitlement `ai`, and default offering are configured with both Apple products. The published paywall is “Cave Cals+ — Smarter logging”. The app integrates RevenueCat/RevenueCatUI 5.90.0 using app-managed StoreKit 2 purchases. The backend independently verifies Apple purchases before granting AI access; RevenueCat client state never grants server access. Both production and sandbox Apple server notifications point to RevenueCat. Custom remote Schoolbell font upload is pending Chrome extension file-upload permission. See `Documentation/Release/Readiness.md` for remaining release checks.
+RevenueCat project: **Cave Cals**, project ID `783afc8e`. App `app7a4868ae0e` and entitlement `ai` are configured with all four Apple subscription products. The `default` offering has the regular monthly/yearly products; `discount` has `.ai.monthly.discount` and `.ai.yearly.discount`, with a published copied paywall (October 7, 2026). Production includes `APP_STORE_PROVIDER_TOKEN=967948` for campaign attribution. See [Discount codes](DiscountCodes.md) for verified setup and release gates. The published paywall is “Cave Cals+ — Smarter logging”. The app integrates RevenueCat/RevenueCatUI 5.90.0 using app-managed StoreKit 2 purchases. The backend independently verifies Apple purchases before granting AI access; RevenueCat client state never grants server access. Both production and sandbox Apple server notifications point to RevenueCat. Custom remote Schoolbell font upload is pending Chrome extension file-upload permission. See `Documentation/Release/Readiness.md` for remaining release checks.

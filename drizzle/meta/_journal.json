@@ -29,6 +29,13 @@
       "when": 1791070894304,
       "tag": "0003_usage_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791313519821,
+      "tag": "0004_discount_codes",
+      "breakpoints": true
     }
   ]
 }

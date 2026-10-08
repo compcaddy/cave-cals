@@ -22,7 +22,7 @@ final class LoggingActionUITests: XCTestCase {
     }
 
     func testPendingLinkSurvivesSetup() {
-        XCUIDevice.shared.system.open(URL(string: "cavecals://log/voice")!)
+        XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://log/voice")!)
         XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 5))
         completeSetup()
         XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
@@ -30,20 +30,43 @@ final class LoggingActionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["aiRecord"].waitForExistence(timeout: 5))
     }
 
+    func testVoiceLogSwitchesBetweenTypingAndSpeaking() {
+        completeSetup()
+        XCTAssertTrue(app.buttons["Voice entry"].waitForExistence(timeout: 5))
+        app.buttons["Voice entry"].tap()
+        XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
+        app.buttons["typeInstead"].tap()
+        XCTAssertTrue(app.navigationBars["Type Food"].waitForExistence(timeout: 5))
+        let text = app.textViews["aiTypedText"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["aiAnalyzeText"].isEnabled)
+        text.tap()
+        // Return adds a line and typing carries on.
+        text.typeText("2 eggs\ntoast with butter")
+        XCTAssertEqual(text.value as? String, "2 eggs\ntoast with butter")
+        XCTAssertTrue(app.buttons["aiAnalyzeText"].isEnabled)
+        app.buttons["recordVoiceInstead"].tap()
+        XCTAssertTrue(app.navigationBars["Speak Food"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["aiRecord"].exists)
+        // What was typed is still there after switching back.
+        app.buttons["typeInstead"].tap()
+        XCTAssertEqual(app.textViews["aiTypedText"].value as? String, "2 eggs\ntoast with butter")
+    }
+
     func testAllLinksReplaceCurrentDrawerAndRepeat() {
         completeSetup()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         for (action, title) in [("voice", "Speak Food"), ("image", "Meal Scan"), ("barcode", "Barcode Scan"), ("voice", "Speak Food")] {
-            XCUIDevice.shared.system.open(URL(string: "cavecals://log/\(action)")!)
+            XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://log/\(action)")!)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), action)
         }
-        XCUIDevice.shared.system.open(URL(string: "cavecals://log/add")!)
+        XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://log/add")!)
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
 
     func testColdLaunchLinkSurvivesSetup() {
         app.terminate()
-        app.open(URL(string: "cavecals://log/image")!)
+        app.open(URL(string: "\(testAppURLScheme)://log/image")!)
         XCTAssertTrue(app.buttons["skipGoal"].waitForExistence(timeout: 10))
         completeSetup()
         XCTAssertTrue(app.navigationBars["Meal Scan"].waitForExistence(timeout: 5))

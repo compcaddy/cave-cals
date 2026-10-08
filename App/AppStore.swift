@@ -43,6 +43,10 @@ import WidgetKit
     /// Day key → when that day was marked done eating. Local to this iPhone.
     private(set) var finishedDays: [String: Date]
     private(set) var finishPromptHiddenDay: String?
+    /// Meal types and their times, decoded from the profile on every reload.
+    private(set) var mealSettings = MealSettings()
+    /// Week start, on-target rule, and chart ranges, synced on the profile.
+    private(set) var progressSettings = ProgressSettings()
     var error: String?
     var toast: String?
     var lastAddedID: UUID?
@@ -79,6 +83,9 @@ import WidgetKit
     func refresh() {
         do {
             profiles = try context.fetch(FetchDescriptor<UserProfile>())
+            mealSettings = MealSettings.decode(profile?.mealSettingsData)
+            progressSettings = ProgressSettings.decode(profile?.progressSettingsData,
+                localWeekday: ProgressPreferences.defaults.object(forKey: ProgressCalendar.weekStartKey) as? Int ?? 2)
             entries = try context.fetch(FetchDescriptor<CalorieEntry>(sortBy: [SortDescriptor(\.timestamp), SortDescriptor(\.componentOrder), SortDescriptor(\.createdAt)]))
             entriesRevision &+= 1
             // Remember up to the eligibility threshold, including deleted entries. Imported
@@ -299,31 +306,39 @@ import WidgetKit
         record.macroGoalsData = macroGoals(date).encoded
         context.insert(record); goals.append(record)
     }
-    @discardableResult func saveGoal(_ value: Double?, tracksMacros: Bool? = nil) -> Bool {
+    /// `newMacroGoals` (a calculated plan's suggested targets) replaces the macro goals from today, in the same save.
+    @discardableResult func saveGoal(_ value: Double?, tracksMacros: Bool? = nil, macroGoals newMacroGoals: MacroNutrients? = nil) -> Bool {
         if let value, !value.isFinite || value < 1 || value > 9999 { return false }
+        if let newMacroGoals, !newMacroGoals.isValidGoal { return false }
         let storedValue = value ?? 0
         // Retain yesterday even if it had no entries, before changing today's default.
         if profile != nil, let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) { retainGoal(yesterday) }
+        let todaysMacroGoals = newMacroGoals ?? macroGoals
         if let profile {
             profile.currentDailyGoal = storedValue; profile.updatedAt = Date()
             if let tracksMacros { profile.tracksMacros = tracksMacros }
+            if let newMacroGoals { profile.macroGoalsData = newMacroGoals.encoded }
         } else {
             let profile = UserProfile(goal: storedValue)
             if let tracksMacros { profile.tracksMacros = tracksMacros }
+            profile.macroGoalsData = newMacroGoals?.encoded
             context.insert(profile)
         }
         let today = Day.key(Date())
         if let record = goals.filter({ $0.day == today }).max(by: { $0.updatedAt < $1.updatedAt }) {
             record.calorieGoal = storedValue; record.updatedAt = Date()
+            if let newMacroGoals { record.macroGoalsData = newMacroGoals.encoded }
         } else {
             let record = DailyGoal(day: today, goal: storedValue)
-            record.macroGoalsData = macroGoals.encoded
+            record.macroGoalsData = todaysMacroGoals.encoded
             context.insert(record)
         }
         return commit()
     }
     func cacheBarcode(_ draft: EntryDraft) {
         guard let code = draft.barcode, !code.isEmpty else { return }
+        // The product is remembered, not the meal it was eaten at.
+        var draft = draft; draft.mealType = nil
         if let existing = barcodes.filter({ $0.barcode == code }).max(by: { $0.updatedAt < $1.updatedAt }) {
             existing.payload = (try? JSONEncoder().encode(draft)) ?? existing.payload; existing.updatedAt = Date()
         } else { let food = BarcodeFood(barcode: code, draft: draft); context.insert(food); barcodes.append(food) }
@@ -331,7 +346,10 @@ import WidgetKit
     /// `method` overrides the one implied by the drafts' source, for copies and Siri.
     @discardableResult func add(_ drafts: [EntryDraft], message: String? = nil, method: LogMethod? = nil) -> Bool {
         guard !drafts.isEmpty, drafts.allSatisfy(\.isValid) else { error = "Please enter valid calories, servings, and a date no later than now."; return false }
+        let meals = mealSettings
         let added = drafts.map { draft -> CalorieEntry in
+            var draft = draft
+            draft.mealType = meals.assignedMeal(chosen: draft.mealType, at: draft.timestamp)
             retainGoal(draft.timestamp)
             let entry = CalorieEntry(draft: draft); context.insert(entry); cacheBarcode(draft); return entry
         }
@@ -348,11 +366,80 @@ import WidgetKit
     }
     func update(_ draft: EntryDraft) -> Bool {
         guard draft.isValid, let entry = entries.first(where: { $0.id == draft.entryID }) else { return false }
+        let movedMeal = entry.mealType != draft.mealType
         retainGoal(draft.timestamp); entry.apply(draft); cacheBarcode(draft)
         guard commit() else { return false }
         UsageStats.shared.count(.edits)
+        if movedMeal { UsageStats.shared.count(.mealMoves) }
         return true
     }
+    /// After a food's macros are set (Home's macro sheet or the editor), the same food logged on other days gets
+    /// them too, scaled by calories (a double portion gets double), so it's complete everywhere and adding it again
+    /// from Quick Add or history carries them. Only blanks, AI estimates, and amounts still matching the source's
+    /// `previous` values (filled from it before, now corrected) change; other typed amounts never do. Returns how
+    /// many other entries changed.
+    @discardableResult func shareMacros(from source: CalorieEntry, previous: MacroNutrients? = nil) -> Int {
+        guard !source.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, source.totalCalories > 0,
+              let macros = MacroNutrients.decode(source.macrosPerServingData)?.scaled(source.servings) else { return 0 }
+        let food = FoodHistory.foodID(for: source)
+        var changed = 0
+        for entry in entries where entry.id != source.id && entry.totalCalories > 0 && FoodHistory.foodID(for: entry) == food {
+            var draft = EntryDraft(entry)
+            var totals = draft.totalMacros ?? MacroNutrients()
+            var updated = false
+            for kind in MacroKind.allCases {
+                guard let value = macros[keyPath: kind.keyPath] else { continue }
+                let ratio = entry.totalCalories / source.totalCalories
+                let current = totals[keyPath: kind.keyPath]
+                var wasShared = false
+                if let old = previous?[keyPath: kind.keyPath], let current {
+                    let oldScaled: Double = (old * ratio * 10).rounded() / 10
+                    wasShared = abs(current - oldScaled) < 0.05
+                }
+                guard current == nil || totals[keyPath: kind.estimateKeyPath] == true || wasShared else { continue }
+                let scaled = (value * ratio * 10).rounded() / 10
+                guard current != scaled else { continue }
+                totals[keyPath: kind.keyPath] = scaled
+                totals[keyPath: kind.estimateKeyPath] = macros[keyPath: kind.estimateKeyPath]
+                updated = true
+            }
+            guard updated, totals.isValid else { continue }
+            draft.macrosPerServing = totals.scaled(1 / max(draft.servings, 0.0001))
+            entry.apply(draft)
+            changed += 1
+        }
+        guard changed > 0 else { return 0 }
+        return commit() ? changed : 0
+    }
+    /// Home's long-press "Move to": files a logged food under another meal (or none) without opening the editor.
+    @discardableResult func setMealType(_ mealType: String?, for entry: CalorieEntry) -> Bool {
+        guard entry.mealType != mealType else { return true }
+        entry.mealType = mealType; entry.updatedAt = Date()
+        guard commit() else { return false }
+        UsageStats.shared.count(.mealMoves)
+        return true
+    }
+    /// Saves Settings → Meal types on the profile, so it syncs with the diary.
+    @discardableResult func saveMealSettings(_ settings: MealSettings) -> Bool {
+        guard settings != mealSettings, let profile, let data = settings.encoded else { return settings == mealSettings }
+        let before = mealSettings
+        profile.mealSettingsData = data; profile.updatedAt = Date()
+        guard commit() else { return false }
+        if before.tracks != settings.tracks || before.byTime != settings.byTime {
+            UsageStats.shared.event("mealTypes.mode", ["mode": settings.statsMode])
+        }
+        return true
+    }
+    /// Saves Progress settings on the profile, so they sync like the diary. Without a profile they last until relaunch.
+    @discardableResult func saveProgressSettings(_ settings: ProgressSettings) -> Bool {
+        guard settings != progressSettings else { return true }
+        progressSettings = settings
+        guard let profile, let data = settings.encoded else { return false }
+        profile.progressSettingsData = data; profile.updatedAt = Date()
+        return commit()
+    }
+    /// Whether any logged food (on any day) is filed under this meal type.
+    func mealTypeInUse(_ id: String) -> Bool { entries.contains { $0.mealType == id } }
     func delete(_ entry: CalorieEntry) {
         let draft = EntryDraft(entry), id = entry.id, created = entry.createdAt
         context.delete(entry)
@@ -375,15 +462,23 @@ import WidgetKit
     func undo() { toastTask?.cancel(); let action = undoAction; undoAction = nil; toast = nil; action?() }
     @discardableResult func saveMeal(_ existing: SavedMeal?, name: String, items: [EntryDraft]) -> Bool {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !items.isEmpty, items.allSatisfy(\.isValid) else { return false }
+        // A saved meal is a template; built from today's log, its foods don't keep that day's meal type.
+        let items = items.map { item -> EntryDraft in var item = item; item.mealType = nil; return item }
         if let existing {
             existing.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
             existing.componentsData = (try? JSONEncoder().encode(items)) ?? existing.componentsData; existing.updatedAt = Date()
         } else { context.insert(SavedMeal(name: name.trimmingCharacters(in: .whitespacesAndNewlines), items: items)) }
         return commit()
     }
-    func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date, method: LogMethod = .meal) -> Bool {
+    /// `mealType` is the meal picked for it, when adding asks for one.
+    func addMeal(_ meal: SavedMeal, factor: Double = 1, date: Date, method: LogMethod = .meal, mealType: String? = nil) -> Bool {
         guard factor.isFinite, factor > 0 else { return false }
-        return add(meal.items.enumerated().map { $0.element.scaled(factor, at: date, meal: meal.id, order: $0.offset) }, message: "\(meal.name) added", method: method)
+        let drafts = meal.items.enumerated().map { item -> EntryDraft in
+            var draft = item.element.scaled(factor, at: date, meal: meal.id, order: item.offset)
+            draft.mealType = mealType
+            return draft
+        }
+        return add(drafts, message: "\(meal.name) added", method: method)
     }
     func deleteMeal(_ meal: SavedMeal) {
         let wasPinned = isMealPinned(meal.id)
@@ -396,7 +491,7 @@ import WidgetKit
     }
     func localBarcode(_ code: String) -> EntryDraft? { barcodes.filter { $0.barcode == code }.max { $0.updatedAt < $1.updatedAt }?.draft }
     func checkCloud() async {
-        guard cloudEnabled else { syncStatus = "Stored on this iPhone"; return }
+        guard cloudEnabled else { syncStatus = AppEnvironment.isDevelopment ? "Dev · saved only on this device" : "Stored on this iPhone"; return }
         do {
             switch try await CKContainer(identifier: Persistence.cloudID).accountStatus() {
             case .available: if !syncStatus.contains("synced") { syncStatus = "iCloud available · sync is automatic" }
@@ -426,7 +521,7 @@ enum Persistence {
     }
     static let schema = Schema([UserProfile.self, DailyGoal.self, CalorieEntry.self, SavedMeal.self, BarcodeFood.self])
     @MainActor static func make(inMemory: Bool = false) throws -> AppStore {
-        #if targetEnvironment(simulator)
+        #if targetEnvironment(simulator) || CAVE_CALS_DEV
         let cloud = false
         #else
         let cloud = !inMemory
@@ -434,7 +529,9 @@ enum Persistence {
         return try makeConfigured(inMemory: inMemory, cloud: cloud)
     }
     @MainActor private static func makeConfigured(inMemory: Bool, cloud: Bool) throws -> AppStore {
-        let config = ModelConfiguration("CaveCals", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
+        let config = AppEnvironment.isDevelopment
+            ? ModelConfiguration("CaveCalsDev", schema: schema, isStoredInMemoryOnly: inMemory, groupContainer: .none, cloudKitDatabase: .none)
+            : ModelConfiguration("CaveCals", schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud ? .private(cloudID) : .none)
         do { return AppStore(container: try ModelContainer(for: schema, configurations: [config]), cloudEnabled: cloud, publishesWidget: !inMemory, persistsUsage: !inMemory, persistsFoodDefaults: !inMemory) }
         catch {
             guard cloud else { throw error }

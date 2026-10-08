@@ -10,16 +10,25 @@ struct EntryEditorSheet: View {
     var blankCaloriesOnOpen = false
     var onCancel: (() -> Void)? = nil
     var pinFoodID: String? = nil
+    /// Opened by a one-tap add while adding asks for a meal: everything else is filled in, so the meal
+    /// choice shows and scrolls into view without bringing up the keyboard.
+    var choosesMeal = false
+    /// How the food is being logged, for the stats, when its source doesn't say (copies).
+    var method: LogMethod? = nil
     @FocusState private var nameFocused: Bool
     @FocusState private var servingSizeFocused: Bool
     @FocusState private var perServingFocused: Bool
     @State private var showingTime = false
     @State private var saveAsCommonDefault = false
     @State private var pinOnQuickAdd = false
+    /// Nil until someone taps the meal row; until then it follows `mealStartsExpanded`.
+    @State private var mealExpanded: Bool?
+    private static let mealRowID = "mealTypeRow"
     @ScaledMetric(relativeTo: .largeTitle) private var calorieFieldHeight = 54
     private let servingSizes = ["1 serving", "1 piece", "1 cup", "1/2 cup", "1 tbsp", "1 tsp", "1 oz", "100 g"]
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             HapticForm {
                 Section {
                     Group {
@@ -86,6 +95,7 @@ struct EntryEditorSheet: View {
                         }
                         .selectValueOnTap(focus: $perServingFocused)
                         ServingControl(value: Binding(get: { draft.servings }, set: { draft.changeServings($0) }))
+                        if showsMeal { mealRow.id(Self.mealRowID) }
                         if onSaveComponent == nil {
                             HStack {
                                 Text("time").font(.cave(.subheadline)).opacity(0.65)
@@ -128,6 +138,15 @@ struct EntryEditorSheet: View {
                 }
             }.caveScreenBackground()
             .tapOutsideClosesKeyboard()
+            .task {
+                guard choosesMeal, showsMeal else { return }
+                // Once laid out, and while the sheet is still sliding up, scroll only as far as it takes to show
+                // the meal choice (not at all on a tall screen), so nothing moves under a finger reaching for it.
+                try? await Task.sleep(for: .milliseconds(60))
+                guard !Task.isCancelled else { return }
+                proxy.scrollTo(Self.mealRowID)
+            }
+            }
             .navigationTitle(onSaveComponent != nil ? "Meal item" : draft.entryID == nil ? "Add Calories" : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingTime) {
@@ -171,9 +190,55 @@ struct EntryEditorSheet: View {
             let time = calendar.dateComponents([.hour, .minute], from: value)
             if let updated = calendar.date(bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: 0, of: draft.timestamp),
                calendar.isDate(updated, inSameDayAs: draft.timestamp), updated <= Date() {
+                let before = draft.timestamp
                 draft.timestamp = updated
+                followMealTime(from: before)
             }
         })
+    }
+    /// Meal types show for logged food being edited (so it can move), and for new food while adding asks
+    /// for a meal. Set by time of day, new food gets its meal when it's added, so adding looks as it always did.
+    private var showsMeal: Bool {
+        let settings = store.mealSettings
+        guard settings.tracks, onSaveComponent == nil else { return false }
+        return draft.entryID != nil || settings.asks
+    }
+    private var mealStartsExpanded: Bool { draft.entryID == nil }
+    private var mealRow: some View {
+        let settings = store.mealSettings
+        let expanded = mealExpanded ?? mealStartsExpanded
+        let current = settings.type(id: draft.mealType)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { mealExpanded = !expanded }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("meal type").font(.cave(.subheadline)).opacity(0.65)
+                    Spacer(minLength: 16)
+                    Text(current?.name ?? (draft.entryID == nil ? "Choose" : "None"))
+                        .foregroundStyle(current == nil && draft.entryID == nil ? Color.caveOrange : Color.primary)
+                    CaveIcon(.chevronRight, size: 13).foregroundStyle(Color.secondary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+                .frame(minHeight: 32).contentShape(Rectangle())
+            }
+            .hapticButtonStyle(.plain)
+            .accessibilityLabel("Meal type")
+            .accessibilityValue(current?.name ?? "None")
+            .accessibilityHint(expanded ? "Hides the meal choices" : "Shows the meal choices")
+            .accessibilityIdentifier("mealTypeRow")
+            if expanded {
+                MealTypePicker(types: settings.visibleTypes, selection: $draft.mealType, allowsNone: draft.entryID != nil)
+                    .padding(.top, 8)
+            }
+        }
+    }
+    /// Editing logged food's time, set by time of day: a meal that matched the old time follows to the new one.
+    private func followMealTime(from before: Date) {
+        let settings = store.mealSettings
+        guard settings.tracks, settings.byTime, draft.entryID != nil,
+              draft.mealType == settings.meal(at: before) else { return }
+        draft.mealType = settings.meal(at: draft.timestamp)
     }
     private var nameSuggestions: [String] {
         var seen = Set<String>()
@@ -192,9 +257,14 @@ struct EntryEditorSheet: View {
         if let onSaveComponent { onSaveComponent(draft); dismiss() }
         else {
             let foodToUpdate = saveAsCommonDefault ? changedCommonFood : nil
-            let saved = draft.entryID != nil ? store.update(draft) : store.add([draft])
+            let original = draft.entryID.flatMap { id in store.entries.first { $0.id == id } }
+            let macrosBefore = original.flatMap { MacroNutrients.decode($0.macrosPerServingData) }
+            let totalsBefore = original.flatMap { entry in macrosBefore?.scaled(entry.servings) }
+            let saved = draft.entryID != nil ? store.update(draft) : store.add([draft], method: method)
             if saved {
                 if let foodToUpdate { store.saveCommonDefault(draft, for: foodToUpdate) }
+                // New macros on a logged food fill the same food's blanks on other days too.
+                if let original, draft.macrosPerServing != macrosBefore { store.shareMacros(from: original, previous: totalsBefore) }
                 if let pinFoodID {
                     let replacementID = FoodHistory.identifier(for: draft) ?? pinFoodID
                     store.updatePin(originalID: pinFoodID, replacementID: replacementID, pinned: pinOnQuickAdd)
@@ -206,15 +276,9 @@ struct EntryEditorSheet: View {
 }
 
 extension View {
+    /// Selects the field's whole value when editing begins, so typing replaces it. Apply it to the TextField itself.
     func selectValueOnFocus(identifier: String) -> some View {
-        onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { notification in
-            guard let field = notification.object as? UITextField,
-                  field.accessibilityIdentifier == identifier else { return }
-            DispatchQueue.main.async {
-                guard field.isFirstResponder else { return }
-                field.selectedTextRange = field.textRange(from: field.beginningOfDocument, to: field.endOfDocument)
-            }
-        }
+        background(SelectValueOnFocusAnchor(identifier: identifier))
     }
     func selectValueOnTap(focus: FocusState<Bool>.Binding) -> some View {
         keyboardInputArea()
@@ -346,5 +410,56 @@ struct ServingControl: View {
             .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 110)
             .focused($editing).accessibilityIdentifier("servingCount").accessibilityLabel("Number of servings")
             .selectValueOnFocus(identifier: "servingCount")
+    }
+}
+
+/// Sits behind a text field and selects its value when editing begins. It finds the field by its identifier or,
+/// failing that, by the field sitting right over it: SwiftUI hands accessibility identifiers to UIKit only while an
+/// accessibility client is running (as in UI tests), so on an iPhone without one the identifier alone never matched.
+private struct SelectValueOnFocusAnchor: UIViewRepresentable {
+    let identifier: String
+    func makeUIView(context: Context) -> AnchorView {
+        let view = AnchorView()
+        view.isUserInteractionEnabled = false
+        view.identifier = identifier
+        return view
+    }
+    func updateUIView(_ view: AnchorView, context: Context) { view.identifier = identifier }
+
+    final class AnchorView: UIView {
+        var identifier = ""
+        private var observer: NSObjectProtocol?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else {
+                if let observer { NotificationCenter.default.removeObserver(observer) }
+                observer = nil
+                return
+            }
+            guard observer == nil else { return }
+            observer = NotificationCenter.default.addObserver(forName: UITextField.textDidBeginEditingNotification,
+                                                              object: nil, queue: .main) { [weak self] notification in
+                guard let field = notification.object as? UITextField else { return }
+                MainActor.assumeIsolated { self?.beganEditing(field) }
+            }
+        }
+
+        private func beganEditing(_ field: UITextField) {
+            guard let window, field.window === window else { return }
+            let mine = convert(bounds, to: nil).insetBy(dx: -2, dy: -2)
+            let theirs = field.convert(field.bounds, to: nil)
+            guard field.accessibilityIdentifier == identifier || mine.contains(CGPoint(x: theirs.midX, y: theirs.midY)) else { return }
+            let original = field.text
+            let selectAll = {
+                // Only while nothing has been typed yet, so a fast typist's digits are never selected.
+                guard field.isFirstResponder, field.text == original else { return }
+                field.selectedTextRange = field.textRange(from: field.beginningOfDocument, to: field.endOfDocument)
+            }
+            DispatchQueue.main.async(execute: selectAll)
+            // A tap right on the digits places the insertion point after editing begins, undoing the first
+            // selection, so select again once that tap has finished.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: selectAll)
+        }
     }
 }

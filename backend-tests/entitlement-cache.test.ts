@@ -31,7 +31,10 @@ test('install keys have a fixed high-entropy shape and are stored only as hashes
   assert.notEqual(trialKeyHash(key), key);
 });
 
-test('spoken descriptions are bounded plain text', () => {
+test('spoken and typed descriptions are bounded plain text', () => {
   assert.equal(describeInput.parse({ text: '  two eggs and toast ' }).text, 'two eggs and toast');
-  for (const text of ['', 'x', 'a'.repeat(501), 'eggs\u0000', 42]) assert.equal(describeInput.safeParse({ text }).success, false);
+  // Typed or pasted descriptions may be longer and span lines.
+  assert.equal(describeInput.parse({ text: '2 eggs\n1 slice toast\r\n\tcoffee' }).text, '2 eggs\n1 slice toast\r\n\tcoffee');
+  assert.equal(describeInput.safeParse({ text: 'a'.repeat(2000) }).success, true);
+  for (const text of ['', 'x', 'a'.repeat(2001), 'eggs\u0000', 'eggs\u001b[2J', 'eggs\u007f', 42]) assert.equal(describeInput.safeParse({ text }).success, false);
 });

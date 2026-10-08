@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { database, type DBTransaction } from './db';
 import { accounts, uploads } from './schema';
 import { APIError, positiveInt, required } from './config';
 import { consume, utcDay, tomorrow } from './rate-limit';
-import { identify, identifyText, type FoodResult } from './ai';
-import { readUpload, deleteUpload } from './storage';
+import { identify, identifyText, importMealFromImages, type FoodResult, type MealImportResult } from './ai';
+import { readUpload, deleteUpload, type Upload } from './storage';
 import type { Identity } from './auth';
 import { entitlement } from './apple';
 import { requireScanAccess, SCAN_RESERVATION_MS } from './scan-access';
@@ -62,8 +62,50 @@ export async function analyze(identity: Identity, uploadId: string, runAI = iden
   }
 }
 
-export const describeInput = z.object({ text: z.string().trim().min(2).max(500).refine(value => !/[\x00-\x1f\x7f]/.test(value)) });
-// A spoken description (Siri/Shortcuts) uses one scan, like a voice recording. The scan is charged under the
+// Recipe photos (up to five pages) are uploaded like meal scans, then imported together as one recipe. Members
+// only (checked by the caller); one import uses one AI request whatever the page count. A retry after a dropped
+// connection returns the saved result; an interrupted or failed import needs a fresh upload.
+export async function importRecipeUploads(identity: Identity, uploadIds: string[], runAI: (images: Buffer[]) => Promise<MealImportResult> = importMealFromImages): Promise<MealImportResult> {
+  required('OPENAI_API_KEY');
+  const rows = await database().transaction(async tx => {
+    await tx.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, identity.accountId)).for('update');
+    const found = await tx.select().from(uploads).where(and(inArray(uploads.id, uploadIds), eq(uploads.accountId, identity.accountId))).for('update');
+    const rows = uploadIds.map(id => found.find(row => row.id === id));
+    if (rows.some(row => !row || row.kind !== 'image' || row.expiresAt < new Date())) throw new APIError(404, 'not_found', 'The recipe photos have expired. Please choose them again.');
+    const pages = rows as Upload[];
+    if (pages.every(row => row.state === 'done' && row.result)) return pages;
+    if (pages.some(row => row.state === 'processing' && row.scanReservedUntil && row.scanReservedUntil > new Date())) throw new APIError(409, 'processing', 'This recipe is still being read. Please retry shortly.');
+    if (pages.some(row => row.state !== 'pending')) throw new APIError(409, 'failed', 'This import was interrupted. Please choose the photos again.');
+    await reserveAIUsage(identity, tx);
+    await tx.update(uploads).set({ state: 'processing', scanReservedUntil: new Date(Date.now() + SCAN_RESERVATION_MS) }).where(inArray(uploads.id, uploadIds));
+    return pages;
+  });
+  if (rows.every(row => row.state === 'done')) return rows[0].result as MealImportResult;
+  let stage = 'read-upload';
+  try {
+    const images: Buffer[] = [];
+    for (const row of rows) images.push(await readUpload(row));
+    stage = 'openai';
+    const result = await runAI(images);
+    stage = 'save-result';
+    await database().update(uploads).set({ state: 'done', result, scanReservedUntil: null }).where(and(inArray(uploads.id, uploadIds), eq(uploads.state, 'processing')));
+    return result;
+  } catch (error) {
+    const detail = error as { name?: string; code?: string; status?: number };
+    console.error('Recipe import failure', { stage, name: detail?.name, code: detail?.code, status: detail?.status });
+    await database().update(uploads).set({ state: 'failed', scanReservedUntil: null }).where(and(inArray(uploads.id, uploadIds), eq(uploads.state, 'processing')));
+    if (error instanceof APIError) throw error;
+    throw new APIError(502, 'ai_unavailable', 'AI processing is temporarily unavailable. Please try again later.');
+  } finally {
+    // Metadata rows stay until expiry so cleanup retries any deletion that fails here.
+    for (const row of rows) await deleteUpload(row).catch(() => console.error('Temporary upload cleanup deferred'));
+  }
+}
+
+// Siri sends one short spoken line; Voice Log's "Type instead" can send a longer typed or pasted description,
+// so line breaks and tabs are allowed. Other control characters are still refused.
+export const describeInput = z.object({ text: z.string().trim().min(2).max(2000).refine(value => !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) });
+// A spoken (Siri/Shortcuts) or typed (Voice Log) description uses one scan, like a voice recording. The scan is charged under the
 // account lock before OpenAI is called, so concurrent requests cannot exceed the allowance, and refunded on failure.
 export async function describe(identity: Identity, text: string, runAI: (text: string) => Promise<FoodResult> = identifyText, regularLogCount = 0): Promise<FoodResult> {
   required('OPENAI_API_KEY');

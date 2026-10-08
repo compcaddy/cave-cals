@@ -9,6 +9,8 @@ struct WeightEditorRoute: Identifiable {
 struct WeightProfileSections: View {
     @Environment(WeightStore.self) private var weights
     @Binding var editor: WeightEditorRoute?
+    /// Goal Weight opens the calorie plan calculator, which owns the goal weight and pace.
+    var onGoalWeight: () -> Void = {}
     var body: some View {
         Group {
             Section {
@@ -35,10 +37,49 @@ struct WeightProfileSections: View {
                         }.contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("todayWeight")
+                    goalWeightRow
                 }
             }
             if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
         }
+    }
+    /// "190 lb" with "5.4 lb to go!" beneath (from the latest weigh-in), "Stay around 180 lb" when maintaining,
+    /// or "Set" without a saved plan.
+    private var goalWeightRow: some View {
+        let plan = weights.caloriePlan
+        let unit = weights.unit
+        let value = plan.map { $0.input.intent == .maintain ? "Stay around \(unit.text($0.input.goalKG))" : unit.text($0.input.goalKG) } ?? "Set"
+        return Button(action: onGoalWeight) {
+            HStack(spacing: 12) {
+                Text("Goal Weight").foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(value).font(.cave(.title3))
+                            .foregroundStyle(plan == nil ? Color.caveOrange : Color.primary)
+                        if let progress = goalProgress {
+                            Text(progress).font(.cave(.caption)).foregroundStyle(Color.secondary)
+                        }
+                    }.fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(.trailing, 8)
+            }.contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Goal Weight")
+        .accessibilityValue([value, goalProgress].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityHint("Opens your calorie plan")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("goalWeight")
+    }
+    private var goalProgress: String? {
+        guard let input = weights.caloriePlan?.input, input.intent != .maintain,
+              let latest = weights.records.first?.kilograms else { return nil }
+        let left = input.intent == .gain ? input.goalKG - latest : latest - input.goalKG
+        // Within half a pound (or 0.2 kg) counts as there.
+        guard weights.unit.display(left) >= (weights.unit == .kilograms ? 0.2 : 0.5) else { return "Goal reached!" }
+        return "\(weights.unit.text(left)) to go!"
     }
 }
 
@@ -82,7 +123,10 @@ struct WeightEditorSheet: View {
     let record: WeightRecord?
     let unit: WeightUnit
     @State private var amount: String
+    /// The amount as the day was loaded (its weigh-in or the dial's starting weight), so only real edits ask to be saved.
+    @State private var loaded: String
     @State private var date: Date
+    @State private var typing = false
     @State private var confirmingDelete = false
     @State private var pendingDate: Date?
     @State private var confirmingDayChange = false
@@ -91,10 +135,20 @@ struct WeightEditorSheet: View {
     init(record: WeightRecord? = nil, unit: WeightUnit) {
         self.record = record; self.unit = unit
         _date = State(initialValue: record?.date ?? Date())
-        _amount = State(initialValue: record.map { unit.editingText($0.kilograms) } ?? "")
+        let amount = record.map { unit.editingText($0.kilograms) } ?? ""
+        _amount = State(initialValue: amount); _loaded = State(initialValue: amount)
     }
     private var selectedRecord: WeightRecord? { weights.record(on: date) }
-    private var hasChanges: Bool { amount != selectedRecord.map { unit.editingText($0.kilograms) } ?? "" }
+    private var hasChanges: Bool { amount != loaded }
+    /// Once there's any weigh-in, weights are dialed instead of typed.
+    private var dialing: Bool { !typing && !weights.records.isEmpty }
+    private var tenths: Binding<Int> {
+        Binding(get: { Int(((WeightUnit.parse(amount) ?? 0) * 10).rounded()) },
+                set: { amount = Self.text(tenths: $0) })
+    }
+    private static func text(tenths: Int) -> String {
+        (Double(tenths) / 10).formatted(.number.grouping(.never).precision(.fractionLength(0...1)))
+    }
     private var kilograms: Double? {
         // Preserve precision when the displayed weight has not been edited.
         if let record = selectedRecord, amount == unit.editingText(record.kilograms) { return record.kilograms }
@@ -108,14 +162,16 @@ struct WeightEditorSheet: View {
                     WeightWeekPicker(date: date, unit: unit, select: selectDay)
                 }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
                 Section {
-                    HStack(alignment: .firstTextBaseline) {
-                        TextField("Weight", text: $amount)
-                            .keyboardType(.decimalPad).focused($focused)
-                            .font(.cave(.largeTitle)).accessibilityIdentifier("weightAmount")
-                            .accessibilityLabel("Weight in \(unit == .pounds ? "pounds" : "kilograms")")
-                        Text(unit.rawValue).foregroundStyle(.secondary)
-                    }.padding(.vertical, 8)
-                    .keyboardInputArea { focused = true }
+                    if dialing { dial } else {
+                        HStack(alignment: .firstTextBaseline) {
+                            TextField("Weight", text: $amount)
+                                .keyboardType(.decimalPad).focused($focused)
+                                .font(.cave(.largeTitle)).accessibilityIdentifier("weightAmount")
+                                .accessibilityLabel("Weight in \(unit == .pounds ? "pounds" : "kilograms")")
+                            Text(unit.rawValue).foregroundStyle(.secondary)
+                        }.padding(.vertical, 8)
+                        .keyboardInputArea { focused = true }
+                    }
                 } header: {
                     Text(date, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                 }
@@ -162,12 +218,47 @@ struct WeightEditorSheet: View {
                 }.hapticFeel(.none)
                 Button("Cancel", role: .cancel) { Haptics.play(.tap); pendingDate = nil }.hapticFeel(.none)
             }
+            .onAppear { loadDay(date) }
             .task {
-                guard record == nil else { return }
+                guard record == nil, weights.records.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }; focused = true
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
+    }
+    private var dial: some View {
+        let reference = WeighInStart.reference(for: date, in: weights.records)
+        let value = tenths.wrappedValue
+        return VStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text((Double(value) / 10).formatted(.number.precision(.fractionLength(1)))).font(.cave(.largeTitle))
+                Text(unit.rawValue).foregroundStyle(.secondary)
+            }.accessibilityHidden(true)
+            WeightDial(tenths: tenths, range: WeighInStart.tenths(around: weights.records, including: value, unit: unit), unit: unit)
+            if let reference, selectedRecord == nil {
+                let change = value - Int((unit.display(reference.kilograms) * 10).rounded())
+                let day = Calendar.current.isDateInYesterday(reference.date) ? "yesterday"
+                    : reference.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                Text(change == 0 ? "Same as \(day)"
+                     : "\(change > 0 ? "↑" : "↓") \(Self.text(tenths: abs(change))) \(unit.rawValue) from \(day)")
+                    .font(.cave(.subheadline)).foregroundStyle(Color.secondary)
+                    .accessibilityIdentifier("weightChange")
+            }
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 8)
+        .overlay(alignment: .topTrailing) {
+            // Typing stays available for big jumps; nudged toward the card's corner.
+            Button {
+                typing = true
+                Task { try? await Task.sleep(for: .milliseconds(150)); focused = true }
+            } label: {
+                CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .hapticButtonStyle(.borderless).offset(x: 12, y: -10)
+            .accessibilityLabel("Type weight")
+            .accessibilityIdentifier("typeWeight")
+        }
     }
     private func saveSelectedDay() -> Bool {
         guard valid, let kilograms else { return false }
@@ -184,7 +275,90 @@ struct WeightEditorSheet: View {
     }
     private func loadDay(_ day: Date) {
         date = day
-        amount = weights.record(on: day).map { unit.editingText($0.kilograms) } ?? ""
+        if let record = weights.record(on: day) { amount = unit.editingText(record.kilograms) }
+        else if let reference = WeighInStart.reference(for: day, in: weights.records), !typing {
+            // Start from the nearest weigh-in, on the dial's 0.1 steps, so often it's just Save.
+            amount = Self.text(tenths: Int((unit.display(reference.kilograms) * 10).rounded()))
+        } else { amount = "" }
+        loaded = amount
+    }
+}
+
+/// A ruler of weights in 0.1 steps, like setup's age dial: numbers every 0.2, a bare tick between.
+private struct WeightDial: View {
+    @Binding var tenths: Int
+    let range: ClosedRange<Int>
+    let unit: WeightUnit
+    @State private var centered: Int?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var itemWidth: CGFloat = 30
+    @ScaledMetric(relativeTo: .body) private var dialHeight: CGFloat = 78
+
+    var body: some View {
+        GeometryReader { geometry in
+            ruler
+                // Insetting both sides to the middle makes the snapped (leading) tick the centered one.
+                .safeAreaPadding(.horizontal, max(0, (geometry.size.width - itemWidth) / 2))
+                .onAppear { centered = tenths }
+        }
+        .frame(height: dialHeight)
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.2),
+                                     .init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
+                             startPoint: .leading, endPoint: .trailing))
+        .overlay(alignment: .top) {
+            CaveIcon(.chevronRight, size: 18).rotationEffect(.degrees(90))
+                .foregroundStyle(Color.caveOrange).accessibilityHidden(true)
+        }
+        .onChange(of: centered) { _, value in
+            if let value, value != tenths { tenths = value }
+        }
+        .onChange(of: tenths) { _, value in
+            if centered != value { centered = value }
+        }
+        .hapticSelection(on: tenths)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Weight")
+        .accessibilityValue("\((Double(tenths) / 10).formatted(.number.precision(.fractionLength(1)))) \(unit == .pounds ? "pounds" : "kilograms")")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: select(tenths + 1)
+            case .decrement: select(tenths - 1)
+            @unknown default: break
+            }
+        }
+        .accessibilityIdentifier("weightDial")
+    }
+    private var ruler: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 0) {
+                ForEach(range, id: \.self) { value in
+                    let selected = value == tenths
+                    VStack(spacing: 6) {
+                        Capsule().fill(selected ? Color.caveOrange : Color.secondary.opacity(0.45))
+                            .frame(width: selected ? 3 : 2, height: value % 10 == 0 ? 22 : value % 2 == 0 ? 16 : 9)
+                            .frame(height: 22, alignment: .top)
+                        if value % 2 == 0 {
+                            Text((Double(value) / 10).formatted(.number.grouping(.never).precision(.fractionLength(1))))
+                                .font(.cave(.body)).lineLimit(1).fixedSize()
+                                .foregroundStyle(selected ? Color.caveOrange : Color.secondary)
+                        }
+                    }
+                    .frame(width: itemWidth).padding(.top, 24)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .contentShape(Rectangle())
+                    .onTapGesture { select(value) }
+                }
+            }.scrollTargetLayout()
+        }
+        // Let a flick carry across many steps, then snap to one.
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        .scrollPosition(id: $centered)
+    }
+    private func select(_ value: Int) {
+        let value = min(max(value, range.lowerBound), range.upperBound)
+        tenths = value
+        withAnimation(reduceMotion ? nil : .snappy) { centered = value }
     }
 }
 
@@ -280,7 +454,7 @@ struct WeightHistoryView: View {
 enum AppleHealthOffer {
     static let shownKey = "appleHealthOfferShown.v1"
 
-    static var wasShown: Bool { UserDefaults.standard.bool(forKey: shownKey) && !optedInForTesting }
+    static var wasShown: Bool { AppEnvironment.isDevelopment || (UserDefaults.standard.bool(forKey: shownKey) && !optedInForTesting) }
     static func recordShown() { UserDefaults.standard.set(true, forKey: shownKey) }
 
     /// Food logged on the day it belongs to, on a day before today (backfilling doesn't count).

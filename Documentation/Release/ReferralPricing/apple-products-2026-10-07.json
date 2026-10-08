@@ -1,0 +1,38 @@
+[
+  {
+    "id": "6809209344",
+    "name": "Cave Cals+ Monthly",
+    "productId": "com.philstarkovich.cavecals.ai.monthly",
+    "state": "APPROVED",
+    "subscriptionPeriod": "ONE_MONTH",
+    "reviewNote": "Cave Cals+ unlocks premium photo meal scanning, voice logging, and recipe link import. Manual tracking, barcode scanning, food search, saved meals, history, calorie goals, and widgets remain free. No app account sign-in is required. The monthly plan offers a 3-day free trial for eligible users; the yearly plan offers a 7-day free trial for eligible users. Open Settings and tap Explore Cave Cals+. Restore purchases appears below the offer; Manage subscription appears only for active members.",
+    "groupLevel": 1
+  },
+  {
+    "id": "6819868378",
+    "name": "Cave Cals+ Monthly - Discount",
+    "productId": "com.philstarkovich.cavecals.ai.monthly.discount",
+    "state": "READY_TO_SUBMIT",
+    "subscriptionPeriod": "ONE_MONTH",
+    "reviewNote": "Same Cave Cals+ subscription as the regular Yearly and Monthly plans, at a discount price for people with a trainer or creator code. These plans appear only after a discount code is applied. To see them: finish setup, then on \"Where did you hear about Cave Cals?\" choose Social media, enter code APPLEREVIEW, tap Apply, then Continue; the Cave Cals+ offer shows these plans. Or tap \"Have a code?\" at the bottom of any Cave Cals+ screen (Settings > Explore Cave Cals+). Cave Cals+ unlocks premium photo meal scanning, voice logging, and recipe import; manual tracking, barcode scanning, food search, saved meals, history, and calorie goals remain free. No account sign-in is required. The monthly plan offers a 3-day free trial and the yearly plan a 7-day free trial for eligible users.",
+    "groupLevel": 1
+  },
+  {
+    "id": "6809209211",
+    "name": "Cave Cals+ Yearly",
+    "productId": "com.philstarkovich.cavecals.ai.yearly",
+    "state": "APPROVED",
+    "subscriptionPeriod": "ONE_YEAR",
+    "reviewNote": "Cave Cals+ unlocks premium photo meal scanning, voice logging, and recipe link import. Manual tracking, barcode scanning, food search, saved meals, history, calorie goals, and widgets remain free. No app account sign-in is required. The monthly plan offers a 3-day free trial for eligible users; the yearly plan offers a 7-day free trial for eligible users. Open Settings and tap Explore Cave Cals+. Restore purchases appears below the offer; Manage subscription appears only for active members.",
+    "groupLevel": 1
+  },
+  {
+    "id": "6819868267",
+    "name": "Cave Cals+ Yearly - Discount",
+    "productId": "com.philstarkovich.cavecals.ai.yearly.discount",
+    "state": "READY_TO_SUBMIT",
+    "subscriptionPeriod": "ONE_YEAR",
+    "reviewNote": "Same Cave Cals+ subscription as the regular Yearly and Monthly plans, at a discount price for people with a trainer or creator code. These plans appear only after a discount code is applied. To see them: finish setup, then on \"Where did you hear about Cave Cals?\" choose Social media, enter code APPLEREVIEW, tap Apply, then Continue; the Cave Cals+ offer shows these plans. Or tap \"Have a code?\" at the bottom of any Cave Cals+ screen (Settings > Explore Cave Cals+). Cave Cals+ unlocks premium photo meal scanning, voice logging, and recipe import; manual tracking, barcode scanning, food search, saved meals, history, and calorie goals remain free. No account sign-in is required. The monthly plan offers a 3-day free trial and the yearly plan a 7-day free trial for eligible users.",
+    "groupLevel": 1
+  }
+]

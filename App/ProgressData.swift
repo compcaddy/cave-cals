@@ -162,9 +162,13 @@ struct ProgressData {
     private let completedTotals: [Date: Double]
     /// Days the person marked done eating: complete however low, including today.
     private let finished: Set<Date>
+    /// A past day counts as complete at 70% of that day's calorie goal (1,400 of 2,000); without a goal, at 70% of
+    /// the prior 28 complete days' average. Days marked done eating always count. (60% of the average until
+    /// October 8, 2026.)
+    static let completeShare = 0.7
 
     init(drafts: [EntryDraft], records: [WeightRecord], finishedDays: Set<Date> = [], firstWeekday: Int = 2,
-         now: Date = Date(), calendar: Calendar = .current) {
+         goal: ((Date) -> Double?)? = nil, now: Date = Date(), calendar: Calendar = .current) {
         dates = ProgressCalendar(firstWeekday: firstWeekday, calendar: calendar)
         today = calendar.startOfDay(for: now)
         foods = Dictionary(grouping: drafts.filter { $0.timestamp <= now }, by: { calendar.startOfDay(for: $0.timestamp) })
@@ -174,17 +178,26 @@ struct ProgressData {
         // Classify chronologically: previously incomplete days never lower a later day's baseline.
         var completed: [Date: Double] = [:]
         for date in totals.keys.sorted() where date < today || finished.contains(date) {
+            let total = totals[date]!
+            if finished.contains(date) { completed[date] = total; continue }
+            if let target = goal?(date), target > 0 {
+                if total >= target * Self.completeShare { completed[date] = total }
+                continue
+            }
             let lower = calendar.date(byAdding: .day, value: -28, to: date)!
             let prior = completed.filter { $0.key >= lower && $0.key < date }.map(\.value)
             let average = ProgressStats(values: prior).average
-            let total = totals[date]!
-            if finished.contains(date) || average.map({ total >= $0 * 0.6 }) ?? true { completed[date] = total }
+            if average.map({ total >= $0 * Self.completeShare }) ?? true { completed[date] = total }
         }
         completedTotals = completed
         // Normally unique by day; choose the latest revision defensively when reading old data.
         weights = Dictionary(grouping: records.filter { !$0.deleted && $0.date <= now }, by: { calendar.startOfDay(for: $0.date) })
             .compactMapValues { $0.max { $0.revision < $1.revision }?.kilograms }
     }
+
+    /// Days whose calories count toward averages (the same rule as everywhere in Progress), with their totals.
+    /// Today is in it only once marked done eating.
+    var completedTotalsByDay: [Date: Double] { completedTotals }
 
     /// A historical day's reference never includes that day, incomplete days, today, or future data.
     func referenceAverage(before day: Date) -> Double? {
@@ -202,7 +215,7 @@ struct ProgressData {
         if date > today { status = .future }
         else if calories != nil, finished.contains(date) { status = .complete }
         else if date == today { status = .inProgress }
-        else if let calories { status = baseline.map { calories < 0.6 * $0 } == true ? .incomplete : .complete }
+        else if calories != nil { status = completedTotals[date] != nil ? .complete : .incomplete }
         else { status = .missing }
         var energy = ProgressEnergy()
         entries.forEach { energy.add(ProgressEnergy($0)) }
@@ -214,9 +227,9 @@ struct ProgressData {
         return ProgressWeek(interval: interval, days: dates.days(in: interval).map(day))
     }
     var currentWeekStart: Date { dates.interval(.week, containing: today).start }
-    func sixWeeks(endingAt date: Date) -> [ProgressWeek] {
+    func fiveWeeks(endingAt date: Date) -> [ProgressWeek] {
         let last = min(dates.interval(.week, containing: date).start, currentWeekStart)
-        return (0..<6).reversed().map { week(containing: dates.move(last, by: -$0, period: .week)) }
+        return (0..<5).reversed().map { week(containing: dates.move(last, by: -$0, period: .week)) }
     }
     func buckets(_ period: ProgressPeriod, containing date: Date) -> [ProgressBucket] {
         let interval = dates.interval(period, containing: date)
@@ -255,17 +268,174 @@ struct ProgressData {
     }
 }
 
+/// What counts as an on-target day for Progress → On-Target vs. Over Days (October 8, 2026): at or under the
+/// goal, within a percentage of it either way, or up to some calories over it.
+struct OnTargetRule: Codable, Equatable {
+    enum Kind: String, Codable, CaseIterable { case atOrUnder, withinPercent, overBy }
+    enum Outcome { case onTarget, over, under }
+    var kind: Kind = .atOrUnder
+    /// Either way, for `withinPercent`.
+    var percent: Double = 5
+    /// Calories past the goal that still count, for `overBy`.
+    var overBy: Double = 100
+    static let percents = 1.0...50.0
+    static let overAmounts = 10.0...2000.0
+
+    func outcome(calories: Double, goal: Double) -> Outcome {
+        guard let range = range(goal: goal) else { return .onTarget }
+        if calories > range.upperBound { return .over }
+        return calories < range.lowerBound ? .under : .onTarget
+    }
+    /// The on-target calories for a goal (no lower end except within a percentage).
+    func range(goal: Double) -> ClosedRange<Double>? {
+        guard goal > 0 else { return nil }
+        switch kind {
+        case .atOrUnder: return 0...goal
+        case .withinPercent: return goal * (1 - percent / 100)...goal * (1 + percent / 100)
+        case .overBy: return 0...(goal + overBy)
+        }
+    }
+    var percentText: String { "\(percent.formatted(.number.precision(.fractionLength(0...1))))%" }
+    var overByText: String { overBy.calorieText }
+    /// "at or under your goal", "within 5% of your goal", "up to 100 over your goal"
+    var summary: String {
+        switch kind {
+        case .atOrUnder: "at or under your goal"
+        case .withinPercent: "within \(percentText) of your goal"
+        case .overBy: "up to \(overByText) over your goal"
+        }
+    }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = (try? container.decode(Kind.self, forKey: .kind)) ?? .atOrUnder
+        percent = Self.percents.clamp((try? container.decode(Double.self, forKey: .percent)) ?? 5)
+        overBy = Self.overAmounts.clamp((try? container.decode(Double.self, forKey: .overBy)) ?? 100)
+    }
+}
+
+extension ClosedRange where Bound == Double {
+    func clamp(_ value: Double) -> Double { Swift.min(Swift.max(value, lowerBound), upperBound) }
+}
+
+/// Progress settings, saved on the synced profile (`UserProfile.progressSettingsData`) so every iPhone and iPad on
+/// the same iCloud account shows the same week start, on-target rule, and chart ranges (October 8, 2026).
+struct ProgressSettings: Codable, Equatable {
+    var firstWeekday = 2
+    var onTarget = OnTargetRule()
+    var trendsRange = ProgressTrendRange.days30
+    var habitsRange = ProgressTrendRange.days90
+
+    init() {}
+    init(firstWeekday: Int) { self.firstWeekday = firstWeekday }
+    /// Unknown or missing values fall back to their defaults, so older and newer app versions read each other.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let weekday = (try? container.decode(Int.self, forKey: .firstWeekday)) ?? 2
+        firstWeekday = (1...7).contains(weekday) ? weekday : 2
+        onTarget = (try? container.decode(OnTargetRule.self, forKey: .onTarget)) ?? OnTargetRule()
+        trendsRange = (try? container.decode(ProgressTrendRange.self, forKey: .trendsRange)) ?? .days30
+        habitsRange = (try? container.decode(ProgressTrendRange.self, forKey: .habitsRange)) ?? .days90
+    }
+    var encoded: Data? { try? JSONEncoder().encode(self) }
+    /// Before anything is saved to the profile, the week start this iPhone used to keep on its own.
+    static func decode(_ data: Data?, localWeekday: Int) -> Self {
+        if let data, let settings = try? JSONDecoder().decode(Self.self, from: data) { return settings }
+        return Self(firstWeekday: (1...7).contains(localWeekday) ? localWeekday : 2)
+    }
+}
+
+/// Progress → Trends over the last 30 or 90 days, or all time (ending yesterday).
+enum ProgressTrendRange: String, CaseIterable, Identifiable, Codable {
+    case days30 = "30 days", days90 = "90 days", all = "All time"
+    var id: Self { self }
+    var days: Int? { switch self { case .days30: 30; case .days90: 90; case .all: nil } }
+    var statName: String { switch self { case .days30: "30"; case .days90: "90"; case .all: "all" } }
+}
+
+/// Progress → Trends: average calories by weekday, and when in the day food is eaten. Both use only complete
+/// past days (Progress's usual rule). The hour chart also skips food logged on a later day than it belongs to,
+/// because backfilled food gets the clock time it was entered, not when it was eaten. See Documentation/Progress.md.
+struct ProgressTrends {
+    struct Food {
+        let timestamp: Date
+        let createdAt: Date
+        let calories: Double
+    }
+    struct Weekday: Identifiable {
+        /// Calendar weekday, 1 = Sunday.
+        let weekday: Int
+        let average: Double?
+        let days: Int
+        var id: Int { weekday }
+    }
+    struct Hour: Identifiable {
+        let hour: Int
+        /// Average calories eaten in this hour on a counted day.
+        let calories: Double
+        /// This hour's share of all counted calories (the 24 add up to 1).
+        let share: Double
+        var id: Int { hour }
+    }
+    /// In the Progress week-start order.
+    let weekdays: [Weekday]
+    let hours: [Hour]
+    let weekdayDays: Int
+    let hourDays: Int
+
+    init(foods: [Food], data: ProgressData, range: ProgressTrendRange) {
+        let calendar = data.dates.calendar
+        let start = range.days.flatMap { calendar.date(byAdding: .day, value: -$0, to: data.today) }
+        let totals = data.completedTotalsByDay.filter { day, _ in day < data.today && start.map { day >= $0 } ?? true }
+
+        var byWeekday: [Int: [Double]] = [:]
+        for (day, total) in totals { byWeekday[calendar.component(.weekday, from: day), default: []].append(total) }
+        weekdays = (0..<7).map { offset in
+            let weekday = (calendar.firstWeekday - 1 + offset) % 7 + 1
+            let values = byWeekday[weekday] ?? []
+            return Weekday(weekday: weekday, average: ProgressStats(values: values).average, days: values.count)
+        }
+        weekdayDays = totals.count
+
+        var sums = Array(repeating: 0.0, count: 24), counted = Set<Date>()
+        for food in foods {
+            let day = calendar.startOfDay(for: food.timestamp)
+            guard totals[day] != nil, calendar.isDate(food.createdAt, inSameDayAs: food.timestamp) else { continue }
+            sums[calendar.component(.hour, from: food.timestamp)] += max(0, food.calories.rounded())
+            counted.insert(day)
+        }
+        hourDays = counted.count
+        let all = sums.reduce(0, +), days = Double(max(counted.count, 1))
+        hours = (0..<24).map { Hour(hour: $0, calories: sums[$0] / days, share: all > 0 ? sums[$0] / all : 0) }
+    }
+}
+
 #if DEBUG
 /// Deterministic, local-only history for UI verification; never mixed into the user's diary.
 enum ProgressPreview {
+    /// Each sample day is meals at different times (so Trends and Good Days vs. Over Days have something to
+    /// show): days over the 2,100 goal start later, eat dinner later, and add a late snack. The day's calories
+    /// and macros add up to the same totals as before.
     static func drafts(now: Date = Date()) -> [EntryDraft] {
         let calendar = Calendar.current
-        return (1...110).filter { $0 % 19 != 0 }.map { ago in
+        typealias Meal = (name: String, hour: Int, minute: Int, share: Double)
+        let goodDay: [Meal] = [("Greek yogurt", 7, 45, 0.25), ("Lunch", 12, 20, 0.4), ("Dinner", 18, 15, 0.35)]
+        let overDay: [Meal] = [("Breakfast", 9, 20, 0.15), ("Lunch", 13, 10, 0.35), ("Dinner", 19, 30, 0.35), ("Tortilla chips", 21, 30, 0.15)]
+        return (1...110).filter { $0 % 19 != 0 }.flatMap { ago -> [EntryDraft] in
             let calories = ago % 13 == 0 ? 600.0 : 1850 + Double(ago % 7) * 55
-            var draft = EntryDraft(name: "Sample day", calories: calories,
-                timestamp: calendar.date(byAdding: .day, value: -ago, to: now)!)
-            if ago % 5 != 0 { draft.macrosPerServing = MacroNutrients(protein: 125, totalCarbs: 180, fat: 65) }
-            return draft
+            let meals = calories > 2100 ? overDay : goodDay
+            let day = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -ago, to: now)!)
+            var left = calories
+            return meals.enumerated().map { index, meal in
+                let part = index == meals.count - 1 ? left : (calories * meal.share).rounded()
+                left -= part
+                var draft = EntryDraft(name: meal.name, calories: part,
+                    timestamp: calendar.date(bySettingHour: meal.hour, minute: meal.minute, second: 0, of: day)!)
+                if ago % 5 != 0 {
+                    draft.macrosPerServing = MacroNutrients(protein: 125, totalCarbs: 180, fat: 65).scaled(part / calories)
+                }
+                return draft
+            }
         }
     }
     @MainActor static func weights(now: Date = Date()) -> WeightStore {
