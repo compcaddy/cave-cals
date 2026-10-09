@@ -1,0 +1,11 @@
+Cave Cals 1.1.0 (1) — device checks not run (owner opted to skip TestFlight steps, October 8, 2026)
+
+Please test the normal Cave Cals app, not Cave Cals Dev. These hardware checks are still pending:
+
+1. Progress > Progress Photos: verify upright preview AND saved photos with front/back cameras, mirroring, timer, ghost overlay, library import and Compare. Test one free photo and additional angles with Cave Cals+.
+2. Settings > Cave Cals+ > Have a code?: apply APPLEREVIEW. Check discount monthly/yearly prices, eligible trial, Apple purchase-sheet cancellation, successful sandbox purchase, paid-feature unlock and restore on iPhone and iPad in iPhone compatibility mode. TestFlight purchases use Apple's sandbox.
+3. From a signed device, try Cave Coach (Progress > On-Target vs. Over Days), estimate missing daily macros, and Voice Log > Type instead. Confirm real answers and useful error handling, not test fixtures. For the Coach comparison, use at least three completed on-target and three over-goal days before today.
+4. On two devices using the same iCloud account, verify add/edit/delete, meal labels and settings, Progress preferences, macro goals and saved meals; test offline changes after reconnecting. Preserve existing data. Confirm a completed sync, not just account availability.
+5. On iPad in iPhone mode, check paywall layout, purchase, cancel, restore, Coach and photos.
+
+These checks were not performed as part of release preparation. No pass is claimed.

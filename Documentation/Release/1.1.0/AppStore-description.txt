@@ -1,0 +1,46 @@
+You Eat. App Track. Weight Drop.
+
+Cave Cals is a simple calorie tracker with a little prehistoric personality. Build a daily calorie target in about a minute, log what you ate, and get on with your day. No account signup required.
+
+FREE EVERYDAY LOGGING
+• Search restaurant and branded foods, scan a barcode, or just type calories. Type "pizza 300" to log it in one tap.
+• Quick Start puts the foods you usually eat at this time of day right on Home. Pin favorites, hide the rest.
+• Save meals from today's log and add them again with one tap.
+• Edit calories, portions, and serving sizes anytime. Duplicate or delete with a swipe.
+• Log with Siri and Shortcuts ("Log food with Cave Cals"), Home Screen widgets, and the Action button.
+• Mark the day done when you're finished eating.
+
+PLAN, MACROS, AND PROGRESS
+• Build a calorie plan from your age, height, weight, activity, and goal, and see an estimated date to reach it. Or skip the plan and just track.
+• Track protein, carbs, and fat with optional daily goals. Tap daily macros to edit or estimate missing values.
+• Organize foods into optional meal types, assigned by time or chosen as you log.
+• Build a plan to lose, maintain, or gain weight.
+• Log weigh-ins and explore weight, calorie, and macro trends. Compare on-target and over-goal days.
+• Take one free Progress Photo a day with a timer and a ghost of your last shot, then compare photos.
+• Weekly Recap compares your week with the last one, and prints a one-page report.
+
+APPLE HEALTH AND ICLOUD
+• Optionally share calories, macros, and weigh-ins with Apple Health. Cave Cals never reads your Health data.
+• Your diary stays on your iPhone, with private iCloud sync when available. Weight history and Progress Photos stay on this device; Progress Photos are included in its backups.
+• An optional morning reminder nudges you only on days nothing is logged yet.
+
+OPTIONAL CAVE CALS+
+• Meal Scan: snap or choose a food photo and get an editable calorie and macro estimate.
+• Voice Log: say or type what you ate and how much, then review the foods before adding them.
+• Import recipes from links, photos, or pasted text, and save them per serving.
+• Cave Coach gives three AI suggestions based on a summary of your logging patterns.
+• Take additional Progress Photos and angles on the same day.
+• Siri can estimate foods it hasn't seen you log before.
+
+Try up to 10 combined Meal Scan and Voice Log analyses without a subscription, until you have logged 100 regular food entries. After either limit, upgrade to Cave Cals+ to keep scanning. Cave Cals+ includes up to 30 photo, voice, and Siri analyses per day and 300 per calendar month. Manual logging, food search, barcode lookup, saved meals, calorie plans, macros, weight tracking, and Progress remain free.
+
+Choose a monthly or yearly subscription. The monthly plan offers a 3-day free trial and the yearly plan a 7-day free trial to eligible new subscribers. Local prices and billing periods are shown before purchase. Subscriptions renew automatically unless cancelled in your Apple Account settings at least 24 hours before the current period ends.
+
+Calorie plans and AI results are estimates. Review and correct each result before saving. Cave Cals is a food diary, not medical advice. If you are pregnant, breastfeeding, under 18, or managing an eating disorder or medical nutrition needs, use a target from your clinician.
+
+Selected photos, recordings, and descriptions are sent to OpenAI only when you choose to analyze them. Cave Coach sends a summary of logging patterns, including selected food names. Your full diary is not sent. Progress Photos are never sent to AI.
+
+Privacy: https://cavecals.vercel.app/privacy
+Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
+Powered by fatsecret nutrition API (www.fatsecret.com)

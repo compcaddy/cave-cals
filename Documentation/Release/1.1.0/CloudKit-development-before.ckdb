@@ -1,0 +1,116 @@
+DEFINE SCHEMA
+
+    RECORD TYPE CD_BarcodeFood (
+        CD_barcode      STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_payload      BYTES QUERYABLE SORTABLE,
+        CD_updatedAt    TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_CalorieEntry (
+        CD_barcode              STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_caloriesPerServing   DOUBLE QUERYABLE SORTABLE,
+        CD_componentOrder       INT64 QUERYABLE SORTABLE,
+        CD_createdAt            TIMESTAMP QUERYABLE SORTABLE,
+        CD_entityName           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_externalID           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id                   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_macrosPerServingData BYTES QUERYABLE SORTABLE,
+        CD_mealTemplateID       STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_mealType             STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_servingDescription   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_servings             DOUBLE QUERYABLE SORTABLE,
+        CD_sourceType           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_timestamp            TIMESTAMP QUERYABLE SORTABLE,
+        CD_totalCalories        DOUBLE QUERYABLE SORTABLE,
+        CD_updatedAt            TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"         TIMESTAMP,
+        "___createdBy"          REFERENCE,
+        "___etag"               STRING,
+        "___modTime"            TIMESTAMP,
+        "___modifiedBy"         REFERENCE,
+        "___recordID"           REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_DailyGoal (
+        CD_calorieGoal    DOUBLE QUERYABLE SORTABLE,
+        CD_day            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_entityName     STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id             STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_macroGoalsData BYTES QUERYABLE SORTABLE,
+        CD_updatedAt      TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"   TIMESTAMP,
+        "___createdBy"    REFERENCE,
+        "___etag"         STRING,
+        "___modTime"      TIMESTAMP,
+        "___modifiedBy"   REFERENCE,
+        "___recordID"     REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_SavedMeal (
+        CD_componentsData BYTES QUERYABLE SORTABLE,
+        CD_createdAt      TIMESTAMP QUERYABLE SORTABLE,
+        CD_entityName     STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id             STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_name           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_updatedAt      TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"   TIMESTAMP,
+        "___createdBy"    REFERENCE,
+        "___etag"         STRING,
+        "___modTime"      TIMESTAMP,
+        "___modifiedBy"   REFERENCE,
+        "___recordID"     REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_UserProfile (
+        CD_createdAt            TIMESTAMP QUERYABLE SORTABLE,
+        CD_currentDailyGoal     DOUBLE QUERYABLE SORTABLE,
+        CD_entityName           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id                   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_mealSettingsData     BYTES QUERYABLE SORTABLE,
+        CD_name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_progressSettingsData BYTES QUERYABLE SORTABLE,
+        CD_tracksMacros         INT64 QUERYABLE SORTABLE,
+        CD_updatedAt            TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"         TIMESTAMP,
+        "___createdBy"          REFERENCE,
+        "___etag"               STRING,
+        "___modTime"            TIMESTAMP,
+        "___modifiedBy"         REFERENCE,
+        "___recordID"           REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Users (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        roles           LIST<INT64>,
+        GRANT WRITE TO "_creator",
+        GRANT READ TO "_world"
+    );

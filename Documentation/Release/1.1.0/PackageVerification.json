@@ -1,0 +1,40 @@
+[
+  {
+    "bundle": "com.philstarkovich.cavecals",
+    "version": "1.1.0",
+    "build": "1",
+    "entitlements": {
+      "application-identifier": "J877QX85N5.com.philstarkovich.cavecals",
+      "aps-environment": "production",
+      "beta-reports-active": true,
+      "com.apple.developer.devicecheck.appattest-environment": "production",
+      "com.apple.developer.healthkit": true,
+      "com.apple.developer.icloud-container-environment": "Production",
+      "com.apple.developer.icloud-container-identifiers": [
+        "iCloud.com.philstarkovich.cavecals"
+      ],
+      "com.apple.developer.icloud-services": [
+        "CloudKit"
+      ],
+      "com.apple.developer.team-identifier": "J877QX85N5",
+      "com.apple.security.application-groups": [
+        "group.com.philstarkovich.cavecals"
+      ],
+      "get-task-allow": false
+    }
+  },
+  {
+    "bundle": "com.philstarkovich.cavecals.QuickLogWidget",
+    "version": "1.1.0",
+    "build": "1",
+    "entitlements": {
+      "application-identifier": "J877QX85N5.com.philstarkovich.cavecals.QuickLogWidget",
+      "beta-reports-active": true,
+      "com.apple.developer.team-identifier": "J877QX85N5",
+      "com.apple.security.application-groups": [
+        "group.com.philstarkovich.cavecals"
+      ],
+      "get-task-allow": false
+    }
+  }
+]

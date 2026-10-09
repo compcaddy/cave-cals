@@ -1,0 +1,299 @@
+Confirm Deployment
+
+Review container schema changes to deploy to the Production environment.
+
+Changes
+Diff View
+---
+ PRODUCTION version - 7c02d570-afe8-11f1-9f95-657c5fee4c6f - 2026-09-14 03:00 AM
++++
+ DEVELOPMENT version - af91d7f0-c38a-11f1-9bf8-0943df7aae5a - 2026-10-09 02:39 AM
+
+ 
+ @@ -1,13 +1,134 @@
+
+ 
+  DEFINE SCHEMA
+
+ 
+  
+
++
+      RECORD TYPE CD_BarcodeFood (
++
+          CD_barcode         STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_barcode_ckAsset ASSET,
++
+          CD_entityName      STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_id              STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_payload         BYTES QUERYABLE SORTABLE,
++
+          CD_payload_ckAsset ASSET,
++
+          CD_updatedAt       TIMESTAMP QUERYABLE SORTABLE,
++
+          "___createTime"    TIMESTAMP,
++
+          "___createdBy"     REFERENCE,
++
+          "___etag"          STRING,
++
+          "___modTime"       TIMESTAMP,
++
+          "___modifiedBy"    REFERENCE,
++
+          "___recordID"      REFERENCE,
++
+          GRANT WRITE TO "_creator",
++
+          GRANT CREATE TO "_icloud",
++
+          GRANT READ TO "_world"
++
+      );
++
+  
++
+      RECORD TYPE CD_CalorieEntry (
++
+          CD_barcode                      STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_barcode_ckAsset              ASSET,
++
+          CD_caloriesPerServing           DOUBLE QUERYABLE SORTABLE,
++
+          CD_componentOrder               INT64 QUERYABLE SORTABLE,
++
+          CD_createdAt                    TIMESTAMP QUERYABLE SORTABLE,
++
+          CD_entityName                   STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_externalID                   STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_externalID_ckAsset           ASSET,
++
+          CD_id                           STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_macrosPerServingData         BYTES QUERYABLE SORTABLE,
++
+          CD_macrosPerServingData_ckAsset ASSET,
++
+          CD_mealTemplateID               STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_mealType                     STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_mealType_ckAsset             ASSET,
++
+          CD_name                         STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_name_ckAsset                 ASSET,
++
+          CD_servingDescription           STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_servingDescription_ckAsset   ASSET,
++
+          CD_servings                     DOUBLE QUERYABLE SORTABLE,
++
+          CD_sourceType                   STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_sourceType_ckAsset           ASSET,
++
+          CD_timestamp                    TIMESTAMP QUERYABLE SORTABLE,
++
+          CD_totalCalories                DOUBLE QUERYABLE SORTABLE,
++
+          CD_updatedAt                    TIMESTAMP QUERYABLE SORTABLE,
++
+          "___createTime"                 TIMESTAMP,
++
+          "___createdBy"                  REFERENCE,
++
+          "___etag"                       STRING,
++
+          "___modTime"                    TIMESTAMP,
++
+          "___modifiedBy"                 REFERENCE,
++
+          "___recordID"                   REFERENCE,
++
+          GRANT WRITE TO "_creator",
++
+          GRANT CREATE TO "_icloud",
++
+          GRANT READ TO "_world"
++
+      );
++
+  
++
+      RECORD TYPE CD_DailyGoal (
++
+          CD_calorieGoal            DOUBLE QUERYABLE SORTABLE,
++
+          CD_day                    STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_day_ckAsset            ASSET,
++
+          CD_entityName             STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_id                     STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_macroGoalsData         BYTES QUERYABLE SORTABLE,
++
+          CD_macroGoalsData_ckAsset ASSET,
++
+          CD_updatedAt              TIMESTAMP QUERYABLE SORTABLE,
++
+          "___createTime"           TIMESTAMP,
++
+          "___createdBy"            REFERENCE,
++
+          "___etag"                 STRING,
++
+          "___modTime"              TIMESTAMP,
++
+          "___modifiedBy"           REFERENCE,
++
+          "___recordID"             REFERENCE,
++
+          GRANT WRITE TO "_creator",
++
+          GRANT CREATE TO "_icloud",
++
+          GRANT READ TO "_world"
++
+      );
++
+  
++
+      RECORD TYPE CD_SavedMeal (
++
+          CD_componentsData         BYTES QUERYABLE SORTABLE,
++
+          CD_componentsData_ckAsset ASSET,
++
+          CD_createdAt              TIMESTAMP QUERYABLE SORTABLE,
++
+          CD_entityName             STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_id                     STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_name                   STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_name_ckAsset           ASSET,
++
+          CD_updatedAt              TIMESTAMP QUERYABLE SORTABLE,
++
+          "___createTime"           TIMESTAMP,
++
+          "___createdBy"            REFERENCE,
++
+          "___etag"                 STRING,
++
+          "___modTime"              TIMESTAMP,
++
+          "___modifiedBy"           REFERENCE,
++
+          "___recordID"             REFERENCE,
++
+          GRANT WRITE TO "_creator",
++
+          GRANT CREATE TO "_icloud",
++
+          GRANT READ TO "_world"
++
+      );
++
+  
++
+      RECORD TYPE CD_UserProfile (
++
+          CD_createdAt                    TIMESTAMP QUERYABLE SORTABLE,
++
+          CD_currentDailyGoal             DOUBLE QUERYABLE SORTABLE,
++
+          CD_entityName                   STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_id                           STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_macroGoalsData               BYTES,
++
+          CD_macroGoalsData_ckAsset       ASSET,
++
+          CD_mealSettingsData             BYTES QUERYABLE SORTABLE,
++
+          CD_mealSettingsData_ckAsset     ASSET,
++
+          CD_name                         STRING QUERYABLE SEARCHABLE SORTABLE,
++
+          CD_name_ckAsset                 ASSET,
++
+          CD_progressSettingsData         BYTES QUERYABLE SORTABLE,
++
+          CD_progressSettingsData_ckAsset ASSET,
++
+          CD_tracksMacros                 INT64 QUERYABLE SORTABLE,
++
+          CD_updatedAt                    TIMESTAMP QUERYABLE SORTABLE,
++
+          "___createTime"                 TIMESTAMP,
++
+          "___createdBy"                  REFERENCE,
++
+          "___etag"                       STRING,
++
+          "___modTime"                    TIMESTAMP,
++
+          "___modifiedBy"                 REFERENCE,
++
+          "___recordID"                   REFERENCE,
++
+          GRANT WRITE TO "_creator",
++
+          GRANT CREATE TO "_icloud",
++
+          GRANT READ TO "_world"
++
+      );
++
+  
+
+ 
+      RECORD TYPE Users (
+
+ 
+          "___createTime" TIMESTAMP,
+
+ 
+          "___createdBy"  REFERENCE,
+
+ 
+          "___etag"       STRING,
+
+ 
+          "___modTime"    TIMESTAMP,
+
+ 
+          "___modifiedBy" REFERENCE,
+
+ 
+          "___recordID"   REFERENCE,
+
+ 
+          roles           LIST<INT64>,
+
+ 
+          GRANT WRITE TO "_creator",
+
+ 
+          GRANT READ TO "_world"
+
+ 
+      );
+
+Cancel
+Copy To Clipboard
+Deploy

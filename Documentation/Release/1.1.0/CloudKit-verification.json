@@ -1,0 +1,57 @@
+{
+  "container": "iCloud.com.philstarkovich.cavecals",
+  "team": "J877QX85N5",
+  "productionFieldsVerified": {
+    "UserProfile": [
+      "id",
+      "name",
+      "tracksMacros",
+      "macroGoalsData",
+      "currentDailyGoal",
+      "mealSettingsData",
+      "progressSettingsData",
+      "createdAt",
+      "updatedAt"
+    ],
+    "DailyGoal": [
+      "id",
+      "day",
+      "macroGoalsData",
+      "calorieGoal",
+      "updatedAt"
+    ],
+    "CalorieEntry": [
+      "id",
+      "name",
+      "totalCalories",
+      "timestamp",
+      "servings",
+      "macrosPerServingData",
+      "caloriesPerServing",
+      "servingDescription",
+      "sourceType",
+      "externalID",
+      "barcode",
+      "mealTemplateID",
+      "componentOrder",
+      "mealType",
+      "createdAt",
+      "updatedAt"
+    ],
+    "SavedMeal": [
+      "id",
+      "name",
+      "componentsData",
+      "createdAt",
+      "updatedAt"
+    ],
+    "BarcodeFood": [
+      "id",
+      "barcode",
+      "payload",
+      "updatedAt"
+    ]
+  },
+  "assetCompanions": 17,
+  "deviceSyncVerified": false
+}

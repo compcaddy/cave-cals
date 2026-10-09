@@ -54,14 +54,15 @@ New saved meals default to the current meal type's name while tracking ("Morning
 - `EntryDraft.mealType` is optional, so saved meals, barcode payloads, and drafts saved by older versions still decode; older app versions ignore it.
 - Both new attributes are additive, optional SwiftData attributes: a lightweight migration, tested from the pre-meal-types store (`MealTypeTests.testUpgradeFromStoreBeforeMealTypesKeepsEverything`).
 
-### CloudKit schema (must be done before release)
+### CloudKit schema (deployed October 8, 2026)
 
-The production CloudKit schema for `iCloud.com.philstarkovich.cavecals` needs the two new fields, plus `CD_progressSettingsData` (Bytes) on `CD_UserProfile` for synced Progress settings (added October 8, 2026), or sync fails for records that use them (anyone who turns meal types on or changes a Progress setting). Not done yet: it needs a signed-in CloudKit Console session. Either:
+Verified team **Phil Starkovich (J877QX85N5)** and container `iCloud.com.philstarkovich.cavecals` against the app's signing settings and explicit private CloudKit configuration.
 
-1. **From a development build:** run a Debug build from Xcode on a test device signed in to iCloud (it syncs with the *development* database), turn on meal types, log a food, and wait for it to sync. CloudKit creates `CD_mealType` on `CD_CalorieEntry` and `CD_mealSettingsData` on `CD_UserProfile` in Development.
-2. **Or by hand:** in CloudKit Console → the container → Development → Schema → Record Types, add `CD_mealType` (String) to `CD_CalorieEntry`, and `CD_mealSettingsData` and `CD_progressSettingsData` (Bytes) to `CD_UserProfile`. Match what the existing `CD_macroGoalsData` field looks like (if it has a `CD_macroGoalsData_ckAsset` Asset companion, add `CD_mealSettingsData_ckAsset` the same way).
+The three fields are deployed to Production: `CD_mealType` (String, `CD_CalorieEntry`), plus `CD_mealSettingsData` and `CD_progressSettingsData` (Bytes, `CD_UserProfile`). The live inspection found that Production previously contained only `Users`; all five app record types still existed only in Development. Development also lacked `CD_UserProfile.CD_macroGoalsData` and the 17 asset companions for model String/Data attributes. Those were added and the complete schema deployed. Existing fields, indexes, and roles were retained; no records were reset or deleted. The app uses the private database.
 
-Then **Deploy Schema Changes…** to Production and confirm only these additions are listed. Deployed fields can't be removed, but unused fields are harmless to every app version. Afterwards, check sync between two signed devices, including an older build editing a food that has a meal (it should keep its meal).
+CloudKit Console reported **Changes Deployed**. A fresh Production export was checked against every stored field in `App/Models.swift`, including the String/Data `_ckAsset` companions Apple documents for large values. Evidence is in `Documentation/Release/1.1.0/CloudKit-*`.
+
+Physical-device synchronization remains unverified. The owner elected to skip the TestFlight/device-testing steps for 1.1.0. A future check should include meal labels, preferences, macro goals, offline changes, and an older build editing a food with a meal. Schema deployment alone does not prove successful end-to-end sync.
 
 ## Usage stats
 

@@ -1,0 +1,24 @@
+{
+  "version": "1.1.0",
+  "build": "1",
+  "sourceCommit": "df952f1",
+  "tag": "v1.1.0-build1",
+  "buildId": "2fbc0585-35b8-4e28-8fad-89faff382229",
+  "processingState": "VALID",
+  "versionId": "ae9475a0-b408-41e7-bb05-1eaddf01fa17",
+  "appStoreState": "READY_FOR_REVIEW",
+  "reviewSubmissionId": "699ca39c-0f9e-4ae9-9888-c410b2bf3208",
+  "reviewSubmitted": false,
+  "draftItems": [
+    "iOS App 1.1.0 (1)",
+    "Cave Cals+ Monthly - Discount",
+    "Cave Cals+ Yearly - Discount"
+  ],
+  "cloudKitProductionDeployed": true,
+  "testFlightDistributionRequested": false,
+  "physicalDeviceChecksPerformed": false,
+  "ownerSkippedTestFlightSteps": true,
+  "releaseType": "AFTER_APPROVAL",
+  "phasedRelease": "INACTIVE",
+  "validationNote": "CLI validator flags READY_FOR_REVIEW as non-editable after adding the app to the draft. Apple web UI shows Items Ready to Submit (3) and an enabled Submit for Review button. Other warnings concern optional promotional images and discount products still awaiting review. Privacy publication verified in browser."
+}

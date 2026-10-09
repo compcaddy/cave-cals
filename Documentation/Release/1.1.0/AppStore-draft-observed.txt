@@ -1,0 +1,237 @@
+- banner "App Store Connect":
+  - heading "App Store Connect" [level=1]:
+    - link "App Store Connect":
+      - /url: /
+  - navigation "Global":
+    - list:
+      - link "Apps":
+        - /url: /apps
+      - link "Xcode Cloud":
+        - /url: /teams/69a6de75-e162-47e3-e053-5b8c7c11a4d1/xcode-cloud
+      - link "Trends":
+        - /url: /trends
+      - link "Reports":
+        - /url: /itc/payments_and_financial_reports
+      - link "Business":
+        - /url: /business
+      - link "Users and Access":
+        - /url: /access/users
+  - button "Phillip Starkovich Phil Starkovich Account name menu":
+    - generic: Phillip Starkovich
+    - generic: Phil Starkovich
+- 'button "Apps menu, Cave Cals: AI Calorie Tracker, selected"':
+  - 'generic "Cave Cals: AI Calorie Tracker"':
+    - 'img "Cave Cals: AI Calorie Tracker"'
+  - generic: "Cave Cals: AI Calorie Tracker"
+- navigation "Apps":
+  - list:
+    - link "Distribution":
+      - /url: /apps/6809208501/distribution
+    - link "Analytics":
+      - /url: /apps/6809208501/analytics
+    - link "TestFlight":
+      - /url: /teams/69a6de75-e162-47e3-e053-5b8c7c11a4d1/apps/6809208501/testflight
+- main:
+  - navigation "Distribution":
+    - list:
+      - heading "iOS App" [level=2]
+      - list:
+        - link "1.1.0 Ready for Review":
+          - /url: /apps/6809208501/distribution/ios/version/inflight
+          - text: 1.1.0 Ready for Review
+        - link "1.0.4 Ready for Distribution":
+          - /url: /apps/6809208501/distribution/ios/version/deliverable
+          - text: 1.0.4 Ready for Distribution
+      - button "Add Platform"
+      - separator
+      - heading "General" [level=2]
+      - list:
+        - link "App Information":
+          - /url: /apps/6809208501/distribution/info
+          - generic: App Information
+        - link "App Review":
+          - /url: /apps/6809208501/distribution/reviewsubmissions
+          - generic: App Review
+        - link "History":
+          - /url: /apps/6809208501/distribution/activity/ios/versions
+          - generic: History
+      - separator
+      - heading "App Store" [level=2]
+      - heading "Trust & Safety" [level=3]
+      - list:
+        - link "App Privacy":
+          - /url: /apps/6809208501/distribution/privacy
+          - generic: App Privacy
+        - link "App Accessibility":
+          - /url: /apps/6809208501/distribution/accessibility
+          - generic: App Accessibility
+        - link "Ratings and Reviews":
+          - /url: /apps/6809208501/distribution/ratings/ios
+          - generic: Ratings and Reviews
+      - heading "Growth & Marketing" [level=3]
+      - list:
+        - link "In-App Events":
+          - /url: /apps/6809208501/distribution/events
+          - generic: In-App Events
+        - link "Custom Product Pages New":
+          - /url: /apps/6809208501/distribution/productpages
+          - generic: Custom Product Pages
+          - paragraph: New
+        - link "Asset Library New":
+          - /url: /apps/6809208501/distribution/asset-library
+          - generic: Asset Library
+          - paragraph: New
+        - link "Product Page Optimization New":
+          - /url: /apps/6809208501/distribution/optimization
+          - generic: Product Page Optimization
+          - paragraph: New
+        - link "Promo Codes":
+          - /url: /apps/6809208501/distribution/promo_codes/generate
+          - generic: Promo Codes
+        - link "Game Center":
+          - /url: /apps/6809208501/distribution/gamecenter
+          - generic: Game Center
+      - heading "Monetization" [level=3]
+      - list:
+        - link "Pricing and Availability":
+          - /url: /apps/6809208501/distribution/pricing
+          - generic: Pricing and Availability
+        - link "In-App Purchases":
+          - /url: /apps/6809208501/distribution/iaps
+          - generic: In-App Purchases
+        - link "Subscriptions":
+          - /url: /apps/6809208501/distribution/subscriptions
+          - generic: Subscriptions
+      - heading "Featuring" [level=3]
+      - list:
+        - link "Nominations":
+          - /url: /apps/6809208501/distribution/nominations
+          - generic: Nominations
+  - heading "App Review" [level=2]
+  - paragraph: All items submitted to App Review and your messages with Apple are shown below.
+  - separator
+  - heading "Drafts" [level=3]
+  - paragraph: Submissions that are ready to submit to App Review.
+  - grid "Drafts":
+    - rowgroup:
+      - row "Date Created Versions Created By Items Status Actions":
+        - columnheader "Date Created":
+          - generic: Date Created
+        - columnheader "Versions":
+          - generic: Versions
+        - columnheader "Created By":
+          - generic: Created By
+        - columnheader "Items":
+          - generic: Items
+        - columnheader "Status":
+          - generic: Status
+        - columnheader "Actions"
+    - rowgroup:
+      - row "Today at 7:36 PM":
+        - rowheader "Today at 7:36 PM":
+          - button "Today at 7:36 PM"
+        - gridcell "iOS 1.1.0":
+          - generic: iOS 1.1.0
+        - gridcell "API user 3HC5M3T58P":
+          - generic: API user 3HC5M3T58P
+        - gridcell "3 Items":
+          - generic: 3 Items
+        - gridcell "Ready for Review":
+          - text: Ready for Review
+        - gridcell
+  - heading "Submissions" [level=3]
+  - paragraph: You can see the last 10 completed submissions from the past 180 days below.
+  - grid "Submissions":
+    - rowgroup:
+      - row "Date Submitted Versions Submitted By Items Status Actions":
+        - columnheader "Date Submitted":
+          - generic: Date Submitted
+        - columnheader "Versions":
+          - generic: Versions
+        - columnheader "Submitted By":
+          - generic: Submitted By
+        - columnheader "Items":
+          - generic: Items
+        - columnheader "Status":
+          - generic: Status
+        - columnheader "Actions"
+    - rowgroup:
+      - row "Oct, 1 at 12:34 PM":
+        - rowheader "Oct, 1 at 12:34 PM":
+          - link "Oct, 1 at 12:34 PM":
+            - /url: /apps/6809208501/distribution/reviewsubmissions/details/1badde8e-5316-41e9-90e4-9cf01f21133d
+        - gridcell "iOS 1.0.4":
+          - generic: iOS 1.0.4
+        - gridcell "Phillip Starkovich":
+          - generic: Phillip Starkovich
+        - gridcell "1 Item":
+          - generic: 1 Item
+        - gridcell "Review Completed":
+          - text: Review Completed
+        - gridcell
+      - row "Sep, 21 at 7:56 PM":
+        - rowheader "Sep, 21 at 7:56 PM":
+          - link "Sep, 21 at 7:56 PM":
+            - /url: /apps/6809208501/distribution/reviewsubmissions/details/12fb4151-34c8-468a-a426-941dbac71382
+        - gridcell "iOS 1.0.3":
+          - generic: iOS 1.0.3
+        - gridcell "Phillip Starkovich":
+          - generic: Phillip Starkovich
+        - gridcell "1 Item":
+          - generic: 1 Item
+        - gridcell "Review Completed":
+          - text: Review Completed
+        - gridcell
+      - row "Sep, 17 at 8:06 PM":
+        - rowheader "Sep, 17 at 8:06 PM":
+          - link "Sep, 17 at 8:06 PM":
+            - /url: /apps/6809208501/distribution/reviewsubmissions/details/c44f6a33-0fdf-4770-9907-dd611c4f0bdc
+        - gridcell "iOS 1.0":
+          - generic: iOS 1.0
+        - gridcell "Phillip Starkovich":
+          - generic: Phillip Starkovich
+        - gridcell "4 Items":
+          - generic: 4 Items
+        - gridcell "Review Completed":
+          - text: Review Completed
+        - gridcell
+  - region "Draft Submissions":
+    - button "Draft Submissions (1)":
+      - text: Draft Submissions (1)
+- dialog "Draft Submission Started by API user 3HC5M3T58P Today at 7:36 PM" [active]:
+  - document:
+    - heading "Draft Submission Started by API user 3HC5M3T58P Today at 7:36 PM" [level=2]:
+      - paragraph: Draft Submission
+      - paragraph: Started by API user 3HC5M3T58P Today at 7:36 PM
+    - button "Close":
+    - generic: Items added below will be reviewed together with iOS version 1.1.0
+    - heading "Items Ready to Submit (3)" [level=5]
+    - list "Items Ready to Submit (3)":
+      - listitem "1.1.0":
+        - generic "App Icon":
+          - img "App Icon"
+        - paragraph:
+          - link "iOS App 1.1.0":
+            - /url: /apps/6809208501/distribution/ios/version/inflight
+        - paragraph: 1.1.0 (1)
+        - paragraph
+        - button "Delete":
+      - listitem "Subscriptions (2)":
+        - paragraph: Subscriptions (2)
+        - button "View all items":
+    - generic: Last updated by API user 3HC5M3T58P Today at 7:44 PM
+    - button "Submit for Review"
+- contentinfo:
+  - list:
+    - link "App Store Connect":
+      - /url: /apps
+  - list:
+    - listitem: Copyright © 2026 Apple Inc. All rights reserved. |
+    - link "Terms of Service":
+      - /url: /WebObjects/iTunesConnect.woa/wa/termsOfService
+    - text: "|"
+    - link "Privacy Policy":
+      - /url: https://www.apple.com/legal/privacy
+    - text: "|"
+    - link "Contact Us":
+      - /url: /contact-us
