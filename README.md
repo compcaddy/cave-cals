@@ -90,7 +90,7 @@ xcodebuild test -project CaveCals.xcodeproj \
 
 Source files are grouped by feature under `App/`. Tests are under `Tests/` and `UITests/`. The optional `scripts/generate_project.rb` recreates the Xcode project using the Ruby `xcodeproj` gem. It is only needed when intentionally regenerating the project after source-file changes. `scripts/make_icon.swift` regenerates the 1024-pixel icon.
 
-Optional Apple Health sharing lives in Settings: **Calories & macros** writes each logged food's Dietary Energy, protein, carbs, fat and fiber (from the day it's turned on, updated on edit/delete), and **Weigh-ins** shares weight. Cave Cals never reads Health data.
+Optional Apple Health sharing lives in Settings (and About You → Apple Health), marked with the Apple Health icon: **Calories & macros** writes each logged food's Dietary Energy, protein, carbs, fat and fiber (from the day it's turned on, updated on edit/delete), and **Weigh-ins** shares weight. Cave Cals never reads Health data.
 
 Optional weight tracking is available in the **You** area. It includes daily weigh-ins, pounds/kilograms, a dismissible daily reminder, and opt-in Apple Health export. Graphs and editable weigh-in history live in **Progress** (the chart icon between the person and cog). Weight records are stored in a separate protected local file excluded from backup, not in the diary’s CloudKit store. See [weight tracking](Documentation/WeightTracking.md) for behavior and verification.
 

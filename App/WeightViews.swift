@@ -83,13 +83,38 @@ struct WeightProfileSections: View {
     }
 }
 
-/// Settings → Apple Health: food (calories & macros) and weigh-ins. Weight tracking itself stays in About You.
+/// Apple's Apple Health icon, as supplied (original in `Artwork/AppleHealth/`). App Review wants HealthKit features
+/// clearly identified (October 12, 2026), so it marks every place Cave Cals connects to Apple Health. A hairline edge
+/// keeps the white tile visible on cream.
+struct AppleHealthIcon: View {
+    var size: CGFloat
+    var body: some View {
+        Image("AppleHealthIcon").resizable().interpolation(.high).frame(width: size, height: size)
+            .overlay(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Settings → Apple Health (and About You → Apple Health): food (calories & macros) and weigh-ins. Weight tracking
+/// itself stays in About You.
 struct AppleHealthSection: View {
     @Environment(AppStore.self) private var store
     @Environment(WeightStore.self) private var weights
     @Environment(NutritionHealthSync.self) private var nutrition
     var body: some View {
+        if AppEnvironment.isDevelopment {
+            Section("Apple Health") { Text("Disabled in Cave Cals Dev. Test food and weigh-ins stay out of Apple Health.") }
+        } else { sharing }
+    }
+    private var sharing: some View {
         Section {
+            HStack(spacing: 12) {
+                AppleHealthIcon(size: 36)
+                Text("Cave Cals works with Apple Health")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("worksWithAppleHealth")
             Toggle("Calories & macros", isOn: Binding(get: { nutrition.enabled }, set: { enabled in
                 Task { await nutrition.setEnabled(enabled, entries: store.entries) }
             }))
@@ -113,6 +138,31 @@ struct AppleHealthSection: View {
                  + (weights.tracking ? "." : " once Track weight is on in About You.")
                  + " Cave Cals never reads your Health data. Pausing sharing leaves what’s already in Apple Health.")
                 .font(.cave(.caption2))
+        }
+    }
+}
+
+/// About You's Apple Health row, between weight and Cave Cals+. It opens the same switches as Settings.
+struct AppleHealthLinkSection: View {
+    @Environment(WeightStore.self) private var weights
+    @Environment(NutritionHealthSync.self) private var nutrition
+    private var sharing: Bool { nutrition.enabled || (weights.tracking && weights.healthSharing) }
+    var body: some View {
+        Section {
+            NavigationLink {
+                HapticForm { AppleHealthSection() }
+                    .caveScreenBackground()
+                    .navigationTitle("Apple Health").navigationBarTitleDisplayMode(.inline)
+                    .hapticOnPush()
+            } label: {
+                HStack(spacing: 12) {
+                    AppleHealthIcon(size: 30)
+                    Text("Apple Health").foregroundStyle(Color.primary)
+                    Spacer(minLength: 8)
+                    Text(sharing ? "On" : "Off").foregroundStyle(Color.secondary)
+                }
+            }
+            .accessibilityIdentifier("aboutYouAppleHealth")
         }
     }
 }
@@ -487,8 +537,8 @@ struct AppleHealthOfferSheet: View {
 
     var body: some View {
         VStack(spacing: 18) {
+            AppleHealthIcon(size: 64).padding(.top, 28)
             Text("Sync with Apple Health").font(.cave(.title)).accessibilityAddTraits(.isHeader)
-                .padding(.top, 28)
             Text("Share what you track with Apple Health and apps that use it.")
                 .font(.cave(.subheadline)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             VStack(spacing: 0) {

@@ -1,5 +1,8 @@
 No account signup or demo login is required. Manual logging, food search, barcode lookup, saved meals, calorie plans, macros, weight tracking, and the standard Progress charts are free. This is the normal Cave Cals app, not our separate development app.
 
+APPLE HEALTH (HEALTHKIT)
+Settings (gear icon on Home) > Apple Health, marked with the Apple Health icon and "Cave Cals works with Apple Health": Calories & macros and Weigh-ins switches, each showing Apple's Health permission sheet. Also in About You (person icon) > Apple Health. Off by default; it only writes calories, macros, and weigh-ins and never reads Health data. Screen recording on a physical iPhone: https://www.youtube.com/shorts/GuFt72SOAkg
+
 FIRST LAUNCH
 Setup is optional: choose Build Plan or Just start tracking. Plans support loss, maintenance, or gain. Targets and AI results are estimates, not medical advice. The post-setup subscription offer can be closed without purchasing.
 
@@ -22,5 +25,5 @@ Settings > Meal types enables optional meal grouping. Tap Protein, Carbs, or Fat
 AI AND DEVICE REQUIREMENTS
 AI requests need internet and a real signed device for Apple's App Attest. Meal Scan and Voice Log share an introductory allowance of up to 10 successful analyses until 100 regular food entries; paid access is server-verified. Developer settings can appear in TestFlight/sandbox for internal testing, but are hidden in App Store builds. Please use the normal purchase flow for subscription review.
 
-HEALTH AND ICLOUD
-Apple Health sharing is optional and off by default. The app only writes calories, macros, and weigh-ins; it never reads Health data. Diary, meal-type settings, and Progress preferences use private iCloud sync. Weight history and Progress Photos stay local. Privacy policy: https://cavecals.com/privacy
+ICLOUD
+Diary, meal-type settings, and Progress preferences use private iCloud sync. Weight history and Progress Photos stay local. Privacy policy: https://cavecals.com/privacy

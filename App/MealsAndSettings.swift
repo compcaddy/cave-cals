@@ -70,6 +70,7 @@ struct ProfileView: View {
                 } footer: { goalFooter }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor) { planningCalories = true }
+                AppleHealthLinkSection()
                 if AppEnvironment.isDevelopment { DevTestDataSection() }
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
             }.caveScreenBackground()
@@ -136,9 +137,7 @@ struct SettingsView: View {
                 }
                 MealTypeSettingsSection()
                 LogReminderSettingsSection()
-                if AppEnvironment.isDevelopment {
-                    Section("Apple Health") { Text("Disabled in Cave Cals Dev. Test food and weigh-ins stay out of Apple Health.") }
-                } else { AppleHealthSection() }
+                AppleHealthSection()
                 SavedNutritionSettingsSection()
                 let hidden = store.activeHiddenQuickAddFoods()
                 if !hidden.isEmpty {
