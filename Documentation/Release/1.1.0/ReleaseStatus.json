@@ -1,16 +1,16 @@
 {
   "version": "1.1.0",
-  "build": "1",
-  "sourceCommit": "df952f1",
-  "tag": "v1.1.0-build1",
-  "buildId": "2fbc0585-35b8-4e28-8fad-89faff382229",
+  "build": "2",
+  "sourceCommit": "ffdb429",
+  "tag": "v1.1.0-build2",
+  "buildId": "7e24f7a7-5525-429b-9090-ee6d22d90321",
   "processingState": "VALID",
   "versionId": "ae9475a0-b408-41e7-bb05-1eaddf01fa17",
-  "appStoreState": "READY_FOR_REVIEW",
+  "appStoreState": "WAITING_FOR_REVIEW",
   "reviewSubmissionId": "699ca39c-0f9e-4ae9-9888-c410b2bf3208",
-  "reviewSubmitted": false,
+  "reviewSubmitted": true,
   "draftItems": [
-    "iOS App 1.1.0 (1)",
+    "iOS App 1.1.0 (2)",
     "Cave Cals+ Monthly - Discount",
     "Cave Cals+ Yearly - Discount"
   ],
@@ -20,5 +20,15 @@
   "ownerSkippedTestFlightSteps": true,
   "releaseType": "AFTER_APPROVAL",
   "phasedRelease": "INACTIVE",
-  "validationNote": "CLI validator flags READY_FOR_REVIEW as non-editable after adding the app to the draft. Apple web UI shows Items Ready to Submit (3) and an enabled Submit for Review button. Other warnings concern optional promotional images and discount products still awaiting review. Privacy publication verified in browser."
+  "submittedDate": "2026-10-12T15:52:26.769Z",
+  "previousBuild": {
+    "build": "1",
+    "buildId": "2fbc0585-35b8-4e28-8fad-89faff382229",
+    "sourceCommit": "df952f1",
+    "tag": "v1.1.0-build1",
+    "rejected": "2026-10-12",
+    "guideline": "2.5.1 HealthKit functionality not clearly identified in the UI"
+  },
+  "reviewNotesVideo": "https://www.youtube.com/shorts/GuFt72SOAkg",
+  "note": "Resubmitted the same review submission (app + both discount subscriptions) after attaching build 2, saving the review notes (read back, 3,952 chars), and marking the rejected item resolved. Review doctor's only blocker before resubmission was the unresolved submission; warnings are optional subscription promotional images. No Resolution Center reply was sent (asc can't reply). No TestFlight distribution; physical-device checks remain the owner's."
 }

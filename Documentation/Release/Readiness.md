@@ -1,8 +1,9 @@
-# 1.1.0 review rejection — October 12, 2026
+# 1.1.0 review rejection and resubmission — October 12, 2026
 
 - **Rejected:** 1.1.0 (1), submission `699ca39c-0f9e-4ae9-9888-c410b2bf3208`, reviewed on iPad Air 11-inch (M3) and iPhone 17 Pro Max. Guideline 2.5.1: the app uses HealthKit but doesn't clearly identify it in the UI. (1.0.4 passed with the same Settings section and drawer.)
 - **Local fix:** Apple Health icon on Settings → Apple Health (new “Cave Cals works with Apple Health” row), a new About You → Apple Health row, and the Sync with Apple Health drawer. Review notes now lead with an APPLE HEALTH (HEALTHKIT) section giving the path; it links the owner's physical-iPhone recording, https://www.youtube.com/shorts/GuFt72SOAkg (checked: plays signed out). 3,953 characters; App Store Connect allows 4,000.
 - **Build 2:** app, widget, and project generator bumped to **1.1.0 (2)**. 216 native unit tests passed on iPhone 17 (1 skipped); About You row, pushed page, and drawer checked by hand in the simulator. The rejection is not resolved until Apple approves.
+- **Resubmitted:** source `ffdb429` (tag `v1.1.0-build2`). Signed Release archive and App Store export succeeded; the IPA's app and widget are both 1.1.0 (2), strict signature verification passed, and entitlements are production (App Attest, iCloud, push) with HealthKit and `get-task-allow` false; the Apple Health icon is in `Assets.car`. Uploaded with `asc builds upload`: build `7e24f7a7-5525-429b-9090-ee6d22d90321` processed **VALID** (App Store eligible, no non-exempt encryption). Attached to 1.1.0, review notes saved and read back identical (3,952 characters), rejected item marked resolved, and submission `699ca39c-0f9e-4ae9-9888-c410b2bf3208` (app + both discount subscriptions) resubmitted at 08:52 PT: **WAITING_FOR_REVIEW**. Release stays automatic after approval with phased release configured. No Resolution Center reply was sent. Evidence: `1.1.0/Build2.json`, `review-notes-saved-build2.json`, `Resubmission-build2.json`, `ReleaseStatus.json`.
 
 # 1.1.0 release preparation — October 8, 2026
 
