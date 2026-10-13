@@ -1,0 +1,36 @@
+{
+  "clans": [
+    {
+      "id": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+      "name": "The Cavemen",
+      "memberCount": 3,
+      "role": "member",
+      "unread": 0,
+      "challenge": {
+        "id": "a38873b6-84fb-4f2c-9807-121e11329fcf",
+        "kind": "streak",
+        "name": "Streak",
+        "status": "active",
+        "dayNumber": 1,
+        "totalDays": null,
+        "joined": true,
+        "canJoin": false,
+        "startsOn": "2026-10-13",
+        "myStatus": "in",
+        "myRank": null,
+        "myLivesLeft": 1,
+        "myLossPct": null,
+        "madeToday": false,
+        "inToday": 1,
+        "inCount": 2,
+        "streak": {
+          "length": 0,
+          "brokeOn": null,
+          "record": 0
+        },
+        "team": null
+      }
+    }
+  ],
+  "unread": 0
+}

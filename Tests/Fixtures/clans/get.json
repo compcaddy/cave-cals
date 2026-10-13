@@ -1,0 +1,254 @@
+{
+  "clan": {
+    "id": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+    "name": "The Cavemen",
+    "inviteCode": "JCGCRE",
+    "accountability": "percent",
+    "rule": {
+      "kind": "withinPercent",
+      "percent": 5
+    },
+    "ruleChoice": "clan",
+    "bestStreak": 0,
+    "createdAt": "2026-10-13T20:18:54.004Z"
+  },
+  "me": {
+    "role": "member",
+    "anonymous": false,
+    "muted": false,
+    "rule": null,
+    "today": "2026-10-13"
+  },
+  "members": [
+    {
+      "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+      "name": "Ana",
+      "photoId": null,
+      "anonymous": false,
+      "blocked": false,
+      "role": "owner",
+      "isMe": false,
+      "joinedAt": "2026-10-13T20:18:54.004Z"
+    },
+    {
+      "personId": "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9",
+      "name": "Ben",
+      "photoId": null,
+      "anonymous": false,
+      "blocked": false,
+      "role": "member",
+      "isMe": true,
+      "joinedAt": "2026-10-13T20:18:57.522Z"
+    },
+    {
+      "personId": "8581f8c8-9cce-40c1-a9cc-147845cefd49",
+      "name": "Cave person",
+      "photoId": null,
+      "anonymous": true,
+      "blocked": false,
+      "role": "member",
+      "isMe": false,
+      "joinedAt": "2026-10-13T20:18:59.424Z"
+    }
+  ],
+  "accountability": {
+    "mode": "percent",
+    "rule": {
+      "kind": "withinPercent",
+      "percent": 5
+    },
+    "ruleChoice": "clan",
+    "days": [
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "cells": {
+      "08f6c243-a7d8-4ed4-9af6-118565ab742a": {
+        "2026-10-07": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-08": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-09": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-10": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-11": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-12": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-13": {
+          "state": "today",
+          "logged": true
+        }
+      },
+      "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9": {
+        "2026-10-07": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-08": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-09": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-10": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-11": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-12": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-13": {
+          "state": "today",
+          "logged": false
+        }
+      },
+      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+        "2026-10-07": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-08": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-09": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-10": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-11": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-12": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-13": {
+          "state": "today",
+          "logged": false
+        }
+      }
+    },
+    "weekly": {
+      "08f6c243-a7d8-4ed4-9af6-118565ab742a": {
+        "logged": 0,
+        "full": 0,
+        "averagePercent": null
+      },
+      "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9": {
+        "logged": 0,
+        "full": 0,
+        "averagePercent": null
+      },
+      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+        "logged": 0,
+        "full": 0,
+        "averagePercent": null
+      }
+    }
+  },
+  "challenge": {
+    "id": "a38873b6-84fb-4f2c-9807-121e11329fcf",
+    "kind": "streak",
+    "name": "Streak",
+    "settings": {
+      "basis": "logging",
+      "anyFood": false,
+      "streakMode": "everyone",
+      "streakPercent": 80,
+      "teamTarget": 100
+    },
+    "savesCount": 1,
+    "savesPeriod": "week",
+    "startsOn": "2026-10-13",
+    "endsOn": null,
+    "status": "active",
+    "dayNumber": 1,
+    "totalDays": null,
+    "joined": true,
+    "canJoin": false,
+    "entrants": [
+      {
+        "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+        "name": "Ana",
+        "photoId": null,
+        "anonymous": false,
+        "blocked": false,
+        "role": "owner",
+        "isMe": false,
+        "joinedAt": "2026-10-13T20:18:54.004Z",
+        "status": "in",
+        "points": 0,
+        "livesLeft": 1,
+        "rank": null,
+        "outOn": null,
+        "creditedLossPct": null,
+        "madeToday": true,
+        "recent": {
+          "2026-10-13": null
+        }
+      },
+      {
+        "personId": "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9",
+        "name": "Ben",
+        "photoId": null,
+        "anonymous": false,
+        "blocked": false,
+        "role": "member",
+        "isMe": true,
+        "joinedAt": "2026-10-13T20:18:57.522Z",
+        "status": "in",
+        "points": 0,
+        "livesLeft": 1,
+        "rank": null,
+        "outOn": null,
+        "creditedLossPct": null,
+        "madeToday": false,
+        "recent": {
+          "2026-10-13": null
+        }
+      }
+    ],
+    "winners": [],
+    "endedOn": null,
+    "streak": {
+      "length": 0,
+      "brokeOn": null,
+      "record": 0
+    },
+    "team": null,
+    "inToday": 1,
+    "inCount": 2
+  },
+  "history": []
+}

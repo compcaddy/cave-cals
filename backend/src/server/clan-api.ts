@@ -563,6 +563,14 @@ export async function deleteClanPerson(personId: string) {
   const identities = await db.select().from(clanIdentities).where(eq(clanIdentities.personId, personId));
   for (const identity of identities) if (identity.provider === 'apple') await revokeAppleToken(identity.appleRefreshToken);
   await deletePhoto(person.photoId);
+  // Past results keep their standings, without the name.
+  const won = await db.select({ id: clanChallenges.id, result: clanChallenges.result }).from(clanChallenges)
+    .where(sql`${clanChallenges.result} -> 'winners' @> ${JSON.stringify([personId])}::jsonb`);
+  for (const row of won) {
+    const result = row.result as { winners?: string[]; winnerNames?: string[] };
+    const names = (result.winners ?? []).map((id, i) => (id === personId ? 'A former member' : result.winnerNames?.[i] ?? ''));
+    await db.update(clanChallenges).set({ result: { ...result, winnerNames: names } }).where(eq(clanChallenges.id, row.id));
+  }
   // Everything else (identities, sessions, days, alerts, nudges, blocks, entries) goes with the person.
   await db.delete(clanPeople).where(eq(clanPeople.id, personId));
   return { deleted: true };

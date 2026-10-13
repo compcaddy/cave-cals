@@ -74,7 +74,7 @@ struct ClansScreen: View {
                 }
                 ForEach(clans.clans) { clan in
                     NavigationLink(value: ClanRoute.clan(clan.id)) { ClanCard(clan: clan) }
-                        .buttonStyle(.plain).accessibilityIdentifier("clanCard")
+                        .hapticButtonStyle(.plain).hapticFeel(.none).accessibilityIdentifier("clanCard")
                 }
                 HStack(spacing: 12) {
                     Button { creating = true } label: { actionLabel("Start a clan", "plus") }.accessibilityIdentifier("startClan")
@@ -297,7 +297,7 @@ struct ClanDetailView: View {
                     header(detail)
                     if let board = detail.challenge {
                         NavigationLink(value: ClanRoute.challenge(clanId)) { ChallengeCard(board: board) }
-                            .buttonStyle(.plain).accessibilityIdentifier("challengeCard")
+                            .hapticButtonStyle(.plain).hapticFeel(.none).accessibilityIdentifier("challengeCard")
                     } else if detail.isAdmin {
                         Button { newChallenge = true } label: {
                             VStack(spacing: 6) {
@@ -392,7 +392,7 @@ struct ClanDetailView: View {
                             Spacer()
                             CaveIcon(.chevronRight, size: 12).foregroundStyle(.secondary)
                         }.padding(.horizontal, 14).frame(minHeight: 56).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityIdentifier("member-\(m.name)")
+                    }.hapticButtonStyle(.plain).accessibilityIdentifier("member-\(m.name)")
                     if m.id != detail.members.last?.id { Divider().padding(.leading, 66) }
                 }
             }.background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))

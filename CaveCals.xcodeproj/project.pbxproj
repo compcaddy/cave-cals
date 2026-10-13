@@ -70,6 +70,7 @@
 		978F85E6B87910D0D146A5E3 /* ProgressPhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB68A8DC780AC676E8446AC6 /* ProgressPhotoTests.swift */; };
 		983832F717BA4D3D8B789E72 /* LoggingAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F2050A1AA162B13C70E09B /* LoggingAction.swift */; };
 		9A1F827E15D8EA784591E6E6 /* UsageStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB63C684429DBA2EB63DB2D /* UsageStats.swift */; };
+		9FC9D03E0D05198D50BB626D /* ClanUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF4342316C191868E57B428A /* ClanUITests.swift */; };
 		A02E64757B9604BEA6329B53 /* ProgressHabits.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9F4106CEF87E14844F10E6 /* ProgressHabits.swift */; };
 		A6ACB443CC13BBBD8A6319C4 /* DevTestData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3134A1C554AFFDF51D03247 /* DevTestData.swift */; };
 		A7C3E1F20B4D5E6F7A8B9C01 /* WelcomeScanAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C3E1F20B4D5E6F7A8B9C02 /* WelcomeScanAnimation.swift */; };
@@ -88,6 +89,7 @@
 		BCE8CEB21913FA838976D53D /* ClanAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7488FB535C3EEA584E135DFB /* ClanAccount.swift */; };
 		C3A6BB7EC7B3FD268CDA8B86 /* MealTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B8D5B21AD199DF63CFA41D /* MealTypes.swift */; };
 		C7BDDEB1EFA44ECA6C94E8C9 /* CaveIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EC6918516005A73F3528519C /* CaveIcons.xcassets */; };
+		CC9FE8EC2A799ECFE4B851F6 /* ClanContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3749D245BFCF5207A604C7E /* ClanContractTests.swift */; };
 		CF1AA7E78E4D28491ACEDA2A /* CaveIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B627F5DE7B765F759D4C456 /* CaveIcon.swift */; };
 		D1E29D41C23479D041AEBA6B /* Clans.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9AC633463C8C941E18EDD1 /* Clans.swift */; };
 		D803B53BF95436E0A95AE591 /* ProgressPhotoViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A287B9A31AB7B6232676E393 /* ProgressPhotoViews.swift */; };
@@ -212,6 +214,7 @@
 		B5D1E0C7A3F24E8B9C6D7E02 /* RecipeImport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecipeImport.swift; sourceTree = "<group>"; };
 		B8801058ADB1E81962DF0EB2 /* MealTypeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MealTypeTests.swift; sourceTree = "<group>"; };
 		BEE928B97BBE50FAB6E85D7C /* AppEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		C3749D245BFCF5207A604C7E /* ClanContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClanContractTests.swift; sourceTree = "<group>"; };
 		C8A6FED4ACAFD031C423A752 /* LoggingActionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoggingActionTests.swift; sourceTree = "<group>"; };
 		CB9A5D9742D425FCFEB08983 /* FoodHistory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoodHistory.swift; sourceTree = "<group>"; };
 		D236F6BF8278041C8DBD1EAE /* ProgressView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
@@ -221,6 +224,7 @@
 		DB5104DFD343B58D8B69A13A /* ClanTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClanTests.swift; sourceTree = "<group>"; };
 		DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		DCE16C368D0C11491E897FFD /* DiscoverySourceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscoverySourceTests.swift; sourceTree = "<group>"; };
+		DF4342316C191868E57B428A /* ClanUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClanUITests.swift; sourceTree = "<group>"; };
 		EC0AFCDD73301B52CE28D526 /* CaloriePlan.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaloriePlan.swift; sourceTree = "<group>"; };
 		EC6918516005A73F3528519C /* CaveIcons.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = CaveIcons.xcassets; sourceTree = "<group>"; };
 		ED838F9E51F472699ADB73F0 /* ProgressPrint.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProgressPrint.swift; sourceTree = "<group>"; };
@@ -283,6 +287,7 @@
 				6A047BDB80FC57066EB2C192 /* OnboardingUITests.swift */,
 				7CA3F6E00A55D7664763702B /* ProgressUITests.swift */,
 				7ED81FB11972A122BA5E1DD4 /* DevBuildUITests.swift */,
+				DF4342316C191868E57B428A /* ClanUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -351,6 +356,7 @@
 				7ED9DDA0ED932BBCAEF958EB /* UsageStatsTests.swift */,
 				D6510E630A9A2794DA97996A /* DevIsolationTests.swift */,
 				DB5104DFD343B58D8B69A13A /* ClanTests.swift */,
+				C3749D245BFCF5207A604C7E /* ClanContractTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -685,6 +691,7 @@
 				E1879AAEAC2E61367077009A /* UsageStatsTests.swift in Sources */,
 				644A4D7AD0C7EA1BB19F397D /* DevIsolationTests.swift in Sources */,
 				FAC1EFF9B4323E691B978D60 /* ClanTests.swift in Sources */,
+				CC9FE8EC2A799ECFE4B851F6 /* ClanContractTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -699,6 +706,7 @@
 				463DDB73A4C8577D6C908B14 /* OnboardingUITests.swift in Sources */,
 				AAF81CC4A0C4E19FFA7D4C4D /* ProgressUITests.swift in Sources */,
 				ED2999DD8B1DDC50EDB2D863 /* DevBuildUITests.swift in Sources */,
+				9FC9D03E0D05198D50BB626D /* ClanUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

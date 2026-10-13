@@ -58,7 +58,7 @@ struct NewChallengeView: View {
                             Spacer(minLength: 0)
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16)).contentShape(Rectangle())
-                    }.buttonStyle(.plain).hapticFeel(.selection).accessibilityIdentifier("challengeKind-\(k.rawValue)")
+                    }.hapticButtonStyle(.plain).hapticFeel(.selection).accessibilityIdentifier("challengeKind-\(k.rawValue)")
                 }
                 Text("One challenge at a time per clan.").font(.cave(.footnote)).foregroundStyle(.secondary).padding(.top, 4)
             }.padding(16)
@@ -451,7 +451,7 @@ struct HomeClanStrip: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.caveOrange.opacity(0.7), lineWidth: 1.5))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(.plain)
         .accessibilityLabel("\(clan.name), \(ClanStatusText.line(challenge))")
         .accessibilityHint("Opens the clan")
         .accessibilityIdentifier("clanStatus")

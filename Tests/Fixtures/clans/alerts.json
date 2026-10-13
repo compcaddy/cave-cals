@@ -1,0 +1,40 @@
+{
+  "unread": 1,
+  "alerts": [
+    {
+      "id": "461047ab-1c5f-4e86-9464-99d7442cb9f9",
+      "clanId": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+      "clanName": "The Cavemen",
+      "kind": "nudge",
+      "payload": {
+        "from": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+        "message": 0
+      },
+      "createdAt": "2026-10-13T20:19:13.205Z",
+      "read": false
+    },
+    {
+      "id": "272c5f41-8ba6-416b-8d8a-1dc5087b5e49",
+      "clanId": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+      "clanName": "The Cavemen",
+      "kind": "challengeStarted",
+      "payload": {
+        "phase": "created",
+        "challengeId": "a38873b6-84fb-4f2c-9807-121e11329fcf"
+      },
+      "createdAt": "2026-10-13T20:19:08.233Z",
+      "read": true
+    },
+    {
+      "id": "ca32772f-1ff5-438b-b574-a88fb27c11eb",
+      "clanId": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+      "clanName": "The Cavemen",
+      "kind": "challengeStarted",
+      "payload": {
+        "accountability": "percent"
+      },
+      "createdAt": "2026-10-13T20:19:05.541Z",
+      "read": true
+    }
+  ]
+}

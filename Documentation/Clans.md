@@ -1,6 +1,6 @@
 # Clans
 
-Design October 13, 2026; the backend is built on branch `clans` (not deployed; tables only on the `clans-dev` Neon branch). The app side is in progress. This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
+Design October 13, 2026. Built on branch `clans` (worktree `../CaveCals-clans`): backend and app. Not deployed or released; tables exist only on the `clans-dev` Neon branch. This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
 
 ## The idea
 
@@ -206,3 +206,19 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
 - **Routes:** `POST /api/v1/clan/auth/signin` is App Attest–verified like other paid routes; owner test access and local development work too. Every other `POST /api/v1/clan/...` route uses the `x-clan-session` header. Photos are at `GET /api/v1/clan-photo/<id>`. The cron is `GET /api/cron/clans`, every 15 minutes. There's also `/join/<CODE>`, `/.well-known/apple-app-site-association`, and `/admin/reports`.
 - **Tests:** `backend-tests/clan-rules.test.ts` and `clan-auth.test.ts` (unit), and `backend-tests/integration/clans.test.ts` (against clans-dev: `NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`).
 - **Local development sign-in:** provider `dev` with a `devSubject`, on localhost with `DEV_API_TOKEN` only.
+
+## Built so far (app)
+
+- **Files:** `App/Clans.swift` (models, `ClanClient`, `ClanStore`, `ClanRouter`, links, strip text), `ClanReports.swift` (`ClanDayReport`, `ClanWeightReport`, `ClanReporter`), `ClanAccount.swift` (sign-in, avatars, `AvatarCropper`, `ClanProfileView`), `ClanViews.swift` (Clans list, join, create, clan page, accountability grid, member sheet, clan settings, Settings → Clans alerts), `ClanChallenges.swift` (new challenge, boards, weight eligibility, Home strip and hooks), and `ClanFixture.swift` (DEBUG pretend server).
+- **Home:** the campfire sits right of the chart icon with the unread badge. The status strip shows only during a running challenge you're in. When the header can't fit "Today" and the date on one line, the date sits under "Today".
+- **Settings:** Home → Show clan status. Clans → which alerts arrive (fire going out, nudges and cheers, challenge updates, streak milestones, new members) and Clan profile (photo, name, birthday, sign out, delete clan account).
+- **Ranges are percentages only.** Clan ranges are at or under, within X%, or up to X% over. Progress's "up to 100 calories over" isn't offered, because the server only sees percentages.
+- **Weight eligibility:** joining a weight challenge asks for a birth month and year if they aren't set, plus "pregnant, breastfeeding, or getting care for an eating disorder?" That answer stays on the phone. The saved plan doesn't keep the doctor-plan switch, so it's asked here.
+- **Tests:** `Tests/ClanTests.swift` covers reports, weight averages, invite links, and strip lines. `Tests/ClanContractTests.swift` decodes the real responses in `Tests/Fixtures/clans/`; refresh them with `SAVE_CLAN_SAMPLES=1 NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`. `UITests/ClanUITests.swift` uses `--clans-fixture`.
+- **Privacy policy and terms** have Clans sections. Update their effective dates when clans ship.
+
+## Not verified yet
+
+- A signed build on a real iPhone: Sign in with Apple, Google sign-in, push delivery, Universal Links, and the photo picker and cropper on device.
+- The app against a running backend end to end; the JSON contract is checked by the decoding test.
+- Dark mode, small iPhones, and large text, before release.

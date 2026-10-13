@@ -1,0 +1,130 @@
+{
+  "clan": {
+    "id": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+    "name": "The Cavemen",
+    "inviteCode": "JCGCRE",
+    "accountability": "percent",
+    "rule": {
+      "kind": "withinPercent",
+      "percent": 5
+    },
+    "ruleChoice": "clan",
+    "bestStreak": 0,
+    "createdAt": "2026-10-13T20:18:54.004Z"
+  },
+  "me": {
+    "role": "owner",
+    "anonymous": true,
+    "muted": false,
+    "rule": null,
+    "today": "2026-10-13"
+  },
+  "hasPlus": true,
+  "members": [
+    {
+      "personId": "8581f8c8-9cce-40c1-a9cc-147845cefd49",
+      "name": "Cave person (you)",
+      "photoId": null,
+      "anonymous": true,
+      "blocked": false,
+      "role": "owner",
+      "isMe": true,
+      "joinedAt": "2026-10-13T20:18:59.424Z"
+    }
+  ],
+  "accountability": {
+    "mode": "percent",
+    "rule": {
+      "kind": "withinPercent",
+      "percent": 5
+    },
+    "ruleChoice": "clan",
+    "days": [
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "cells": {
+      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+        "2026-10-07": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-08": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-09": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-10": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-11": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-12": {
+          "state": "none",
+          "logged": false
+        },
+        "2026-10-13": {
+          "state": "today",
+          "logged": false
+        }
+      }
+    },
+    "weekly": {
+      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+        "logged": 0,
+        "full": 0,
+        "averagePercent": null
+      }
+    }
+  },
+  "challenge": null,
+  "history": [
+    {
+      "id": "a38873b6-84fb-4f2c-9807-121e11329fcf",
+      "kind": "streak",
+      "name": "Streak",
+      "startsOn": "2026-10-13",
+      "endsOn": null,
+      "endedAt": "2026-10-13T20:19:24.326Z",
+      "result": {
+        "team": null,
+        "manual": false,
+        "record": false,
+        "streak": {
+          "length": 0,
+          "brokeOn": null
+        },
+        "endedOn": "2026-10-13",
+        "winners": [],
+        "standings": [
+          {
+            "rank": null,
+            "points": 0,
+            "status": "left",
+            "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+            "creditedLossPct": null
+          },
+          {
+            "rank": null,
+            "points": 0,
+            "status": "left",
+            "personId": "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9",
+            "creditedLossPct": null
+          }
+        ],
+        "winnerNames": []
+      }
+    }
+  ]
+}

@@ -12,6 +12,16 @@ import { api } from '../../backend/src/server/api';
 import { photoResponse } from '../../backend/src/server/clan-api';
 import { runClanJobs } from '../../backend/src/server/clan-jobs';
 import { addDays, localDay } from '../../backend/src/server/clan-rules';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+
+// SAVE_CLAN_SAMPLES=1 saves real responses for the app's decoding test (Tests/ClanContractTests.swift).
+function sample(name: string, body: unknown) {
+  if (process.env.SAVE_CLAN_SAMPLES !== '1') return;
+  const dir = path.join(process.cwd(), 'Tests', 'Fixtures', 'clans');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(body, null, 2) + '\n');
+}
 
 nextEnv.loadEnvConfig(process.cwd(), true);
 const env = process.env as Record<string, string | undefined>;
@@ -58,7 +68,9 @@ test('sign-in needs the clan rules, and makes a person with their first name', a
   const again = await call('clan/auth/signin', { nonce: 'local', provider: 'dev', devSubject: `${run}-Ana Smith` });
   assert.equal(again.body.personId, ana.personId);
   assert.equal(again.body.isNew, false);
-  assert.equal((await call('clan/me', {}, ana.session)).body.displayName, 'Ana');
+  const me = (await call('clan/me', {}, ana.session)).body;
+  assert.equal(me.displayName, 'Ana');
+  sample('me', me);
   assert.equal((await call('clan/me', {}, 'not-a-session')).status, 401);
 });
 
@@ -74,6 +86,7 @@ test('clans are made, joined by code, and need Cave Cals+ for a third member', a
   code = (await call('clan/get', { clanId }, ana.session)).body.clan.inviteCode;
   assert.match(code, /^[A-Z2-9]{6}$/);
   const preview = await call('clan/preview', { code: code.toLowerCase() }, ben.session);
+  sample('preview', preview.body);
   assert.deepEqual([preview.body.name, preview.body.memberCount, preview.body.alreadyMember], ['The Cavemen', 1, false]);
   assert.equal((await call('clan/join', { code }, ben.session)).status, 200);
   // Without Cave Cals+ on any admin, a third person can't join.
@@ -114,12 +127,15 @@ test('one challenge at a time; members join before it starts', async () => {
   assert.equal(created.status, 200, JSON.stringify(created.body));
   assert.equal((await call('clan/challenge/create', { clanId, kind: 'loggingDays', settings: {}, startsOn: today, lengthDays: 7 }, ana.session)).body.error.code, 'challenge_running');
   assert.equal((await call('clan/challenge/join', { challengeId: created.body.challengeId }, ben.session)).status, 200);
-  const board = (await call('clan/get', { clanId }, ben.session)).body.challenge;
+  const detail = (await call('clan/get', { clanId }, ben.session)).body;
+  sample('get', detail);
+  const board = detail.challenge;
   assert.equal(board.kind, 'streak');
   assert.equal(board.joined, true);
   assert.equal(board.entrants.length, 2);
   assert.equal(board.inToday, 1);
   const list = (await call('clan/list', {}, ben.session)).body;
+  sample('list', list);
   assert.equal(list.clans[0].challenge.kind, 'streak');
   assert.equal(list.clans[0].challenge.madeToday, false);
 });
@@ -128,6 +144,7 @@ test('nudges go once a day, and blocks stop them', async () => {
   assert.equal((await call('clan/nudge', { clanId, personId: ben.personId, kind: 'nudge', message: 0 }, ana.session)).status, 200);
   assert.equal((await call('clan/nudge', { clanId, personId: ben.personId, kind: 'nudge', message: 1 }, ana.session)).body.error.code, 'already_sent');
   const alerts = (await call('clan/alerts', {}, ben.session)).body;
+  sample('alerts', alerts);
   assert.ok(alerts.alerts.some((a: any) => a.kind === 'nudge'));
   assert.equal((await call('clan/block', { personId: ana.personId, blocked: true }, ben.session)).status, 200);
   assert.equal((await call('clan/nudge', { clanId, personId: ben.personId, kind: 'cheer' }, ana.session)).body.error.code, 'blocked');
@@ -166,6 +183,7 @@ test('the clans job runs, and ends a challenge everyone has left', async () => {
   const detail = (await call('clan/get', { clanId }, cal.session)).body;
   assert.equal(detail.challenge, null);
   assert.equal(detail.history[0].kind, 'streak');
+  sample('get-history', detail);
 });
 
 test('deleting a clan account removes the person and everything of theirs', async () => {
