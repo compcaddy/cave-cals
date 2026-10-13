@@ -251,6 +251,8 @@ import WidgetKit
         guard updated != finishedDays else { return }
         finishedDays = updated
         if persistsUsage { preferences.set(try? JSONEncoder().encode(updated), forKey: Self.finishedDaysKey) }
+        // Done eating makes a day full for clans.
+        ClanReporter.shared.schedule()
     }
     func finishPromptHidden(on date: Date) -> Bool { finishPromptHiddenDay == Day.key(date) }
     func hideFinishPrompt(on date: Date) {

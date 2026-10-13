@@ -13,8 +13,8 @@ export const ALERT_KINDS = [
 export type AlertKind = typeof ALERT_KINDS[number];
 // The Settings → Clans switches; several kinds share one switch.
 export const ALERT_SWITCH: Record<AlertKind, string> = {
-  evening: 'evening', nudge: 'nudges', cheer: 'nudges', challengeStarted: 'challenges', challengeEnded: 'challenges',
-  lifeLost: 'challenges', out: 'challenges', streakMilestone: 'milestones', streakRecord: 'milestones', memberJoined: 'members',
+  evening: 'evening', nudge: 'nudges', cheer: 'nudges', challengeStarted: 'updates', challengeEnded: 'updates',
+  lifeLost: 'updates', out: 'updates', streakMilestone: 'milestones', streakRecord: 'milestones', memberJoined: 'members',
 };
 export type Push = { title: string; body: string };
 

@@ -102,6 +102,7 @@ struct SettingsView: View {
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAdd = true
     @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDay = true
+    @AppStorage(ClanStore.showsStatusKey) private var showsClanStatus = true
     @State private var showsHiddenQuickAdd = false
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
 
@@ -132,11 +133,14 @@ struct SettingsView: View {
                         .accessibilityIdentifier("showHomeQuickAdd")
                     Toggle("Show “Done eating” button", isOn: $showsFinishDay)
                         .accessibilityIdentifier("showFinishDay")
+                    Toggle("Show clan status", isOn: $showsClanStatus)
+                        .accessibilityIdentifier("showClanStatus")
                 } header: { Text("Home") } footer: {
-                    Text("Quick Start shows your usual first foods until you log another way that day. “Done eating for today” appears from 6 pm or at 90% of your goal; a day marked done counts as complete in Progress.").font(.cave(.caption2))
+                    Text("Quick Start shows your usual first foods until you log another way that day. “Done eating for today” appears from 6 pm or at 90% of your goal; a day marked done counts as complete in Progress. Clan status is a line above your calories while you’re in a clan challenge.").font(.cave(.caption2))
                 }
                 MealTypeSettingsSection()
                 LogReminderSettingsSection()
+                ClanNotificationSettingsSection()
                 AppleHealthSection()
                 SavedNutritionSettingsSection()
                 let hidden = store.activeHiddenQuickAddFoods()

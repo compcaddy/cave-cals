@@ -40,6 +40,8 @@ enum PaywallTrigger: String {
     case progressPhotos
     /// Progress → Good Days vs. Over Days → Cave Coach.
     case coach
+    /// A third clan member or a challenge in a clan of three or more (an admin needs Cave Cals+).
+    case clans
 }
 
 /// Where an error reached someone, so the admin page can show how often each feature fails.
@@ -47,6 +49,8 @@ enum StatsErrorArea: String {
     case mealScan, voice, barcode, recipe, siri, search, macroEstimate, subscription, save, iCloud, appleHealth, weights, progressPhotos
     /// Cave Coach couldn't write insights.
     case coach
+    /// Clans: sign-in, loading, reports, and clan actions.
+    case clans
 }
 
 enum UsageCounter: String {

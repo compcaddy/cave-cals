@@ -19,6 +19,8 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record a food description to estimate calories when you choose voice logging.</string>
+	<key>GoogleClientID</key>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 	<key>AIBackendURL</key>
 	<string>$(AI_BACKEND_URL)</string>
 	<key>NSAppTransportSecurity</key>

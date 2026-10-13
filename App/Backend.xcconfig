@@ -1,3 +1,5 @@
 // Public backend origin only. Credentials remain on the server.
 AI_BACKEND_URL = https:/$()/cavecals.vercel.app
+// Google sign-in for clans: the iOS OAuth client ID from Google Cloud Console (public; empty hides the button).
+GOOGLE_CLIENT_ID =
 #include? "Backend.local.xcconfig"

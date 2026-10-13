@@ -208,6 +208,16 @@ final class LogReminderNotificationDelegate: NSObject, UNUserNotificationCenterD
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        // Clan alerts open their clan.
+        let info = response.notification.request.content.userInfo
+        if info["kind"] is String, info["aps"] != nil, response.notification.request.trigger is UNPushNotificationTrigger {
+            let clanId = info["clanId"] as? String, kind = info["kind"] as? String ?? ""
+            await MainActor.run {
+                UsageStats.shared.event("clan.pushOpened", ["kind": kind])
+                ClanRouter.shared.open(clanId: clanId)
+            }
+            return
+        }
         guard await LogReminders.isReminder(response.notification) else { return }
         await MainActor.run {
             UsageStats.shared.count(.reminderTaps)

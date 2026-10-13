@@ -10,6 +10,11 @@ final class QuickActionAppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().delegate = LogReminderNotificationDelegate.shared
         return true
     }
+    /// Clan push notifications.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in ClanStore.shared.registerPush(token: deviceToken) }
+    }
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         // Capture a cold-launch shortcut before SwiftUI creates the root view.

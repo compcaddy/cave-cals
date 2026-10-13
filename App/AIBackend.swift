@@ -227,6 +227,10 @@ actor AIBackend {
         }
         return try await signed("meal/import", fields: ["uploadIds": uploadIds])
     }
+    /// Clan sign-in (Apple, Google, or local development) through the verified-device path; returns a session.
+    func clanSignIn(_ fields: [String: Any]) async throws -> ClanSignInResult {
+        try await signed("clan/auth/signin", fields: fields)
+    }
     /// Estimates foods from what the person said (Siri/Shortcuts). Uses one scan, like a voice recording.
     func describe(text: String, regularLogCount: Int = 0) async throws -> AIResult {
         try await signed("food/describe", fields: ["text": text, "regularLogCount": regularLogCount])
@@ -290,7 +294,7 @@ actor AIBackend {
         var request = URLRequest(url: base.appendingPathComponent("api/v1/\(path)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze", "food/describe", "meal/import"].contains(path) {
+        if AIConfiguration.testAccess != nil && ["account/status", "uploads/sign", "food/analyze", "food/describe", "meal/import", "clan/auth/signin"].contains(path) {
             // The separately issued owner capability authorizes testing without App Attest.
             request.setValue("1", forHTTPHeaderField: "X-Cave-Owner-Test")
             body["nonce"] = UUID().uuidString

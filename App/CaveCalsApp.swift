@@ -110,7 +110,7 @@ import CoreData
             #endif
             Persistence.shared = store
             UsageStats.shared.attach(store)
-            store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0) }
+            store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0); ClanReporter.shared.schedule() }
             _store = State(initialValue: store)
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
@@ -126,9 +126,15 @@ import CoreData
                     .modelContainer(store.container).tint(.caveOrange).accentColor(.caveOrange)
                     // Every button taps back; explicit styles use `.hapticButtonStyle(_:)` to keep it.
                     .hapticButtonStyle(.automatic)
-                    .onAppear { appearance.apply() }
+                    .onAppear { appearance.apply(); ClanReporter.shared.attach(store, weights: weights) }
                     .onChange(of: appearance) { _, value in value.apply() }
-                    .onOpenURL { LoggingActionRouter.shared.open(url: $0) }
+                    .onOpenURL { url in
+                        // Clan invites (cavecals.com/join/<CODE> or cavecals://join/<CODE>) open the campfire.
+                        if !ClanRouter.shared.handle(url: url) { LoggingActionRouter.shared.open(url: url) }
+                    }
+                    .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                        if let url = activity.webpageURL { ClanRouter.shared.handle(url: url) }
+                    }
             } else {
                 ContentUnavailableView { Label { Text("Unable to open your data") } icon: { CaveIcon(.warning, size: 48) } } description: { Text(failure ?? "Please try reopening the app.") }
             }

@@ -24,6 +24,8 @@ enum MainSheet: Identifiable {
     /// Home's Protein, Carbs, or Fat: the day's foods and their grams.
     case macros(MacroKind)
     case newMeal, mealEditor(MealRoute), mealCapture(AIInputSheet.Mode), mealImport(RecipeImportSource)
+    /// The campfire: clans, optionally opening an invite's Join page or one clan (from a notification).
+    case clans(joinCode: String?, clanId: String?)
     var id: String {
         switch self {
         case .entry(let draft): "entry-\(draft.id)"
@@ -46,6 +48,7 @@ enum MainSheet: Identifiable {
         case .mealEditor(let route): "meal-editor-\(route.id)"
         case .mealCapture(let mode): "meal-capture-\(mode == .photo ? "photo" : "voice")"
         case .mealImport(let source): "meal-import-\(source.rawValue)"
+        case .clans: "clans"
         }
     }
 }
@@ -140,6 +143,9 @@ struct MainView: View {
         return FoodSearchState()
     }()
     @State private var sheet: MainSheet?
+    @State private var clanStore = ClanStore.shared
+    @State private var clanRouter = ClanRouter.shared
+    @AppStorage(ClanStore.showsStatusKey) private var showsClanStatus = true
     @State private var openedInitially = false
     @State private var focusSearchAfterDismiss = false
     @State private var backgroundedAt: Date?
@@ -202,6 +208,7 @@ struct MainView: View {
                 guard !Task.isCancelled else { return }
                 localSearch.prepare(entries: store.entries, revision: store.entriesRevision)
             }
+            .modifier(ClanHomeHooks(phase: phase, pending: clanRouter.pending, open: openPendingClan))
     }
     private var home: some View {
         NavigationStack {
@@ -395,12 +402,23 @@ struct MainView: View {
                 Image("CaveProgress").renderingMode(.template).resizable().scaledToFit()
                     .frame(width: 25, height: 25).frame(width: 44, height: 44)
             }.accessibilityLabel("Progress").accessibilityIdentifier("progress")
+            Button { sheet = .clans(joinCode: nil, clanId: nil); UsageStats.shared.event("clans.open") } label: {
+                Image("CaveCampfire").renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 25, height: 25).frame(width: 44, height: 44)
+                    .overlay(alignment: .topTrailing) {
+                        if clanStore.unread > 0 { ClanBadge(count: clanStore.unread).offset(x: -1, y: 4) }
+                    }
+            }.accessibilityLabel(clanStore.unread > 0 ? "Clans, \(clanStore.unread) new" : "Clans").accessibilityIdentifier("clans")
             Button { sheet = .settings } label: {
                 CaveIcon(.gear, size: 26).frame(width: 44, height: 44)
             }.accessibilityLabel("Settings").accessibilityIdentifier("appSettings")
         }
         .frame(height: 44)
         .padding(.horizontal, 20).padding(.top, 8)
+        if showsClanStatus, Calendar.current.isDateInToday(selected), let strip = clanStore.stripItem {
+            HomeClanStrip(clan: strip.clan, challenge: strip.challenge) { sheet = .clans(joinCode: nil, clanId: strip.clan.id) }
+                .padding(.horizontal, 20).padding(.top, 2).padding(.bottom, 2)
+        }
         DailySummaryCard(day: selected, calories: store.total(selected), calorieGoal: store.goal(selected),
                          macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
                          macroGoals: store.macroGoals(selected), isVisible: sheet == nil, shown: $summaryFigures,
@@ -522,6 +540,11 @@ struct MainView: View {
         }
         return true
     }
+    /// Invite links and clan notifications open the campfire (over anything else that's open).
+    private func openPendingClan() {
+        guard let request = clanRouter.consume() else { return }
+        sheet = .clans(joinCode: request.joinCode, clanId: request.clanId)
+    }
     private var drawerPresented: Binding<Bool> {
         Binding(get: { sheet != nil }, set: { if !$0 { sheet = nil } })
     }
@@ -561,6 +584,7 @@ struct MainView: View {
             RecipeImportSheet(source: source) { recipe in
                 sheet = .mealEditor(MealRoute(name: recipe.name, items: recipe.items, servings: recipe.servings))
             }
+        case .clans(let joinCode, let clanId): ClansScreen(joinCode: joinCode, openClanId: clanId)
         case nil: EmptyView()
         }
     }
@@ -1610,14 +1634,11 @@ struct DaySelector: View {
                 CaveIcon(.chevronLeft, size: 22).frame(width: 44, height: 44)
             }.hapticButtonStyle(.borderless).hapticFeel(.selection).accessibilityLabel("Previous day")
             Button(action: openCalendar) {
-                HStack(alignment: .firstTextBaseline, spacing: relativeDayName == nil ? 6 : 12) {
-                    Text(relativeDayName ?? fullDateLabel)
-                        .font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
-                    if relativeDayName != nil {
-                        Text(fullDateLabel)
-                            .font(.custom("Schoolbell-Regular", size: 13, relativeTo: .caption))
-                            .foregroundStyle(.secondary)
-                    }
+                // With the campfire in the header there may not be room for "Today" and the date on one line;
+                // then the date sits under "Today" rather than shrinking or cutting off.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: relativeDayName == nil ? 6 : 12) { dayName; smallDate }
+                    VStack(alignment: .leading, spacing: -3) { dayName; smallDate }
                 }
                 .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.center)
                 // Today's wider label sits closer to the chevrons.
@@ -1630,6 +1651,14 @@ struct DaySelector: View {
                 CaveIcon(.chevronRight, size: 22).frame(width: 44, height: 44)
             }.hapticButtonStyle(.borderless).hapticFeel(.selection).accessibilityLabel("Next day")
                 .disabled(Calendar.current.startOfDay(for: selected) >= Calendar.current.startOfDay(for: today))
+        }
+    }
+    private var dayName: some View {
+        Text(relativeDayName ?? fullDateLabel).font(.custom("Schoolbell-Regular", size: 18, relativeTo: .subheadline))
+    }
+    @ViewBuilder private var smallDate: some View {
+        if relativeDayName != nil {
+            Text(fullDateLabel).font(.custom("Schoolbell-Regular", size: 13, relativeTo: .caption)).foregroundStyle(.secondary)
         }
     }
     /// Only the current day gets the "Today" label beside its full date.
