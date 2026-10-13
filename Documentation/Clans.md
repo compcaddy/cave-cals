@@ -1,6 +1,6 @@
 # Clans
 
-Design draft, October 13, 2026. **Nothing is built yet.** This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
+Design October 13, 2026; the backend is built on branch `clans` (not deployed; tables only on the `clans-dev` Neon branch). The app side is in progress. This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
 
 ## The idea
 
@@ -17,7 +17,7 @@ Everything lives behind a new **campfire** icon in the Home header. The rest of 
   - Google's sign-in provides the person's name and profile photo, which fill in their clan profile.
   - Apple provides the name only on the first sign-in, and no photo.
   - Google sign-in shows Google's normal page in the system sign-in window (`ASWebAuthenticationSession` with PKCE). Google's own SDK uses the same window, so leaving the SDK out changes nothing people see and keeps the app lighter.
-  - Google needs an iOS OAuth client ID (no secret) and a Web client ID that the server uses to verify sign-ins. Both are free in Google Cloud Console.
+  - Google needs one iOS OAuth client ID (free in Google Cloud Console, no secret). The app signs in with it, and the server accepts tokens made for it (`GOOGLE_CLIENT_IDS`).
 - **Profile:**
   - Display name, defaulting to the first name from sign-in and editable.
   - Photo: picked from Photos or taken with the camera, then dragged and pinched inside a circle. Uploaded as 512 px, re-encoded so no location or other metadata remains (the same approach as Progress Photos), and stored in private Vercel Blob. Only clanmates can see it. A Google sign-in uses the Google photo until the person changes it; anyone without a photo shows initials.
@@ -60,7 +60,7 @@ It never includes calories, the goal number, foods, or weight. The server comput
 - **Full day:** the phone works this out with Progress's complete-day rule (`ProgressData.completeShare`):
   - With a goal: at least 70% of it logged.
   - Without a goal: 70% of their usual completed day.
-- **On target:** a full day that's also inside the rule's range (`OnTargetRule`: at or under, within X%, or up to N over).
+- **On target:** a full day that's also inside the clan's range: at or under the goal, within X% of it, or up to X% over it (`clanRuleSchema` in `backend/src/server/clan-rules.ts`). Progress's "up to 100 calories over" becomes "up to 5% over" here, because the server only ever sees percentages, never calories.
 - **People without a goal:** they can earn logged and full-day marks, but not on-target ones.
 
 ## Accountability (clan setting, admins switch it)
@@ -170,8 +170,8 @@ There's **one active challenge per clan**. The database allows several, so that 
 ## Setup checklist (owner)
 
 1. Apple Developer: add Sign in with Apple and Associated Domains to `com.philstarkovich.cavecals`, create a Sign in with Apple key (for token revocation), and an APNs key. Decide whether the Dev app ID gets its own sign-in and push capabilities so Dev can test.
-2. Google Cloud Console: set up the OAuth consent screen, then create an iOS client ID and a Web client ID.
-3. Vercel: the current Pro plan already covers the 15-minute cron. Add the new environment variables (APNs key, Sign in with Apple key, Google client IDs).
+2. Google Cloud Console: set up the OAuth consent screen (app name, support email, scopes openid/email/profile), then create an **iOS** OAuth client ID for `com.philstarkovich.cavecals`.
+3. Vercel: the current Pro plan already covers the 15-minute cron. Add the new environment variables: `GOOGLE_CLIENT_IDS`, `APPLE_SIGNIN_KEY_ID` + `APPLE_SIGNIN_PRIVATE_KEY` (Sign in with Apple key, for revoking at deletion), `CLAN_TOKEN_KEY` (32 random bytes, base64, encrypts stored Apple tokens), and `APNS_KEY_ID` + `APNS_KEY` (push).
 4. Neon: create a dev branch.
 5. App Store Connect: update the age rating questionnaire (user-generated content) and the privacy details (name, photo, user ID, email from sign-in, and the fitness data linked to an account). Claude will update the privacy policy and terms.
 
@@ -195,3 +195,14 @@ There's **one active challenge per clan**. The database allows several, so that 
 ## Later
 
 Chat (with moderation), public clans, coach dashboards, several challenges at once, referrals ("Give a Friend a Premium Pass"), and a clan widget.
+
+## Built so far (backend)
+
+- **Tables:** `drizzle/0005_clans.sql` (13 new tables, nothing existing changes), applied only to the `clans-dev` Neon branch (`br-snowy-firefly-ax06ipux`). The worktree's `.env.development.local` points there.
+- **Server:** `backend/src/server/clan-*.ts`.
+  - `clan-rules` holds the pure scoring: locks, made days, accountability cells, every challenge type, and invite codes.
+  - `clan-auth` verifies Apple and Google tokens, runs sessions, and seals and revokes Apple tokens.
+  - `clan-api` holds the routes, `clan-board` the boards and members as each viewer sees them, `clan-jobs` the cron, `clan-push` APNs and alerts, `clan-photos` photos, and `clan-names` the name filter.
+- **Routes:** `POST /api/v1/clan/auth/signin` is App Attest–verified like other paid routes; owner test access and local development work too. Every other `POST /api/v1/clan/...` route uses the `x-clan-session` header. Photos are at `GET /api/v1/clan-photo/<id>`. The cron is `GET /api/cron/clans`, every 15 minutes. There's also `/join/<CODE>`, `/.well-known/apple-app-site-association`, and `/admin/reports`.
+- **Tests:** `backend-tests/clan-rules.test.ts` and `clan-auth.test.ts` (unit), and `backend-tests/integration/clans.test.ts` (against clans-dev: `NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`).
+- **Local development sign-in:** provider `dev` with a `devSubject`, on localhost with `DEV_API_TOKEN` only.

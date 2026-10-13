@@ -16,6 +16,8 @@ import { statsInput, recordStats, recordServerError } from './stats';
 import { checkDiscountCode, discountCheckInput } from './discount-codes';
 import { coach, coachInput, coachTips } from './coach';
 import { waitUntil } from '@vercel/functions';
+import { clanAPI, MAX_PHOTO_BODY } from './clan-api';
+import { signIn, signInInput } from './clan-auth';
 const nonceSchema = z.string().min(1).max(200);
 const keySchema = z.string().min(1).max(200);
 // One source per recipe import. `wholeRecipe` asks a link import for the full batch plus its serving count;
@@ -29,7 +31,7 @@ export async function api(request: Request, path: string): Promise<Response> {
   try {
     if (request.method !== 'POST') throw new APIError(405, 'method', 'Use POST.');
     if (!request.headers.get('content-type')?.startsWith('application/json')) throw new APIError(415, 'content_type', 'Use application/json.');
-    const raw = (await readLimited(request, path === 'foods/search' || path === 'discount/check' ? 1024 : path === 'stats' || path === 'meal/import' ? 256 * 1024 : 64 * 1024)).toString('utf8');
+    const raw = (await readLimited(request, path === 'foods/search' || path === 'discount/check' ? 1024 : path === 'clan/me/photo' ? MAX_PHOTO_BODY + 1024 : path === 'stats' || path === 'meal/import' ? 256 * 1024 : 64 * 1024)).toString('utf8');
     let body: unknown;
     try { body = JSON.parse(raw); } catch { throw new APIError(400, 'invalid_json', 'Invalid request.'); }
     const ok = (value: unknown) => Response.json(value, { headers: { 'Cache-Control':'no-store' } });
@@ -63,6 +65,10 @@ export async function api(request: Request, path: string): Promise<Response> {
       await applyNotification(signedPayload);
       return ok({ received: true });
     }
+    if (path.startsWith('clan/') && path !== 'clan/auth/signin') {
+      // Clan routes use the session from a verified sign-in rather than signing every request.
+      return ok(await clanAPI(request, path, body));
+    }
     const { nonce } = z.object({ nonce: nonceSchema }).parse(body);
     let identity;
     if (request.headers.get('x-cave-owner-test') === '1') {
@@ -85,6 +91,9 @@ export async function api(request: Request, path: string): Promise<Response> {
       // Only attested installs keep an install key; developer and owner-test identities are shared.
       const trialKey = wantsTrialKey && !identity.development && identity.keyId !== OWNER_TEST_KEY ? await issueTrialKey(identity) : undefined;
       return ok({ accountId: identity.accountId, ...membership, ...access, productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300), ...(trialKey ? { trialKey } : {}) });
+    }
+    if (path === 'clan/auth/signin') {
+      return ok(await signIn(identity, signInInput.parse(body)));
     }
     if (path === 'purchase/verify') {
       const input = z.object({ signedTransaction: z.string().min(1).max(50000) }).parse(body);

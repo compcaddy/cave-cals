@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, index, boolean, date, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, timestamp, jsonb, index, uniqueIndex, boolean, date, primaryKey } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 export const accounts = pgTable('ai_accounts', {
   id: uuid('id').primaryKey(),
   scansUsed: integer('scans_used').notNull().default(0),
@@ -125,3 +126,159 @@ export const discountCodeDaily = pgTable('discount_code_daily', {
   storeTaps: integer('store_taps').notNull().default(0),
   applies: integer('applies').notNull().default(0),
 }, t => [primaryKey({ columns: [t.code, t.day] })]);
+
+// Clans (Documentation/Clans.md). People sign in with Apple or Google only to use clans. The diary never
+// reaches the server: each phone sends one small report per day (logged, full day, % of goal).
+export const clanPeople = pgTable('clan_people', {
+  id: uuid('id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  // The current profile photo (512-px JPEG in private storage); null shows initials.
+  photoId: uuid('photo_id'),
+  birthYear: integer('birth_year'),
+  birthMonth: integer('birth_month'),
+  // IANA zone from the latest daily report; days lock at 9 AM here.
+  timeZone: text('time_zone').notNull().default('America/Los_Angeles'),
+  // Alert kinds turned off in Settings → Clans ({ "nudge": false, … }).
+  alertPrefs: jsonb('alert_prefs').notNull().default({}),
+  // The local day the 7 PM "fire going out" alert last went out, so it goes once a day.
+  eveningAlertOn: date('evening_alert_on'),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+export const clanIdentities = pgTable('clan_identities', {
+  provider: text('provider').notNull(), // apple | google | dev
+  subject: text('subject').notNull(),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  // Encrypted Apple refresh token, revoked when the clan account is deleted (Apple requires it).
+  appleRefreshToken: text('apple_refresh_token'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.provider, t.subject] }), index('clan_identities_person_idx').on(t.personId)]);
+export const clanSessions = pgTable('clan_sessions', {
+  // SHA-256 of the random session token the app keeps in its Keychain.
+  tokenHash: text('token_hash').primaryKey(),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  // The signing-in iPhone's AI account, used to check Cave Cals+ for clans of three or more.
+  accountId: uuid('account_id'),
+  // Local development and private test access decide Cave Cals+ themselves instead of Apple.
+  membershipOverride: boolean('membership_override'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => [index('clan_sessions_person_idx').on(t.personId)]);
+export const clanPushTokens = pgTable('clan_push_tokens', {
+  token: text('token').primaryKey(),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  environment: text('environment').notNull(), // sandbox | production
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [index('clan_push_tokens_person_idx').on(t.personId)]);
+export const clans = pgTable('clans', {
+  id: uuid('id').primaryKey(),
+  name: text('name').notNull(),
+  inviteCode: text('invite_code').notNull().unique(),
+  accountability: text('accountability').notNull().default('off'), // off | logged | percent
+  // What "on target" means here ({ kind: atOrUnder | withinPercent | upToPercentOver, percent }).
+  rule: jsonb('rule').notNull().default({ kind: 'atOrUnder', percent: 5 }),
+  ruleChoice: text('rule_choice').notNull().default('clan'), // clan | member
+  bestStreak: integer('best_streak').notNull().default(0),
+  createdBy: uuid('created_by').references(() => clanPeople.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+export const clanMembers = pgTable('clan_members', {
+  id: uuid('id').primaryKey(),
+  clanId: uuid('clan_id').notNull().references(() => clans.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('member'), // owner | admin | member
+  // Shown as "Cave person N" with no photo; admins can't see through it.
+  anonymous: boolean('anonymous').notNull().default(false),
+  anonNumber: integer('anon_number'),
+  muted: boolean('muted').notNull().default(false),
+  // The member's own on-target rule, when the clan lets members choose.
+  rule: jsonb('rule'),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  leftAt: timestamp('left_at', { withTimezone: true }),
+  removedBy: uuid('removed_by'),
+}, t => [
+  index('clan_members_clan_idx').on(t.clanId), index('clan_members_person_idx').on(t.personId),
+  uniqueIndex('clan_members_active_idx').on(t.clanId, t.personId).where(sql`${t.leftAt} is null`),
+]);
+// One report per person and local day, shared by all of their clans. Locked days never change.
+export const clanDays = pgTable('clan_days', {
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  day: date('day').notNull(),
+  logged: boolean('logged').notNull(),
+  fullDay: boolean('full_day').notNull(),
+  // Calories as a whole % of the person's goal; null without a goal. Never calories or the goal itself.
+  percentOfGoal: integer('percent_of_goal'),
+  // The goal is at least 1,200 (women) / 1,500 (men); lower goals can't earn on-target days.
+  goalOk: boolean('goal_ok').notNull(),
+  doneEating: boolean('done_eating').notNull().default(false),
+  reportedAt: timestamp('reported_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.personId, t.day] })]);
+export const clanChallenges = pgTable('clan_challenges', {
+  id: uuid('id').primaryKey(),
+  clanId: uuid('clan_id').notNull().references(() => clans.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), // loggingDays | onTargetDays | teamTotal | survivor | streak | weightLoss
+  // Type-specific rules: basis, anyFood, rule, streak mode/percent, team target, survivor ending.
+  settings: jsonb('settings').notNull().default({}),
+  savesCount: integer('saves_count').notNull().default(0),
+  savesPeriod: text('saves_period').notNull().default('challenge'), // week | month | challenge
+  startsOn: date('starts_on').notNull(),
+  // Null while open-ended (streaks, open Survivor).
+  endsOn: date('ends_on'),
+  status: text('status').notNull().default('upcoming'), // upcoming | active | ended | canceled
+  result: jsonb('result'),
+  evaluatedAt: timestamp('evaluated_at', { withTimezone: true }),
+  createdBy: uuid('created_by').references(() => clanPeople.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+}, t => [index('clan_challenges_clan_idx').on(t.clanId, t.status)]);
+export const clanEntrants = pgTable('clan_entrants', {
+  challengeId: uuid('challenge_id').notNull().references(() => clanChallenges.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('in'), // in | out | left
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  leftOn: date('left_on'),
+  outOn: date('out_on'),
+  // Cached by the last evaluation, for lists and the Home strip.
+  points: integer('points').notNull().default(0),
+  livesLeft: integer('lives_left'),
+  rank: integer('rank'),
+  // Weight challenges: only percentages from the phone ({ startReady, changePct, finalPct, endReady }).
+  weight: jsonb('weight'),
+}, t => [primaryKey({ columns: [t.challengeId, t.personId] }), index('clan_entrants_person_idx').on(t.personId)]);
+export const clanAlerts = pgTable('clan_alerts', {
+  id: uuid('id').primaryKey(),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  clanId: uuid('clan_id').references(() => clans.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  payload: jsonb('payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }),
+}, t => [index('clan_alerts_person_idx').on(t.personId, t.readAt)]);
+// One nudge (or cheer) per sender, person, and day.
+export const clanNudges = pgTable('clan_nudges', {
+  fromId: uuid('from_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  toId: uuid('to_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  clanId: uuid('clan_id').notNull().references(() => clans.id, { onDelete: 'cascade' }),
+  day: date('day').notNull(),
+  kind: text('kind').notNull(), // nudge | cheer
+}, t => [primaryKey({ columns: [t.fromId, t.toId, t.day, t.kind] })]);
+export const clanBlocks = pgTable('clan_blocks', {
+  blockerId: uuid('blocker_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  blockedId: uuid('blocked_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.blockerId, t.blockedId] })]);
+// Reported names and photos, handled by the owner on /admin/reports.
+export const clanReports = pgTable('clan_reports', {
+  id: uuid('id').primaryKey(),
+  reporterId: uuid('reporter_id').references(() => clanPeople.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull(), // name | photo | clanName
+  targetPersonId: uuid('target_person_id').references(() => clanPeople.id, { onDelete: 'set null' }),
+  targetClanId: uuid('target_clan_id').references(() => clans.id, { onDelete: 'set null' }),
+  // What was reported, as it was then (the name, or the photo's ID).
+  snapshot: text('snapshot').notNull(),
+  reason: text('reason').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolution: text('resolution'),
+}, t => [index('clan_reports_open_idx').on(t.resolvedAt, t.createdAt)]);

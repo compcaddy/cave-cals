@@ -87,6 +87,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <Link className={`pill${all ? ' on' : ''}`} href="/admin?env=all">All builds</Link>
         <Link className="pill" href={`/admin/errors${query}`}>Errors · {n(errors7)} this week</Link>
         <Link className="pill" href={`/admin/codes${query}`}>Discount codes</Link>
+        <Link className="pill" href="/admin/reports">Clan reports</Link>
       </nav>
     </header>
 

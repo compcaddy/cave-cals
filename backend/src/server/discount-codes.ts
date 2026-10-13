@@ -29,7 +29,7 @@ export function linkCode(segment: string) {
 }
 /** Names the site uses, or may use, for its own pages. The admin form refuses them as codes. */
 export const RESERVED_CODES = new Set([
-  'ADMIN', 'API', 'APP', 'APPS', 'BLOG', 'BRAND', 'DOWNLOAD', 'FAVICON', 'HELP', 'HOME', 'LOGIN', 'PRIVACY',
+  'ADMIN', 'API', 'APP', 'APPS', 'BLOG', 'BRAND', 'DOWNLOAD', 'FAVICON', 'HELP', 'HOME', 'JOIN', 'LOGIN', 'PRIVACY',
   'ROBOTS', 'SCREENSHOTS', 'SITEMAP', 'STATS', 'SUPPORT', 'TERMS', 'TEST',
 ]);
 
