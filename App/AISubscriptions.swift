@@ -10,38 +10,8 @@ import RevenueCatUI
     var busy = false
     var message: String?
     var messageIsError = false
-    /// A saved code must never silently fall back to regular prices when its offering is unavailable.
+    /// RevenueCat's current offering. In-app discount codes were removed October 13, 2026 (App Review, 3.1.1).
     var offering: Offering?
-    private(set) var offerings: Offerings?
-    /// The discount code applied on this iPhone (`DiscountCodes`), kept for every paywall.
-    private(set) var discount: AppliedDiscount? = DiscountCodes.applied
-
-    /// Saves (or clears) a discount code and switches the paywall to its prices.
-    func apply(_ discount: AppliedDiscount?) {
-        DiscountCodes.applied = discount
-        selectOffering()
-    }
-    private func selectOffering() {
-        discount = DiscountCodes.applied
-        offering = Self.selectedOffering(discount: discount, all: offerings?.all ?? [:], current: offerings?.current)
-    }
-    static func selectedOffering(discount: AppliedDiscount?, all: [String: Offering], current: Offering?) -> Offering? {
-        if let discount { return all[discount.offering] }
-        return current
-    }
-    /// "$29.99 a year instead of $59.99" for each plan in a code's offering, against the regular offering.
-    func priceComparison(for offeringID: String) -> [String] {
-        guard let deal = offerings?.offering(identifier: offeringID) else { return [] }
-        let regular = offerings?.current
-        let plans: [(Offering) -> Package?] = [{ $0.annual }, { $0.monthly }]
-        return zip(plans, ["year", "month"]).compactMap { plan, unit in
-            guard let price = plan(deal)?.storeProduct else { return nil }
-            if let normal = regular.flatMap(plan)?.storeProduct, normal.price > price.price {
-                return "\(price.localizedPriceString) a \(unit) instead of \(normal.localizedPriceString)"
-            }
-            return "\(price.localizedPriceString) a \(unit)"
-        }
-    }
 
     private func connectRevenueCat() async {
         guard !AppEnvironment.isDevelopment, let account else { return }
@@ -54,8 +24,7 @@ import RevenueCatUI
         } else if Purchases.shared.appUserID != userID {
             _ = try? await Purchases.shared.logIn(userID)
         }
-        offerings = try? await Purchases.shared.offerings()
-        selectOffering()
+        offering = try? await Purchases.shared.offerings().current
     }
     func refresh(regularLogCount: Int = 0) async {
         guard !busy else { return }
@@ -63,7 +32,7 @@ import RevenueCatUI
         do {
             account = try await AIBackend.shared.status(regularLogCount: regularLogCount)
             if AppEnvironment.isDevelopment {
-                products = []; trialEligible = []; offerings = nil; offering = nil
+                products = []; trialEligible = []; offering = nil
                 message = "Purchases are disabled in Cave Cals Dev. Use Developer settings for private AI test access."
                 messageIsError = false
                 return
@@ -87,8 +56,7 @@ import RevenueCatUI
                 }
             }
             await connectRevenueCat()
-            message = discount != nil && offering == nil ? "Your code is saved, but its prices couldn’t load. Please try again." : nil
-            messageIsError = message != nil
+            message = nil; messageIsError = false
             if let account { UsageStats.shared.noteMembership(account.active) }
         } catch {
             message = error.localizedDescription
@@ -175,18 +143,17 @@ import RevenueCatUI
 }
 
 /// Reports one showing of the paywall and how it ended, whichever way the screen goes away.
-/// `code` is the discount code applied at the time, if any.
 @MainActor final class PaywallStatsReport {
     private var shown = false, finished = false
-    func show(_ trigger: PaywallTrigger, code: String? = nil) {
+    func show(_ trigger: PaywallTrigger) {
         guard !shown else { return }
         shown = true
-        UsageStats.shared.paywallShown(trigger, code: code)
+        UsageStats.shared.paywallShown(trigger)
     }
-    func finish(_ trigger: PaywallTrigger, _ result: String, product: String? = nil, code: String? = nil) {
+    func finish(_ trigger: PaywallTrigger, _ result: String, product: String? = nil) {
         guard shown, !finished else { return }
         finished = true
-        UsageStats.shared.paywallResult(trigger, result, product: product, code: code)
+        UsageStats.shared.paywallResult(trigger, result, product: product)
     }
 }
 
@@ -194,15 +161,10 @@ struct AIUpgradePaywall: View {
     let subscriptions: AISubscriptions
     /// What put the paywall on screen, for the stats.
     let trigger: PaywallTrigger
-    /// "Have a code?" under the paywall. Off right after setup, which has just asked for one.
-    var offersCodeEntry = true
     var onAccessGranted: () -> Void = {}
     let onDismissRequested: () -> Void
     @State private var dismissalGate = PaywallDismissalGate()
     @State private var report = PaywallStatsReport()
-    @State private var enteringCode = false
-    @State private var codeJustApplied = false
-    @State private var confetti = 0
 
     var body: some View {
         Group {
@@ -215,36 +177,29 @@ struct AIUpgradePaywall: View {
                     let trial = subscriptions.trialEligible.contains(product.id)
                     let result = await subscriptions.buy(product)
                     if result.error == nil && !result.userCancelled && subscriptions.account?.active == true {
-                        report.finish(trigger, trial ? "trial" : "purchased", product: product.id, code: subscriptions.discount?.code)
+                        report.finish(trigger, trial ? "trial" : "purchased", product: product.id)
                         grantAccessAndDismiss()
                     }
                     return result
                 }, performRestore: {
                     let result = await subscriptions.restore()
                     if result.success {
-                        report.finish(trigger, "restored", code: subscriptions.discount?.code)
+                        report.finish(trigger, "restored")
                         grantAccessAndDismiss()
                     }
                     return result
                 })
                 .onRequestedDismissal { requestDismissal() }
-                // Applying a code swaps in its offering, so the paywall starts over with the new prices.
-                .id(offering.identifier)
-                .safeAreaInset(edge: .bottom, spacing: 0) { codeBar }
             } else {
                 ContentUnavailableView {
                     Label { Text("Subscriptions unavailable") } icon: { CaveIcon(.warning, size: 48) }
                 } description: {
-                    Text(AppEnvironment.isDevelopment ? "Purchases are disabled in Cave Cals Dev. Private AI test access is configured in Developer settings." : subscriptions.discount != nil ? "Your code is saved, but its prices couldn’t load. Please try again." : "Please close this screen and try again.")
+                    Text(AppEnvironment.isDevelopment ? "Purchases are disabled in Cave Cals Dev. Private AI test access is configured in Developer settings." : "Please close this screen and try again.")
                 } actions: {
                     if !AppEnvironment.isDevelopment {
                         Button("Try Again") { Task { await subscriptions.refresh() } }
                             .hapticButtonStyle(.bordered)
                             .disabled(subscriptions.busy)
-                        if subscriptions.discount != nil {
-                            Button("Edit code") { enteringCode = true }
-                                .hapticButtonStyle(.plain)
-                        }
                     }
                     Button("Close") { requestDismissal() }
                 }
@@ -252,34 +207,8 @@ struct AIUpgradePaywall: View {
         }
         .accessibilityIdentifier("aiUpgradePaywall")
         .navigationBarBackButtonHidden(true)
-        .sheet(isPresented: $enteringCode, onDismiss: {
-            if codeJustApplied { codeJustApplied = false; confetti += 1 }
-        }) { DiscountCodeSheet(subscriptions: subscriptions) { codeJustApplied = true } }
-        // Confetti once the code sheet has closed on a code that works.
-        .overlay { ConfettiBurst(trigger: confetti) }
-        .onAppear { report.show(trigger, code: subscriptions.discount?.code) }
-        .onDisappear { report.finish(trigger, subscriptions.offering == nil ? "unavailable" : "closed", code: subscriptions.discount?.code) }
-    }
-
-    /// Under the paywall: the applied code, or "Have a code?" to apply one.
-    @ViewBuilder private var codeBar: some View {
-        if let discount = subscriptions.discount {
-            Text("Code \(discount.code) applied · \(discount.deal)")
-                .font(.cave(.footnote)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background(Color.caveBackground)
-                .accessibilityIdentifier("paywallDiscountApplied")
-        } else if offersCodeEntry {
-            Button("Have a code?") { enteringCode = true }
-                .font(.cave(.footnote))
-                .foregroundStyle(Color.caveOrange)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Color.caveBackground)
-                .hapticButtonStyle(.plain)
-                .accessibilityIdentifier("haveDiscountCode")
-        }
+        .onAppear { report.show(trigger) }
+        .onDisappear { report.finish(trigger, subscriptions.offering == nil ? "unavailable" : "closed") }
     }
 
     private func grantAccessAndDismiss() {
@@ -294,7 +223,7 @@ struct AIUpgradePaywall: View {
     }
 }
 
-/// Setup is already saved. "Where did you hear about Cave Cals?" (with its discount code box) comes first while
+/// Setup is already saved. "Where did you hear about Cave Cals?" comes first while
 /// Cave Cals+ loads behind it, then the offer. Neither may block access to the diary.
 struct OnboardingUpgradeView: View {
     @Environment(AppStore.self) private var store
@@ -308,12 +237,12 @@ struct OnboardingUpgradeView: View {
         NavigationStack {
             Group {
                 if askingSource {
-                    DiscoverySourceView(subscriptions: subscriptions) { sourceAnswered() }
+                    DiscoverySourceView { sourceAnswered() }
                 } else if loading {
                     ProgressView("Loading Cave Cals+…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    AIUpgradePaywall(subscriptions: subscriptions, trigger: .onboarding, offersCodeEntry: false, onDismissRequested: finish)
+                    AIUpgradePaywall(subscriptions: subscriptions, trigger: .onboarding, onDismissRequested: finish)
                 }
             }
             .caveScreenBackground()
@@ -453,7 +382,7 @@ struct AISubscriptionSection: View {
                     .frame(maxWidth: .infinity, minHeight: 34)
             }
             .hapticButtonStyle(.borderedProminent)
-            .disabled(subscriptions.offering == nil && subscriptions.discount == nil)
+            .disabled(subscriptions.offering == nil)
             .accessibilityIdentifier("aiPaywall")
         }
     }

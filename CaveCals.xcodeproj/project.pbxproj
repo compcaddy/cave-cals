@@ -76,7 +76,7 @@
 		AACC33000000000000000001 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AACC33000000000000000002 /* LaunchScreen.storyboard */; };
 		AAF81CC4A0C4E19FFA7D4C4D /* ProgressUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA3F6E00A55D7664763702B /* ProgressUITests.swift */; };
 		ABA9E9C24F2F908529AA1276 /* CaveIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EC6918516005A73F3528519C /* CaveIcons.xcassets */; };
-		AD2A1EB16D14400B8006E25E /* DiscountCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF4E44024CB3B809F65AB68 /* DiscountCodes.swift */; };
+		AD2A1EB16D14400B8006E25E /* DiscoverySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF4E44024CB3B809F65AB68 /* DiscoverySource.swift */; };
 		B0A43FF4A39D1FB941B4B6D8 /* ReviewPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CABEA2E2D6852DA73701A87 /* ReviewPrompt.swift */; };
 		B41247EC91065AF23F421734 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 06D20150EE354567305B2E08 /* PrivacyInfo.xcprivacy */; };
 		B5D1E0C7A3F24E8B9C6D7E01 /* RecipeImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D1E0C7A3F24E8B9C6D7E02 /* RecipeImport.swift */; };
@@ -93,7 +93,7 @@
 		F630A3BB15EECFC6C9AB4D58 /* WeightHealthExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8E343231ED893C00899A04 /* WeightHealthExporter.swift */; };
 		F6EBDF603D5065461DEFD5EA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 478C002A46CD3337FA7531CC /* RevenueCat */; };
 		F7E222213BDE0B50CD1DA2ED /* AIDeveloperSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E7486514F9CFE0D95E4D4D /* AIDeveloperSettings.swift */; };
-		FB9A6CFCBE28CBFBFC28AC87 /* DiscountCodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE16C368D0C11491E897FFD /* DiscountCodeTests.swift */; };
+		FB9A6CFCBE28CBFBFC28AC87 /* DiscoverySourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE16C368D0C11491E897FFD /* DiscoverySourceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -159,7 +159,7 @@
 		345473C621200A1AD33FA755 /* ECCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ECCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		363F8FBA43CEF7123EFB0E8A /* ProgressTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProgressTests.swift; sourceTree = "<group>"; };
 		39E7847333FE9D2822D18768 /* AIBackend.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIBackend.swift; sourceTree = "<group>"; };
-		4FF4E44024CB3B809F65AB68 /* DiscountCodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscountCodes.swift; sourceTree = "<group>"; };
+		4FF4E44024CB3B809F65AB68 /* DiscoverySource.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscoverySource.swift; sourceTree = "<group>"; };
 		52B8D5B21AD199DF63CFA41D /* MealTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MealTypes.swift; sourceTree = "<group>"; };
 		541DCC8CF6D2160AB5060220 /* BarcodeScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScanner.swift; sourceTree = "<group>"; };
 		581ECFEB8543B8F07F457C75 /* ECCUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ECCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -206,7 +206,7 @@
 		D262B99BD0EC759215AA3C57 /* ECCUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ECCUITests.swift; sourceTree = "<group>"; };
 		D6510E630A9A2794DA97996A /* DevIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DevIsolationTests.swift; sourceTree = "<group>"; };
 		DC0A76AB61AB9ACE6EF609D4 /* MainView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		DCE16C368D0C11491E897FFD /* DiscountCodeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscountCodeTests.swift; sourceTree = "<group>"; };
+		DCE16C368D0C11491E897FFD /* DiscoverySourceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscoverySourceTests.swift; sourceTree = "<group>"; };
 		EC0AFCDD73301B52CE28D526 /* CaloriePlan.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaloriePlan.swift; sourceTree = "<group>"; };
 		EC6918516005A73F3528519C /* CaveIcons.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = CaveIcons.xcassets; sourceTree = "<group>"; };
 		ED838F9E51F472699ADB73F0 /* ProgressPrint.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProgressPrint.swift; sourceTree = "<group>"; };
@@ -333,7 +333,7 @@
 				363F8FBA43CEF7123EFB0E8A /* ProgressTests.swift */,
 				FB68A8DC780AC676E8446AC6 /* ProgressPhotoTests.swift */,
 				B8801058ADB1E81962DF0EB2 /* MealTypeTests.swift */,
-				DCE16C368D0C11491E897FFD /* DiscountCodeTests.swift */,
+				DCE16C368D0C11491E897FFD /* DiscoverySourceTests.swift */,
 				7ED9DDA0ED932BBCAEF958EB /* UsageStatsTests.swift */,
 				D6510E630A9A2794DA97996A /* DevIsolationTests.swift */,
 			);
@@ -386,7 +386,7 @@
 				A7C3E1F20B4D5E6F7A8B9C02 /* WelcomeScanAnimation.swift */,
 				A7C3E1F20B4D5E6F7A8B9C04 /* KeyboardDismissal.swift */,
 				B5D1E0C7A3F24E8B9C6D7E02 /* RecipeImport.swift */,
-				4FF4E44024CB3B809F65AB68 /* DiscountCodes.swift */,
+				4FF4E44024CB3B809F65AB68 /* DiscoverySource.swift */,
 				323C3741C63ADCA956F7D8EF /* MealTypeViews.swift */,
 				52B8D5B21AD199DF63CFA41D /* MealTypes.swift */,
 				AB9BD67CF8C9F966E17DE7B0 /* ProgressPhotos.swift */,
@@ -616,7 +616,7 @@
 				A7C3E1F20B4D5E6F7A8B9C01 /* WelcomeScanAnimation.swift in Sources */,
 				A7C3E1F20B4D5E6F7A8B9C03 /* KeyboardDismissal.swift in Sources */,
 				B5D1E0C7A3F24E8B9C6D7E01 /* RecipeImport.swift in Sources */,
-				AD2A1EB16D14400B8006E25E /* DiscountCodes.swift in Sources */,
+				AD2A1EB16D14400B8006E25E /* DiscoverySource.swift in Sources */,
 				1844B1B39D17079FBBDFBA1B /* MealTypeViews.swift in Sources */,
 				C3A6BB7EC7B3FD268CDA8B86 /* MealTypes.swift in Sources */,
 				94E7EBCBCC7B45730C5CFD7D /* ProgressPhotos.swift in Sources */,
@@ -654,7 +654,7 @@
 				7ABABBE8169B1D0FA8E59A82 /* ProgressTests.swift in Sources */,
 				978F85E6B87910D0D146A5E3 /* ProgressPhotoTests.swift in Sources */,
 				730CC8D7F1C4BD2193C6BE81 /* MealTypeTests.swift in Sources */,
-				FB9A6CFCBE28CBFBFC28AC87 /* DiscountCodeTests.swift in Sources */,
+				FB9A6CFCBE28CBFBFC28AC87 /* DiscoverySourceTests.swift in Sources */,
 				E1879AAEAC2E61367077009A /* UsageStatsTests.swift in Sources */,
 				644A4D7AD0C7EA1BB19F397D /* DevIsolationTests.swift in Sources */,
 			);
@@ -704,7 +704,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -734,7 +734,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCals.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -768,7 +768,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -798,7 +798,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -822,7 +822,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -847,7 +847,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidgetDev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -883,7 +883,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCalsDev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -921,7 +921,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCalsDev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -954,7 +954,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -982,7 +982,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = App/CaveCals.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -1014,7 +1014,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -1038,7 +1038,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -1127,7 +1127,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidgetDev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -1159,7 +1159,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -1238,7 +1238,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
@@ -1385,7 +1385,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/QuickLogWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J877QX85N5;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Widgets/Info.plist;

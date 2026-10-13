@@ -21,6 +21,7 @@ enum DevTestData {
                 try clearContents(of: url, using: files)
             }
         }
+        // A discount code saved by builds before October 13, 2026, when in-app codes were removed.
         try KeychainValue.save(nil, key: "discount.code.v1")
         // Keep developer connection/access credentials; resetting a diary must not reset server quotas.
         let connection = defaults.string(forKey: "ai.debug.url")

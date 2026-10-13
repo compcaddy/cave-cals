@@ -6,12 +6,8 @@ Settings (gear icon on Home) > Apple Health, marked with the Apple Health icon a
 FIRST LAUNCH
 Setup is optional: choose Build Plan or Just start tracking. Plans support loss, maintenance, or gain. Targets and AI results are estimates, not medical advice. The post-setup subscription offer can be closed without purchasing.
 
-DISCOUNT SUBSCRIPTIONS / APPLEREVIEW
-Please review the new monthly and yearly discount subscriptions with this version:
-com.philstarkovich.cavecals.ai.monthly.discount
-com.philstarkovich.cavecals.ai.yearly.discount
-They unlock the same Cave Cals+ features as the regular plans.
-To see them, open Settings (gear icon) > the Cave Cals+ card > Have a code?, enter APPLEREVIEW, and tap Apply. Alternatively, after setup, choose Social media on Where did you hear about Cave Cals?, enter APPLEREVIEW, Apply, then Continue. The paywall uses the discount plans after the code is applied. Monthly has a 3-day trial and yearly a 7-day trial for eligible subscribers. Local StoreKit prices and renewal terms appear before purchase. Restore purchases is available on the paywall and in the subscription area. No external payment is used.
+SUBSCRIPTIONS (GUIDELINE 3.1.1)
+Build 3 removes all in-app promo/discount code entry, as requested. The discount subscriptions are no longer part of this submission. Cave Cals+ is sold only through the regular monthly and yearly In-App Purchase subscriptions, with Apple introductory offers for eligible new subscribers; the paywall shows the introductory price, its length, and the renewal price. "Where did you hear about Cave Cals?" after setup is a survey for our own stats; no answer changes prices or unlocks anything. Restore purchases is on the paywall and in the subscription area.
 
 CAVE COACH
 Open Progress (chart icon), scroll to On-Target vs. Over Days, then Cave Coach > Get coach tips. Cave Cals+ is required. It returns three suggestions; Get new tips replaces them (up to three requests per day). The selected range ends yesterday. Meaningful comparisons require at least three on-target and three over-goal days; historical food can be logged by changing Home's date. The request sends a summary of logging patterns, including selected food names, calorie/macro averages and timing, through our backend to OpenAI. It does not send the full diary or read Apple Health. Tips are labeled AI suggestions, not medical advice.

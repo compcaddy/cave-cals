@@ -1,5 +1,7 @@
 # “Where did you hear about Cave Cals?” and discount codes
 
+> **Rejected by App Review, October 12–13, 2026.** Both discount subscriptions were rejected under guideline 3.1.1: “the app uses promo codes to unlock discounts.” Apple said to remove the feature and use App Store offer codes for discounts. The app version itself was accepted. **1.1.0 (3) removed all in-app code entry** (the code box, Have a code?, the code sheet, confetti, the saved code, and the switch to the `discount` offering); the question stays, for usage stats only. Everything below describes the rejected design and is kept for reference. The backend check, `/admin/codes`, the code pages, the `discount` offering, and the two rejected products still exist but nothing in the app uses them. Creator discounts would have to be Apple offer codes, and offer-code purchases arrive without `appAccountToken`, which `verifyPurchase` (`backend/src/server/apple.ts`) refuses today.
+
 Added October 6, 2026. The backend is live; the app side ships with 1.0.5. Creators and the trainer get a code (SARAH) and a page at **CaveCals.com/Sarah**. People who use a code see the code prices on every Cave Cals+ paywall. The owner sees aggregate counts per code; there are no creator payouts, commissions, or creator dashboards.
 
 ## In the app

@@ -24,7 +24,7 @@ The yearly App Store subscription now offers a one-week free trial for eligible 
 
 UI tests isolate onboarding from live App Attest/StoreKit and exercise the unavailable-offer branch, skip/close, saved choices, existing profiles, and preview isolation. A signed-device sandbox purchase remains a separate release check.
 
-Since October 6, 2026 (local), **Where did you hear about Cave Cals?** comes first, while Cave Cals+ loads behind it, with a discount code box for trainer and creator codes; a code that works switches this offer (and every later paywall) to the code prices. UI tests skip it unless they add `--discovery-question`. See [Discount codes](DiscountCodes.md).
+Since October 6, 2026, **Where did you hear about Cave Cals?** comes first, while Cave Cals+ loads behind it. Its discount code box was removed October 13, 2026 (App Review, guideline 3.1.1). UI tests skip it unless they add `--discovery-question`. See [Discount codes](DiscountCodes.md).
 
 ## Developer preview
 

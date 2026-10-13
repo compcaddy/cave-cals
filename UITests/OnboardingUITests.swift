@@ -131,9 +131,9 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["skipOnboardingPaywall"].exists)
     }
-    /// "Where did you hear about Cave Cals?" sits between setup and the offer. A code that doesn't work says so;
-    /// one that works is applied (UI tests accept CAVETEST without the backend).
-    func testDiscoveryQuestionAppliesADiscountCode() {
+    /// "Where did you hear about Cave Cals?" sits between setup and the offer. There's no discount code box anywhere
+    /// (App Review rejected in-app codes under 3.1.1 on October 13, 2026).
+    func testDiscoveryQuestionComesBeforeTheOfferWithoutACodeBox() {
         app.terminate()
         app.launchArguments += ["--discovery-question"]
         app.launch()
@@ -143,41 +143,13 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(social.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["skipOnboardingPaywall"].exists, "The question comes before the offer")
         XCTAssertFalse(app.buttons["discoveryContinue"].isEnabled, "Continue waits for an answer")
-        capture("Discovery question")
+        XCTAssertFalse(app.buttons["discoveryHaveCode"].exists)
         social.tap()
-        let field = app.textFields["discountCode"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap(); field.typeText("nope")
-        let apply = app.buttons["applyDiscountCode"]
-        apply.tap()
-        // A spinner shows while the code is checked.
-        XCTAssertEqual(apply.label, "Checking code")
-        XCTAssertTrue(app.staticTexts["discountCodeMessage"].waitForExistence(timeout: 5))
-        capture("Discovery question with a code that doesn't work")
-        // The red × clears the box.
-        app.buttons["clearDiscountCode"].tap()
-        XCTAssertFalse(app.staticTexts["discountCodeMessage"].exists)
-        XCTAssertFalse(app.buttons["clearDiscountCode"].exists)
-        field.typeText("cavetest")
-        XCTAssertEqual((field.value as? String)?.uppercased(), "CAVETEST", "Fast typing preserves the entire code; matching ignores capitals")
-        app.buttons["applyDiscountCode"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["discountApplied"].waitForExistence(timeout: 5))
-        let confirmation = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "Code CAVETEST worked. Special discount on Cave Cals+")).firstMatch
-        XCTAssertTrue(confirmation.exists, "Code CAVETEST worked! / Special discount on Cave Cals+")
-        XCTAssertFalse(field.exists, "The box closes once the code works")
-        capture("Discovery question with a code applied")
+        XCTAssertFalse(app.textFields["discountCode"].exists, "Picking Social media doesn't open a code box")
+        capture("Discovery question")
         app.buttons["discoveryContinue"].tap()
-        // No storefront is loaded in UI tests: a saved code must show an unavailable state,
-        // with a working code sheet, rather than offer the regular subscription.
-        XCTAssertTrue(app.staticTexts["Your code is saved, but its prices couldn’t load. Please try again."].waitForExistence(timeout: 5))
-        app.buttons["Edit code"].tap()
-        let paywallCode = app.textFields["discountCode"]
-        XCTAssertTrue(paywallCode.waitForExistence(timeout: 5))
-        paywallCode.tap(); paywallCode.typeText("cavetest")
-        app.buttons["applyDiscountCode"].tap()
-        XCTAssertTrue(app.buttons["Edit code"].waitForExistence(timeout: 5))
-        XCTAssertFalse(paywallCode.exists, "Applying a code dismisses only the code sheet")
+        XCTAssertTrue(app.buttons["skipOnboardingPaywall"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["haveDiscountCode"].exists, "The paywall has no code entry")
         skipOffer()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
     }
