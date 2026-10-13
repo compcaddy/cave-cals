@@ -1638,7 +1638,7 @@ struct DaySelector: View {
                 // then the date sits under "Today" rather than shrinking or cutting off.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: relativeDayName == nil ? 6 : 12) { dayName; smallDate }
-                    VStack(alignment: .leading, spacing: -3) { dayName; smallDate }
+                    VStack(alignment: .center, spacing: -3) { dayName; smallDate }
                 }
                 .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.center)
                 // Today's wider label sits closer to the chevrons.
