@@ -1,34 +1,44 @@
 {
   "version": "1.1.0",
-  "build": "2",
-  "sourceCommit": "ffdb429",
-  "tag": "v1.1.0-build2",
-  "buildId": "7e24f7a7-5525-429b-9090-ee6d22d90321",
+  "build": "3",
+  "sourceCommit": "fd2d1d4",
+  "tag": "v1.1.0-build3",
+  "buildId": "254e0baa-e10e-4705-8b61-a67f7388fec0",
   "processingState": "VALID",
   "versionId": "ae9475a0-b408-41e7-bb05-1eaddf01fa17",
   "appStoreState": "WAITING_FOR_REVIEW",
-  "reviewSubmissionId": "699ca39c-0f9e-4ae9-9888-c410b2bf3208",
+  "reviewSubmissionId": "4ef6311c-91cc-4346-b7a3-089451b59884",
   "reviewSubmitted": true,
-  "draftItems": [
-    "iOS App 1.1.0 (2)",
-    "Cave Cals+ Monthly - Discount",
-    "Cave Cals+ Yearly - Discount"
+  "submittedDate": "2026-10-13T17:38:48.946Z",
+  "submissionItems": [
+    "iOS App 1.1.0 (3)"
   ],
+  "discountSubscriptions": "Not submitted (READY_TO_SUBMIT after the canceled submission; rejected under 3.1.1 on 2026-10-13). Do not attach them.",
   "cloudKitProductionDeployed": true,
   "testFlightDistributionRequested": false,
   "physicalDeviceChecksPerformed": false,
-  "ownerSkippedTestFlightSteps": true,
   "releaseType": "AFTER_APPROVAL",
   "phasedRelease": "INACTIVE",
-  "submittedDate": "2026-10-12T15:52:26.769Z",
-  "previousBuild": {
-    "build": "1",
-    "buildId": "2fbc0585-35b8-4e28-8fad-89faff382229",
-    "sourceCommit": "df952f1",
-    "tag": "v1.1.0-build1",
-    "rejected": "2026-10-12",
-    "guideline": "2.5.1 HealthKit functionality not clearly identified in the UI"
-  },
+  "pricingScheduled": "Monthly $4.99 with $0.99 first month; yearly $39.99 (existing subscribers keep their price) with $19.99 first year; free trials end; all from 2026-10-15 in 175 territories. See Pricing-2026-10-15.json.",
+  "revenueCatPaywall": "Published 2026-10-13: offer rows read '<intro price> for <intro length>, then <price> per year/month', badge INTRO PRICE, buttons Unlock Cave Cals+.",
+  "previousBuilds": [
+    {
+      "build": "2",
+      "buildId": "7e24f7a7-5525-429b-9090-ee6d22d90321",
+      "sourceCommit": "ffdb429",
+      "tag": "v1.1.0-build2",
+      "submission": "699ca39c-0f9e-4ae9-9888-c410b2bf3208",
+      "outcome": "App version ACCEPTED 2026-10-13 (2.5.1 resolved); both discount subscriptions REJECTED under 3.1.1 (in-app promo codes). Submission canceled 2026-10-13 so build 3 could replace build 2; build 2 was never released."
+    },
+    {
+      "build": "1",
+      "buildId": "2fbc0585-35b8-4e28-8fad-89faff382229",
+      "sourceCommit": "df952f1",
+      "tag": "v1.1.0-build1",
+      "rejected": "2026-10-12",
+      "guideline": "2.5.1 HealthKit functionality not clearly identified in the UI"
+    }
+  ],
   "reviewNotesVideo": "https://www.youtube.com/shorts/GuFt72SOAkg",
-  "note": "Resubmitted the same review submission (app + both discount subscriptions) after attaching build 2, saving the review notes (read back, 3,952 chars), and marking the rejected item resolved. Review doctor's only blocker before resubmission was the unresolved submission; warnings are optional subscription promotional images. No Resolution Center reply was sent (asc can't reply). No TestFlight distribution; physical-device checks remain the owner's."
+  "note": "Build 3 removes all in-app discount code entry. Description (trial sentence), What's New (code bullet removed), and review notes (new SUBSCRIPTIONS (GUIDELINE 3.1.1) section, 3,716 chars) saved and read back identical. Review doctor's only blocker was the need for a fresh submission; the dry run confirmed the discount subscriptions are not included. No Resolution Center reply was sent. No TestFlight distribution; physical-device and sandbox purchase checks remain the owner's."
 }

@@ -1,0 +1,50 @@
+{
+  "recorded": "2026-10-13",
+  "startDate": "2026-10-15",
+  "territories": 175,
+  "subscriptions": {
+    "monthly": {
+      "id": "6809209344",
+      "usPrices": [
+        {
+          "startDate": null,
+          "price": "5.99",
+          "preservedForExisting": false
+        },
+        {
+          "startDate": "2026-10-15",
+          "price": "4.99",
+          "preservedForExisting": false
+        }
+      ],
+      "introductoryOffers": {
+        "FREE_TRIAL THREE_DAYS 2026-09-06\u21922026-10-15": 175,
+        "PAY_AS_YOU_GO ONE_MONTH 2026-10-15\u2192None": 175
+      },
+      "note": "CHN, NZL, QAT, ROU, THA: Apple's equalized $4.99 equals the current local price, so no change is scheduled there."
+    },
+    "yearly": {
+      "id": "6809209211",
+      "usPrices": [
+        {
+          "startDate": null,
+          "price": "29.99",
+          "preservedForExisting": true
+        },
+        {
+          "startDate": "2026-10-15",
+          "price": "39.99",
+          "preservedForExisting": false
+        }
+      ],
+      "introductoryOffers": {
+        "FREE_TRIAL ONE_WEEK 2026-09-29\u21922026-10-15": 175,
+        "PAY_UP_FRONT ONE_YEAR 2026-10-15\u2192None": 175
+      }
+    }
+  },
+  "introPricePointsUS": {
+    "monthly": "$0.99 (pay as you go, 1 month)",
+    "yearly": "$19.99 (pay up front, 1 year)"
+  }
+}
