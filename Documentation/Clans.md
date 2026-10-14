@@ -1,6 +1,6 @@
 # Clans
 
-Design October 13, 2026. Built on branch `clans` (worktree `../CaveCals-clans`): backend and app. Not deployed or released; tables exist only on the `clans-dev` Neon branch. This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
+Design October 13, 2026. Built on branch `clans` and merged into `main` the same day. The backend and its 13 tables are live on production (the owner chose this over a test server, with no real users yet); no App Store or TestFlight build includes Clans yet. This is on branch `clans` (worktree `../CaveCals-clans`), so `main` stays releasable for 1.1.x. The owner confirmed the design on October 13, 2026.
 
 ## The idea
 
@@ -158,7 +158,7 @@ There's **one active challenge per clan**. The database allows several, so that 
 
 **Push:** HTTP/2 to APNs (`node:http2`) with a .p8 key (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`).
 
-**Database branches:** the old `backend-dev` Neon branch is gone (October 13 check: only `production` remains). Create a new dev branch for clans work. Production is migrated only at release.
+**Database:** `0005_clans.sql` is applied to production (October 13, 2026). The `clans-dev` Neon branch was used for development and its integration tests (`backend-tests/integration/clans.test.ts` refuses any other database).
 
 ## In the app
 

@@ -1,3 +1,11 @@
+# Clans: merged and backend live, app unreleased — October 13, 2026
+
+- **Owner decision (no real users yet):** merge `clans` into `main` and put the backend on production instead of a separate test server; Clans stays visible in the app (no switch), and the owner will say if a release must ship without it.
+- **Production database:** migration `0005_clans.sql` (13 new tables; nothing existing changed) applied to Neon `production`; existing rows intact (15 AI accounts before and after). The `clans-dev` branch still exists.
+- **Production deploy** of `main` at `740c025`: `/`, `/privacy`, `/terms`, food search, and `/admin` (401) unchanged; `/join/X7K2QM` 200; `/.well-known/apple-app-site-association` 200 JSON (`J877QX85N5.com.philstarkovich.cavecals`, `/join/*`); `POST /api/v1/clan/list` without a session → 401 `signed_out`; `/api/cron/clans` and `/api/v1/clan-photo/<id>` → 401 without credentials; Vercel lists the `*/15 * * * *` clans cron.
+- **Owner setup done:** Google iOS client (test user added, consent screen in Testing), one Apple key for APNs + Sign in with Apple, app ID capabilities (Sign in with Apple, Associated Domains), and Production env vars `GOOGLE_CLIENT_IDS`, `APNS_KEY(_ID)`, `APPLE_SIGNIN_KEY_ID`/`PRIVATE_KEY`, `CLAN_TOKEN_KEY`. Privacy policy with Clans and Google sections live (October 13).
+- **Not verified:** a signed iPhone build against production (Sign in with Apple, Google, push, Universal Links, photo upload), and the cron's first real evaluation. App Store privacy details and age rating not yet updated. No TestFlight/App Store build includes Clans.
+
 # 1.1.0 (3): discount codes removed, new prices, resubmitted — October 13, 2026
 
 - **Review outcome for build 2:** the app version was **accepted** (the 2.5.1 Apple Health fix worked), but both discount subscriptions were **rejected under guideline 3.1.1**: “the app uses promo codes to unlock discounts.” Apple asked to remove the feature and use App Store offer codes. Accepted items can't be released until the rejected ones are fixed or removed, and release was automatic, so removing only the subscriptions would have released build 2 with its code box.
