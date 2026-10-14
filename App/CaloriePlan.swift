@@ -180,4 +180,8 @@ struct SavedCaloriePlan: Codable, Equatable {
     var input: CaloriePlanInput
     var calorieGoal: Double
     var createdAt = Date()
+    /// The age entered, plus the full years since the plan was made.
+    func currentAge(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        input.age + max(0, calendar.dateComponents([.year], from: createdAt, to: now).year ?? 0)
+    }
 }

@@ -83,6 +83,47 @@ struct WeightProfileSections: View {
     }
 }
 
+/// About You → Age and Height, from the calorie plan. They change rarely; tapping opens the plan, which uses them
+/// (or builds one, when there isn't a plan yet).
+struct PlanDetailsSection: View {
+    @Environment(WeightStore.self) private var weights
+    var onEdit: () -> Void
+    var body: some View {
+        let plan = weights.caloriePlan
+        Section {
+            row("Age", value: plan.map { "\($0.currentAge())" }, id: "planDetailsAge")
+            row("Height", value: plan.map { Self.height($0.input.heightCM, unit: weights.unit) }, id: "planDetailsHeight")
+        } footer: {
+            Text(plan == nil ? "Add them with a calorie plan." : "From your calorie plan. Changing them updates the plan.").font(.cave(.caption2))
+        }
+    }
+    /// 5′ 11″ with pounds, 180 cm with kilograms.
+    static func height(_ cm: Double, unit: WeightUnit) -> String {
+        guard unit == .pounds else { return "\(Int(cm.rounded())) cm" }
+        let inches = Int((cm / 2.54).rounded())
+        return "\(inches / 12)′ \(inches % 12)″"
+    }
+    private func row(_ title: String, value: String?, id: String) -> some View {
+        Button(action: onEdit) {
+            HStack(spacing: 12) {
+                Text(title).foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                    Text(value ?? "Add").font(.cave(.title3)).foregroundStyle(value == nil ? Color.caveOrange : Color.primary)
+                        .fixedSize(horizontal: true, vertical: false)
+                }.padding(.trailing, 8)
+            }.contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value ?? "Not set")
+        .accessibilityHint("Opens your calorie plan")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(id)
+    }
+}
+
 /// Apple's Apple Health icon, as supplied (original in `Artwork/AppleHealth/`). App Review wants HealthKit features
 /// clearly identified (October 12, 2026), so it marks every place Cave Cals connects to Apple Health. A hairline edge
 /// keeps the white tile visible on cream.

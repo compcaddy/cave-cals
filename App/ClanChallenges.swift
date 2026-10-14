@@ -337,7 +337,8 @@ struct ChallengeBoardView: View {
         Task {
             do {
                 var fields: [String: Any] = ["challengeId": board.id]
-                if board.kind == .weightLoss { fields["notClinicianLed"] = true }
+                // Only reached after the eligibility sheet confirmed both.
+                if board.kind == .weightLoss { fields["notClinicianLed"] = true; fields["adult"] = true }
                 let _: [String: Bool] = try await ClanClient.shared.call("clan/challenge/join", fields)
                 Haptics.play(.success); UsageStats.shared.event("challenge.joined", ["kind": board.kind.rawValue])
                 await refresh()
@@ -369,62 +370,50 @@ struct ChallengeBoardView: View {
 }
 
 /// Weight challenges are for adults, and not for anyone pregnant, breastfeeding, or in care for an eating
-/// disorder. The answer isn't saved or sent; only the birth month and year are, so the server can check age.
+/// disorder. Age comes from the calorie plan, or the sheet asks. Neither answer is saved or sent; joining only says
+/// "adult" and "not in a doctor-led plan".
 struct WeightEligibilitySheet: View {
     var onDone: (Bool) -> Void
     @Environment(WeightStore.self) private var weights
-    @State private var clans = ClanStore.shared
-    @State private var month = 0
-    @State private var year = 0
+    @State private var adultAnswer: Bool?
     @State private var answer: Bool?
-    @State private var message: String?
+    private var planAge: Int? { weights.caloriePlan?.currentAge() }
+    private var adult: Bool? { planAge.map { $0 >= 18 } ?? adultAnswer }
     var body: some View {
         NavigationStack {
             HapticForm {
                 if !weights.tracking {
                     Section { Text("Turn on Track weight in About You first, so your weigh-ins can count.").font(.cave(.callout)) }
                 }
-                if clans.me?.birthMonth == nil || clans.me?.birthYear == nil {
+                if let planAge, planAge < 18 {
+                    Section { Text("Weight challenges are for adults 18 and older. Logging and streak challenges are open to you.").font(.cave(.callout)) }
+                } else if planAge == nil {
                     Section {
-                        Picker("Birth month", selection: $month) {
-                            Text("Choose").tag(0)
-                            ForEach(1...12, id: \.self) { Text(Calendar.current.monthSymbols[$0 - 1]).tag($0) }
-                        }.hapticSelection(on: month)
-                        Picker("Birth year", selection: $year) {
-                            Text("Choose").tag(0)
-                            ForEach((1920...(Calendar.current.component(.year, from: Date()) - 13)).reversed(), id: \.self) { Text(String($0)).tag($0) }
-                        }.hapticSelection(on: year)
-                    } header: { Text("Birthday") } footer: { Text("Weight challenges are for adults 18 and older. Never shown to anyone.").font(.cave(.caption2)) }
+                        Picker("Are you 18 or older?", selection: $adultAnswer) {
+                            Text("Choose").tag(Bool?.none); Text("Yes").tag(Bool?.some(true)); Text("No").tag(Bool?.some(false))
+                        }.pickerStyle(.inline).labelsHidden().hapticSelection(on: adultAnswer)
+                    } header: { Text("Are you 18 or older?").textCase(nil) } footer: {
+                        Text(adultAnswer == false ? "Weight challenges are for adults. Logging and streak challenges are open to you." : "Weight challenges are for adults.").font(.cave(.caption2))
+                    }
+                }
+                if adult != false {
+                    Section {
+                        Picker("Are you pregnant, breastfeeding, or getting care for an eating disorder?", selection: $answer) {
+                            Text("Choose").tag(Bool?.none); Text("No").tag(Bool?.some(false)); Text("Yes").tag(Bool?.some(true))
+                        }.pickerStyle(.inline).labelsHidden().hapticSelection(on: answer)
+                    } header: { Text("Are you pregnant, breastfeeding, or getting care for an eating disorder?").textCase(nil) } footer: {
+                        Text(answer == true ? "Weight challenges aren’t a fit right now. Logging and streak challenges are still open to you." : "Your answers stay on this iPhone.").font(.cave(.caption2))
+                    }
                 }
                 Section {
-                    Picker("Are you pregnant, breastfeeding, or getting care for an eating disorder?", selection: $answer) {
-                        Text("Choose").tag(Bool?.none); Text("No").tag(Bool?.some(false)); Text("Yes").tag(Bool?.some(true))
-                    }.pickerStyle(.inline).labelsHidden().hapticSelection(on: answer)
-                } header: { Text("Are you pregnant, breastfeeding, or getting care for an eating disorder?").textCase(nil) } footer: {
-                    Text(answer == true ? "Weight challenges aren’t a fit right now. Logging and streak challenges are still open to you." : "Your answer stays on this iPhone.").font(.cave(.caption2))
-                }
-                Section {
-                    Button { confirm() } label: { Text("Join").frame(maxWidth: .infinity) }
-                        .disabled(answer != false || !weights.tracking || ((clans.me?.birthMonth == nil || clans.me?.birthYear == nil) && (month == 0 || year == 0)))
+                    Button { onDone(true) } label: { Text("Join").frame(maxWidth: .infinity) }
+                        .disabled(adult != true || answer != false || !weights.tracking)
                         .accessibilityIdentifier("weightEligibilityJoin")
                 }
-                if let message { Section { Text(message).font(.cave(.footnote)).foregroundStyle(.red) } }
             }
             .caveScreenBackground()
             .navigationTitle("Weight challenge").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { onDone(false) }.hapticButtonStyle(.automatic) } }
-        }
-    }
-    private func confirm() {
-        guard answer == false else { return }
-        Task {
-            if month > 0 && year > 0 {
-                do {
-                    let profile: ClanProfile = try await ClanClient.shared.call("clan/me/update", ["birthMonth": month, "birthYear": year])
-                    clans.setProfile(profile)
-                } catch { message = error.localizedDescription; return }
-            }
-            onDone(true)
         }
     }
 }

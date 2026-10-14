@@ -1,0 +1,64 @@
+{
+  "appId": "6809208501",
+  "checkedOn": "2026-10-13",
+  "status": "PREPARED_NOT_APPLIED",
+  "blockers": [
+    "ASCCLI Apple web authentication required to pull and stage privacy declarations.",
+    "1.1.0 build 3 is WAITING_FOR_REVIEW and does not contain Clans; no editable Clans app info exists."
+  ],
+  "publication": "Stage privacy as unpublished draft after authenticating; publish with the Clans submission. Preserve the existing submission and all unrelated declarations.",
+  "ageRating": {
+    "userGeneratedContent": true,
+    "messagingAndChat": true,
+    "healthOrWellnessTopics": true,
+    "contests": "FREQUENT_OR_INTENSE",
+    "reasoning": {
+      "userGeneratedContent": "Members share profile names, photos and clan names.",
+      "messagingAndChat": "Preset nudges and cheers communicate between members.",
+      "contests": "Repeatable fitness challenges and rankings are a central Clans feature; no wagering or prizes required by Apple definition."
+    },
+    "commandTemplate": "asc age-rating edit --app-info-id CLANS_APP_INFO_ID --user-generated-content true --messaging-and-chat true --health-or-wellness-topics true --contests FREQUENT_OR_INTENSE",
+    "remainingAssessment": "Keep socialMedia false for private invite-only groups without a public discovery/amplification feed. Reassess if product behavior changes. Do not infer age-assurance API use from a self-entered birthday."
+  },
+  "privacy": {
+    "preserveExisting": true,
+    "tracking": false,
+    "linkedToUser": true,
+    "appFunctionality": [
+      "Name",
+      "Email Address",
+      "Photos or Videos",
+      "Other User Content",
+      "User ID",
+      "Health",
+      "Fitness",
+      "Other Data Types",
+      "Emails or Text Messages",
+      "Customer Support",
+      "Contacts"
+    ],
+    "developerAdvertisingOrMarketing": [
+      "Email Address",
+      "User ID"
+    ],
+    "notes": {
+      "Health/Fitness": "Calorie-goal and weight-change percentages are linked to the account; preserve existing Health declaration.",
+      "Other Data Types": "Birth month/year stored for weight-challenge eligibility.",
+      "Emails or Text Messages": "Stored nudge/cheer sender, recipient and message kind; Apple includes non-SMS in-app messages.",
+      "Customer Support": "Moderation reports and reasons are retained for support/safety.",
+      "Contacts": "Clan membership and blocks form an account-linked social graph; no device address book access.",
+      "User ID marketing": "Used with email address to select opted-in subscribers and generate unsubscribe links."
+    }
+  },
+  "manifestFollowUp": "App/PrivacyInfo.xcprivacy currently lacks Name and Email Address; reconcile the native manifest with final declarations before archiving Clans.",
+  "sources": [
+    "https://developer.apple.com/app-store/app-privacy-details/",
+    "https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/"
+  ],
+  "evidence": [
+    "backend/src/server/schema.ts",
+    "backend/src/server/email.ts",
+    "Documentation/Clans.md",
+    "App/PrivacyInfo.xcprivacy"
+  ]
+}

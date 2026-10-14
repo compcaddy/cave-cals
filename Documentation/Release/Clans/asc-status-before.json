@@ -1,0 +1,67 @@
+{
+  "app": {
+    "id": "6809208501",
+    "bundleId": "com.philstarkovich.cavecals",
+    "name": "Cave Cals: AI Calorie Tracker"
+  },
+  "summary": {
+    "health": "yellow",
+    "nextAction": "Wait for App Store review outcome.",
+    "blockers": []
+  },
+  "builds": {
+    "latest": {
+      "id": "254e0baa-e10e-4705-8b61-a67f7388fec0",
+      "version": "1.1.0",
+      "buildNumber": "3",
+      "processingState": "VALID",
+      "expired": false,
+      "uploadedDate": "2026-10-13T10:19:59-07:00",
+      "platform": "IOS"
+    }
+  },
+  "testflight": {
+    "betaReviewState": "APPROVED",
+    "internalBuildState": "PROCESSING",
+    "submittedDate": "2026-09-16T15:47:53-07:00",
+    "betaReviewSubmission": {
+      "id": "2e8f3f09-9ef3-455a-a08e-fd873788260f",
+      "state": "APPROVED",
+      "submittedDate": "2026-09-16T15:47:53-07:00",
+      "relationToLatestBuild": "differentVersionTrain",
+      "build": {
+        "id": "2e8f3f09-9ef3-455a-a08e-fd873788260f",
+        "version": "1.0.1",
+        "buildNumber": "2",
+        "platform": "IOS"
+      }
+    }
+  },
+  "appstore": {
+    "versionId": "ae9475a0-b408-41e7-bb05-1eaddf01fa17",
+    "version": "1.1.0",
+    "state": "WAITING_FOR_REVIEW",
+    "platform": "IOS",
+    "createdDate": "2026-10-08T19:29:14-07:00"
+  },
+  "submission": {
+    "inFlight": true,
+    "blockingIssues": []
+  },
+  "review": {
+    "latestSubmissionId": "4ef6311c-91cc-4346-b7a3-089451b59884",
+    "state": "WAITING_FOR_REVIEW",
+    "submittedDate": "2026-10-13T17:38:48.946Z",
+    "platform": "IOS"
+  },
+  "phasedRelease": {
+    "configured": true,
+    "id": "ae9475a0-b408-41e7-bb05-1eaddf01fa17",
+    "state": "INACTIVE"
+  },
+  "links": {
+    "appStoreConnect": "https://appstoreconnect.apple.com/apps/6809208501",
+    "testFlight": "https://appstoreconnect.apple.com/apps/6809208501/testflight/ios",
+    "review": "https://appstoreconnect.apple.com/apps/6809208501/appstore/review"
+  }
+}

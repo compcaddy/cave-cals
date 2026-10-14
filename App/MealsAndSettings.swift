@@ -70,6 +70,7 @@ struct ProfileView: View {
                     .accessibilityValue(store.profile?.dailyGoal?.calorieText ?? "Not set")
                     .accessibilityHint("Edit daily calorie goal")
                 } footer: { goalFooter }
+                PlanDetailsSection { planningCalories = true }
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor) { planningCalories = true }
                 AppleHealthLinkSection()

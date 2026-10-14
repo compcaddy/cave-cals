@@ -77,4 +77,15 @@ import XCTest
         XCTAssertEqual(ClanStatusText.line(try summary(#"{"kind":"teamTotal","dayNumber":6,"totalDays":30,"team":{"total":62,"target":100,"reached":false},\#(base)}"#)), "62 of 100 days")
         XCTAssertEqual(ClanStatusText.line(try summary(#"{"kind":"weightLoss","dayNumber":17,"totalDays":28,"myRank":1,"myLossPct":2.4,\#(base)}"#)), "Week 3 · You’re 1st (−2.4%)")
     }
+
+    func testAboutYouAgeAdvancesFromThePlanAndHeightFollowsTheUnit() {
+        let input = CaloriePlanInput(gender: .male, age: 30, heightCM: 180.3, weightKG: 90, goalKG: 85, activity: .light, intent: .lose, weeklyLossKG: 0.4)
+        let made = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 1))!
+        let plan = SavedCaloriePlan(input: input, calorieGoal: 2100, createdAt: made)
+        XCTAssertEqual(plan.currentAge(now: Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 28))!), 31)
+        XCTAssertEqual(plan.currentAge(now: Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 1))!), 32)
+        XCTAssertEqual(PlanDetailsSection.height(180.3, unit: .pounds), "5′ 11″")
+        XCTAssertEqual(PlanDetailsSection.height(180.3, unit: .kilograms), "180 cm")
+        XCTAssertEqual(PlanDetailsSection.height(152.4, unit: .pounds), "5′ 0″")
+    }
 }

@@ -234,3 +234,8 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
   - In Vercel: `SES_SMTP_HOST`, `SES_SMTP_PORT` (587), `SES_SMTP_USER`, `SES_SMTP_PASS`, `EMAIL_FROM` (a verified SES identity, for example `Cave Cals <hello@cavecals.com>`), and `EMAIL_POSTAL_ADDRESS`.
   - In the Apple Developer site, under Sign in with Apple for Email Communication, add the sending domain or address so relay addresses deliver.
   - In Google Cloud Console → Data access, add the `email` scope.
+
+## October 14, 2026 changes
+
+- **No birthday.** Account no longer asks for a birth month and year. About You shows Age and Height from the calorie plan instead, and tapping them opens the plan. For weight challenges, the eligibility sheet uses the plan's current age, or asks "Are you 18 or older?" when there's no plan, and joining sends `adult: true`. The server still accepts the old birth fields from earlier builds.
+- **Google photo.** The server now follows Google's image redirects, but only to Google image hosts. The app also sends the picture from Google's userinfo endpoint, in case the ID token leaves it out. A missing photo is filled in the next time someone signs in with Google, and failures are logged (`Google photo …`).

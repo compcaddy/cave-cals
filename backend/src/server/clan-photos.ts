@@ -38,16 +38,25 @@ export async function deletePhoto(id: string | null | undefined) {
   if (useLocal()) await unlink(localFile(id)).catch(() => {});
   else await del(blobPath(id)).catch(() => {});
 }
-// A Google sign-in's profile picture becomes the first photo. Only Google's own image hosts are fetched.
+// A Google sign-in's profile picture becomes the first photo. Only Google's own image hosts are fetched, and
+// redirects are followed only to them.
+const googleImageHost = (host: string) => /(^|\.)(googleusercontent|ggpht)\.com$/.test(host);
 export async function photoFromURL(url: string): Promise<string | null> {
   let parsed: URL;
   // Google's picture links end in a size (=s96-c); ask for one big enough to crop.
   try { parsed = new URL(url.replace(/=s\d+-c$/, '=s512-c')); } catch { return null; }
-  if (parsed.protocol !== 'https:' || !/(^|\.)googleusercontent\.com$/.test(parsed.hostname)) return null;
+  if (parsed.protocol !== 'https:' || !googleImageHost(parsed.hostname)) return null;
   try {
-    const response = await fetch(parsed, { signal: AbortSignal.timeout(10_000), redirect: 'error' });
-    if (!response.ok || Number(response.headers.get('content-length') ?? 0) > MAX_PHOTO_INPUT_BYTES) return null;
-    const bytes = Buffer.from(await response.arrayBuffer());
-    return await storePhoto(bytes);
-  } catch { return null; }
+    const response = await fetch(parsed, { signal: AbortSignal.timeout(10_000) });
+    const final = new URL(response.url || parsed.toString());
+    if (!response.ok || final.protocol !== 'https:' || !googleImageHost(final.hostname)) {
+      console.error('Google photo fetch refused', response.status, final.hostname);
+      return null;
+    }
+    if (Number(response.headers.get('content-length') ?? 0) > MAX_PHOTO_INPUT_BYTES) { console.error('Google photo too large'); return null; }
+    return await storePhoto(Buffer.from(await response.arrayBuffer()));
+  } catch (error) {
+    console.error('Google photo failed', error instanceof Error ? `${error.name}: ${error.message}` : 'UnknownError');
+    return null;
+  }
 }

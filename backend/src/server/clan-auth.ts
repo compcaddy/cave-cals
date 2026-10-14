@@ -129,6 +129,8 @@ export const signInInput = z.object({
   acceptedTerms: z.boolean().optional(),
   // "Email me Cave Cals news" on the sign-in screen (off unless ticked).
   newsOptIn: z.boolean().optional(),
+  // Google: the picture from its userinfo endpoint, used when the ID token leaves it out (Google image hosts only).
+  pictureURL: z.string().url().max(2000).optional(),
   // Local development only.
   devSubject: z.string().min(1).max(100).optional(),
   devEmail: z.string().email().max(254).optional(),
@@ -151,7 +153,7 @@ export async function signIn(identity: Identity, input: z.infer<typeof signInInp
       : { keysURL: 'https://www.googleapis.com/oauth2/v3/certs', issuers: ['https://accounts.google.com', 'accounts.google.com'], audiences: googleAudiences(), nonce: input.rawNonce });
     subject = claims.sub;
     email = verifiedEmail(claims);
-    if (!apple) { suggestedName = claims.given_name || claims.name || suggestedName; pictureURL = claims.picture; }
+    if (!apple) { suggestedName = claims.given_name || claims.name || suggestedName; pictureURL = claims.picture || input.pictureURL; }
     else refreshToken = await appleRefreshToken(input.authorizationCode);
   }
   const db = database();
@@ -160,11 +162,13 @@ export async function signIn(identity: Identity, input: z.infer<typeof signInInp
   const now = new Date();
   if (personId) {
     if (refreshToken) await db.update(clanIdentities).set({ appleRefreshToken: refreshToken }).where(and(eq(clanIdentities.provider, input.provider), eq(clanIdentities.subject, subject)));
-    const [person] = await db.select({ displayName: clanPeople.displayName, newsOptIn: clanPeople.newsOptIn }).from(clanPeople).where(eq(clanPeople.id, personId));
+    const [person] = await db.select({ displayName: clanPeople.displayName, newsOptIn: clanPeople.newsOptIn, photoId: clanPeople.photoId }).from(clanPeople).where(eq(clanPeople.id, personId));
     displayName = person?.displayName ?? '';
     // Keep the latest email the provider vouches for; ticking the news box again opts back in.
     const update: Partial<typeof clanPeople.$inferInsert> = email ? { ...email } : {};
     if (input.newsOptIn === true && !person?.newsOptIn) Object.assign(update, { newsOptIn: true, newsOptInAt: now });
+    // No photo yet (or the first try failed): use the Google picture.
+    if (!person?.photoId && pictureURL) { const photoId = await photoFromURL(pictureURL); if (photoId) update.photoId = photoId; }
     if (Object.keys(update).length) await db.update(clanPeople).set(update).where(eq(clanPeople.id, personId));
   } else {
     if (input.acceptedTerms !== true) throw new APIError(400, 'terms_required', 'Agree to the terms to continue.');

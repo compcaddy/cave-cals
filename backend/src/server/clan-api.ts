@@ -314,14 +314,14 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
     case 'clan/days': return saveDays(personId, body, now);
     case 'clan/challenge/create': return createChallenge(personId, challengeCreate.parse(body), now);
     case 'clan/challenge/join': {
-      const { challengeId, notClinicianLed } = z.object({ challengeId: uuid, notClinicianLed: z.boolean().optional() }).parse(body);
+      const { challengeId, notClinicianLed, adult } = z.object({ challengeId: uuid, notClinicianLed: z.boolean().optional(), adult: z.boolean().optional() }).parse(body);
       const challenge = await challengeRow(challengeId);
       await membership(challenge.clanId, personId);
       const person = await me(personId);
       if (localDay(now, person.timeZone) > challenge.startsOn || challenge.status === 'ended' || challenge.status === 'canceled') {
         throw new APIError(409, 'challenge_started', 'This challenge already started. Join the next one!');
       }
-      if (challenge.kind === 'weightLoss') await requireWeightEligible(person, notClinicianLed);
+      if (challenge.kind === 'weightLoss') await requireWeightEligible(person, notClinicianLed, adult);
       await db.insert(clanEntrants).values({ challengeId, personId }).onConflictDoUpdate({
         target: [clanEntrants.challengeId, clanEntrants.personId], set: { status: 'in', leftOn: null },
       });
@@ -439,11 +439,13 @@ async function challengeRow(challengeId: string) {
   if (!challenge) throw new APIError(404, 'challenge_not_found', 'This challenge no longer exists.');
   return challenge;
 }
-async function requireWeightEligible(person: typeof clanPeople.$inferSelect, notClinicianLed: boolean | undefined) {
-  const adult = adultByBirth(person.birthYear, person.birthMonth);
-  if (adult === null) throw new APIError(400, 'birth_month_needed', 'Add your birth month and year to join weight challenges.');
-  if (!adult) throw new APIError(403, 'adults_only', 'Weight challenges are for adults 18 and older.');
-  // The app checks the doctor-led plan setting, which never leaves the phone.
+async function requireWeightEligible(person: typeof clanPeople.$inferSelect, notClinicianLed: boolean | undefined, adult: boolean | undefined) {
+  // The app confirms 18+ from the calorie plan's age or by asking (nothing is stored). Older apps sent a birth
+  // month and year instead.
+  const byBirth = adultByBirth(person.birthYear, person.birthMonth);
+  if (adult !== true && byBirth === null) throw new APIError(400, 'adult_needed', 'Confirm you’re 18 or older to join weight challenges.');
+  if (adult === false || byBirth === false) throw new APIError(403, 'adults_only', 'Weight challenges are for adults 18 and older.');
+  // The app checks the doctor-led plan question, which never leaves the phone.
   if (notClinicianLed !== true) throw new APIError(403, 'clinician_plan', 'Weight challenges aren’t available with a doctor-led plan.');
 }
 

@@ -65,12 +65,22 @@ enum ClanSignIn {
         form.queryItems = [.init(name: "client_id", value: clientID), .init(name: "code", value: code), .init(name: "code_verifier", value: verifier),
                            .init(name: "grant_type", value: "authorization_code"), .init(name: "redirect_uri", value: redirect)]
         token.httpBody = form.percentEncodedQuery?.data(using: .utf8)
-        struct Tokens: Decodable { let id_token: String }
+        struct Tokens: Decodable { let id_token: String; let access_token: String? }
         let (data, _) = try await URLSession.shared.data(for: token)
-        guard let idToken = try? JSONDecoder().decode(Tokens.self, from: data).id_token else {
+        guard let tokens = try? JSONDecoder().decode(Tokens.self, from: data) else {
             throw ClanError(code: "invalid_sign_in", message: "Google sign-in didn’t finish. Please try again.")
         }
-        try await send(["provider": "google", "identityToken": idToken, "rawNonce": nonce, "newsOptIn": newsOptIn])
+        var fields: [String: Any] = ["provider": "google", "identityToken": tokens.id_token, "rawNonce": nonce, "newsOptIn": newsOptIn]
+        // Google's ID token doesn't always carry the picture; its userinfo does.
+        if let access = tokens.access_token {
+            var info = URLRequest(url: URL(string: "https://openidconnect.googleapis.com/v1/userinfo")!)
+            info.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
+            struct UserInfo: Decodable { let picture: String? }
+            if let (body, _) = try? await URLSession.shared.data(for: info), let picture = (try? JSONDecoder().decode(UserInfo.self, from: body))?.picture {
+                fields["pictureURL"] = picture
+            }
+        }
+        try await send(fields)
     }
     private final class AnchorProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
         static var key = 0
@@ -323,13 +333,10 @@ struct AvatarCropper: View {
 
 // MARK: Account
 
-/// Your Cave Cals account: photo and name (what clanmates see), email and news, birth month (for weight
-/// challenges), sign out, and delete.
+/// Your Cave Cals account: photo and name (what clanmates see), email and news, sign out, and delete.
 struct AccountView: View {
     @State private var clans = ClanStore.shared
     @State private var name = ""
-    @State private var birthMonth = 0
-    @State private var birthYear = 0
     @State private var picked: PhotosPickerItem?
     @State private var cropping: UIImage?
     @State private var busy = false
@@ -357,18 +364,6 @@ struct AccountView: View {
                 TextField("First name", text: $name).textContentType(.givenName).submitLabel(.done)
                     .onSubmit { saveName() }.accessibilityIdentifier("clanName")
                     .keyboardInputArea()
-            }
-            Section {
-                Picker("Birth month", selection: $birthMonth) {
-                    Text("Not set").tag(0)
-                    ForEach(1...12, id: \.self) { Text(Calendar.current.monthSymbols[$0 - 1]).tag($0) }
-                }.hapticSelection(on: birthMonth)
-                Picker("Birth year", selection: $birthYear) {
-                    Text("Not set").tag(0)
-                    ForEach((1920...(Calendar.current.component(.year, from: Date()) - 13)).reversed(), id: \.self) { Text(String($0)).tag($0) }
-                }.hapticSelection(on: birthYear)
-            } header: { Text("Birthday") } footer: {
-                Text("Only needed for weight challenges, which are for adults. Never shown to anyone.").font(.cave(.caption2))
             }
             if !firstTime {
                 Section {
@@ -405,7 +400,6 @@ struct AccountView: View {
         .overlay { if busy { ProgressView().controlSize(.large) } }
         .onAppear {
             name = clans.me?.displayName ?? ""
-            birthMonth = clans.me?.birthMonth ?? 0; birthYear = clans.me?.birthYear ?? 0
             news = clans.me?.newsOptIn ?? false
         }
         .onChange(of: news) { _, value in
@@ -413,8 +407,6 @@ struct AccountView: View {
             UsageStats.shared.event("account.news", ["on": value ? "yes" : "no"])
             Task { try? await update(["newsOptIn": value]) }
         }
-        .onChange(of: birthMonth) { saveBirth() }
-        .onChange(of: birthYear) { saveBirth() }
         .onChange(of: picked) {
             guard let picked else { return }
             Task {
@@ -442,14 +434,6 @@ struct AccountView: View {
             do { try await update(["displayName": trimmed]); message = nil; Haptics.play(.success) }
             catch { message = error.localizedDescription }
         }
-    }
-    private func saveBirth() {
-        guard birthMonth != (clans.me?.birthMonth ?? 0) || birthYear != (clans.me?.birthYear ?? 0) else { return }
-        var fields: [String: Any] = [:]
-        if birthMonth > 0 { fields["birthMonth"] = birthMonth }
-        if birthYear > 0 { fields["birthYear"] = birthYear }
-        guard !fields.isEmpty else { return }
-        Task { try? await update(fields) }
     }
     private func upload(_ jpeg: Data) {
         busy = true
