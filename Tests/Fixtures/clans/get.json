@@ -1,8 +1,8 @@
 {
   "clan": {
-    "id": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+    "id": "ec26575f-495a-44c6-b1b3-515958291400",
     "name": "The Cavemen",
-    "inviteCode": "JCGCRE",
+    "inviteCode": "458UZ2",
     "accountability": "percent",
     "rule": {
       "kind": "withinPercent",
@@ -10,7 +10,7 @@
     },
     "ruleChoice": "clan",
     "bestStreak": 0,
-    "createdAt": "2026-10-13T20:18:54.004Z"
+    "createdAt": "2026-10-14T03:23:41.333Z"
   },
   "me": {
     "role": "member",
@@ -21,34 +21,34 @@
   },
   "members": [
     {
-      "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+      "personId": "9c2e5cfa-3c69-4484-b307-4d4902a823c8",
       "name": "Ana",
       "photoId": null,
       "anonymous": false,
       "blocked": false,
       "role": "owner",
       "isMe": false,
-      "joinedAt": "2026-10-13T20:18:54.004Z"
+      "joinedAt": "2026-10-14T03:23:41.333Z"
     },
     {
-      "personId": "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9",
+      "personId": "253ad6b6-ed20-4600-ab16-5802b7f2ef41",
       "name": "Ben",
       "photoId": null,
       "anonymous": false,
       "blocked": false,
       "role": "member",
       "isMe": true,
-      "joinedAt": "2026-10-13T20:18:57.522Z"
+      "joinedAt": "2026-10-14T03:23:43.879Z"
     },
     {
-      "personId": "8581f8c8-9cce-40c1-a9cc-147845cefd49",
+      "personId": "366f1a64-4e46-488d-823a-2e0e0033afdb",
       "name": "Cave person",
       "photoId": null,
       "anonymous": true,
       "blocked": false,
       "role": "member",
       "isMe": false,
-      "joinedAt": "2026-10-13T20:18:59.424Z"
+      "joinedAt": "2026-10-14T03:23:45.579Z"
     }
   ],
   "accountability": {
@@ -68,7 +68,7 @@
       "2026-10-13"
     ],
     "cells": {
-      "08f6c243-a7d8-4ed4-9af6-118565ab742a": {
+      "9c2e5cfa-3c69-4484-b307-4d4902a823c8": {
         "2026-10-07": {
           "state": "none",
           "logged": false
@@ -98,7 +98,7 @@
           "logged": true
         }
       },
-      "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9": {
+      "253ad6b6-ed20-4600-ab16-5802b7f2ef41": {
         "2026-10-07": {
           "state": "none",
           "logged": false
@@ -128,7 +128,7 @@
           "logged": false
         }
       },
-      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+      "366f1a64-4e46-488d-823a-2e0e0033afdb": {
         "2026-10-07": {
           "state": "none",
           "logged": false
@@ -160,17 +160,17 @@
       }
     },
     "weekly": {
-      "08f6c243-a7d8-4ed4-9af6-118565ab742a": {
+      "9c2e5cfa-3c69-4484-b307-4d4902a823c8": {
         "logged": 0,
         "full": 0,
         "averagePercent": null
       },
-      "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9": {
+      "253ad6b6-ed20-4600-ab16-5802b7f2ef41": {
         "logged": 0,
         "full": 0,
         "averagePercent": null
       },
-      "8581f8c8-9cce-40c1-a9cc-147845cefd49": {
+      "366f1a64-4e46-488d-823a-2e0e0033afdb": {
         "logged": 0,
         "full": 0,
         "averagePercent": null
@@ -178,7 +178,7 @@
     }
   },
   "challenge": {
-    "id": "a38873b6-84fb-4f2c-9807-121e11329fcf",
+    "id": "9d0f1fbb-efe1-4386-8c3e-d111101b2bda",
     "kind": "streak",
     "name": "Streak",
     "settings": {
@@ -199,14 +199,14 @@
     "canJoin": false,
     "entrants": [
       {
-        "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+        "personId": "9c2e5cfa-3c69-4484-b307-4d4902a823c8",
         "name": "Ana",
         "photoId": null,
         "anonymous": false,
         "blocked": false,
         "role": "owner",
         "isMe": false,
-        "joinedAt": "2026-10-13T20:18:54.004Z",
+        "joinedAt": "2026-10-14T03:23:41.333Z",
         "status": "in",
         "points": 0,
         "livesLeft": 1,
@@ -219,14 +219,14 @@
         }
       },
       {
-        "personId": "d89ff648-ad29-45a5-9c48-86bc4dcb9fc9",
+        "personId": "253ad6b6-ed20-4600-ab16-5802b7f2ef41",
         "name": "Ben",
         "photoId": null,
         "anonymous": false,
         "blocked": false,
         "role": "member",
         "isMe": true,
-        "joinedAt": "2026-10-13T20:18:57.522Z",
+        "joinedAt": "2026-10-14T03:23:43.879Z",
         "status": "in",
         "points": 0,
         "livesLeft": 1,

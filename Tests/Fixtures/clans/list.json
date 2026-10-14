@@ -1,13 +1,13 @@
 {
   "clans": [
     {
-      "id": "4acf3ebb-be5c-4636-ba0f-03d0160975e7",
+      "id": "ec26575f-495a-44c6-b1b3-515958291400",
       "name": "The Cavemen",
       "memberCount": 3,
       "role": "member",
       "unread": 0,
       "challenge": {
-        "id": "a38873b6-84fb-4f2c-9807-121e11329fcf",
+        "id": "9d0f1fbb-efe1-4386-8c3e-d111101b2bda",
         "kind": "streak",
         "name": "Streak",
         "status": "active",

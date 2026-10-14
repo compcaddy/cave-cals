@@ -143,6 +143,13 @@ export const clanPeople = pgTable('clan_people', {
   // The local day the 7 PM "fire going out" alert last went out, so it goes once a day.
   eveningAlertOn: date('evening_alert_on'),
   termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }).notNull(),
+  // From Apple or Google sign-in (verified by them). Apple's may be a private relay address.
+  email: text('email'),
+  emailPrivate: boolean('email_private').notNull().default(false),
+  // "Email me Cave Cals news": off unless the person turns it on, with when they did either.
+  newsOptIn: boolean('news_opt_in').notNull().default(false),
+  newsOptInAt: timestamp('news_opt_in_at', { withTimezone: true }),
+  newsOptOutAt: timestamp('news_opt_out_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 export const clanIdentities = pgTable('clan_identities', {
@@ -282,3 +289,16 @@ export const clanReports = pgTable('clan_reports', {
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   resolution: text('resolution'),
 }, t => [index('clan_reports_open_idx').on(t.resolvedAt, t.createdAt)]);
+
+// News emails written and sent on /admin/email (Amazon SES), only to people who opted in.
+export const emailCampaigns = pgTable('email_campaigns', {
+  id: uuid('id').primaryKey(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('sending'), // sending | sent | failed
+  recipients: integer('recipients').notNull().default(0),
+  sent: integer('sent').notNull().default(0),
+  failed: integer('failed').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+});

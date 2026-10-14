@@ -42,6 +42,11 @@ struct ClanProfile: Decodable, Equatable {
     var birthMonth: Int?
     var alertPrefs: [String: Bool]
     var needsName: Bool
+    /// From Apple or Google; Apple's may be a private relay address. Missing from older servers.
+    var email: String?
+    var emailPrivate: Bool?
+    /// "Email me Cave Cals news".
+    var newsOptIn: Bool?
 }
 struct ClanRule: Codable, Equatable, Hashable {
     enum Kind: String, Codable, CaseIterable { case atOrUnder, withinPercent, upToPercentOver }

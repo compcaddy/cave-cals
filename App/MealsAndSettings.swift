@@ -31,6 +31,8 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             HapticForm {
+                // The optional Cave Cals account (clans and news) leads About You.
+                AccountSection()
                 // With no goal yet, the calculator leads About You. Once a goal exists it lives under the goal.
                 if store.profile?.dailyGoal == nil {
                 Section {

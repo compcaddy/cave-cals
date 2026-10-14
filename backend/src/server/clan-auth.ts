@@ -29,7 +29,18 @@ async function providerKeys(url: string, refresh = false): Promise<JWK[]> {
   return keys;
 }
 const base64url = (part: string) => Buffer.from(part, 'base64url');
-export type TokenClaims = { iss: string; aud: string | string[]; sub: string; exp: number; iat?: number; nonce?: string; email?: string; name?: string; given_name?: string; picture?: string };
+export type TokenClaims = {
+  iss: string; aud: string | string[]; sub: string; exp: number; iat?: number; nonce?: string; name?: string; given_name?: string; picture?: string;
+  // Apple sends booleans as strings ("true").
+  email?: string; email_verified?: boolean | string; is_private_email?: boolean | string;
+};
+const yes = (value: boolean | string | undefined) => value === true || value === 'true';
+/** A verified email from the identity token, or nothing. */
+export function verifiedEmail(claims: TokenClaims): { email: string; emailPrivate: boolean } | null {
+  const email = claims.email?.trim().toLowerCase();
+  if (!email || email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !yes(claims.email_verified)) return null;
+  return { email, emailPrivate: yes(claims.is_private_email) || email.endsWith('@privaterelay.appleid.com') };
+}
 // Verifies an RS256 JWT's signature with the provider's key, then its issuer, audience, expiry, and nonce.
 export async function verifyIdentityToken(token: string, options: { keysURL: string; issuers: string[]; audiences: string[]; nonce: string; now?: number }): Promise<TokenClaims> {
   const invalid = () => new APIError(401, 'invalid_sign_in', 'Sign-in couldn’t be verified. Please try again.');
@@ -116,16 +127,21 @@ export const signInInput = z.object({
   // Apple shares the name only with the app, and only on the first sign-in.
   name: z.string().max(200).optional(),
   acceptedTerms: z.boolean().optional(),
+  // "Email me Cave Cals news" on the sign-in screen (off unless ticked).
+  newsOptIn: z.boolean().optional(),
   // Local development only.
   devSubject: z.string().min(1).max(100).optional(),
+  devEmail: z.string().email().max(254).optional(),
 });
 export type SignInResult = { session: string; personId: string; isNew: boolean; displayName: string };
 
 export async function signIn(identity: Identity, input: z.infer<typeof signInInput>): Promise<SignInResult> {
   let subject: string, suggestedName = input.name ?? '', pictureURL: string | undefined, refreshToken: string | null = null;
+  let email: { email: string; emailPrivate: boolean } | null = null;
   if (input.provider === 'dev') {
     if (!identity.development || !input.devSubject) throw new APIError(403, 'dev_only', 'Development sign-in is local only.');
     subject = input.devSubject;
+    if (input.devEmail) email = { email: input.devEmail.toLowerCase(), emailPrivate: false };
   } else {
     if (!input.identityToken || !input.rawNonce) throw new APIError(400, 'invalid_request', 'Some request fields are invalid.');
     const apple = input.provider === 'apple';
@@ -134,23 +150,32 @@ export async function signIn(identity: Identity, input: z.infer<typeof signInInp
       ? { keysURL: 'https://appleid.apple.com/auth/keys', issuers: ['https://appleid.apple.com'], audiences: appleAudiences(), nonce: input.rawNonce }
       : { keysURL: 'https://www.googleapis.com/oauth2/v3/certs', issuers: ['https://accounts.google.com', 'accounts.google.com'], audiences: googleAudiences(), nonce: input.rawNonce });
     subject = claims.sub;
+    email = verifiedEmail(claims);
     if (!apple) { suggestedName = claims.given_name || claims.name || suggestedName; pictureURL = claims.picture; }
     else refreshToken = await appleRefreshToken(input.authorizationCode);
   }
   const db = database();
   const [existing] = await db.select().from(clanIdentities).where(and(eq(clanIdentities.provider, input.provider), eq(clanIdentities.subject, subject)));
   let personId = existing?.personId, isNew = false, displayName = '';
+  const now = new Date();
   if (personId) {
     if (refreshToken) await db.update(clanIdentities).set({ appleRefreshToken: refreshToken }).where(and(eq(clanIdentities.provider, input.provider), eq(clanIdentities.subject, subject)));
-    const [person] = await db.select({ displayName: clanPeople.displayName }).from(clanPeople).where(eq(clanPeople.id, personId));
+    const [person] = await db.select({ displayName: clanPeople.displayName, newsOptIn: clanPeople.newsOptIn }).from(clanPeople).where(eq(clanPeople.id, personId));
     displayName = person?.displayName ?? '';
+    // Keep the latest email the provider vouches for; ticking the news box again opts back in.
+    const update: Partial<typeof clanPeople.$inferInsert> = email ? { ...email } : {};
+    if (input.newsOptIn === true && !person?.newsOptIn) Object.assign(update, { newsOptIn: true, newsOptInAt: now });
+    if (Object.keys(update).length) await db.update(clanPeople).set(update).where(eq(clanPeople.id, personId));
   } else {
-    if (input.acceptedTerms !== true) throw new APIError(400, 'terms_required', 'Agree to the clan rules to continue.');
+    if (input.acceptedTerms !== true) throw new APIError(400, 'terms_required', 'Agree to the terms to continue.');
     // A first name from the provider, if it passes the filter; otherwise the app asks for one.
     try { displayName = suggestedName ? cleanDisplayName(suggestedName.split(' ')[0]) : ''; } catch { displayName = ''; }
     personId = randomUUID(); isNew = true;
     await db.transaction(async tx => {
-      await tx.insert(clanPeople).values({ id: personId!, displayName, termsAcceptedAt: new Date() });
+      await tx.insert(clanPeople).values({
+        id: personId!, displayName, termsAcceptedAt: now, ...(email ?? {}),
+        newsOptIn: input.newsOptIn === true, newsOptInAt: input.newsOptIn === true ? now : null,
+      });
       await tx.insert(clanIdentities).values({ provider: input.provider, subject, personId: personId!, appleRefreshToken: refreshToken });
     });
     // A Google profile picture becomes the first photo (re-encoded and stored like any other).

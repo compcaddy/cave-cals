@@ -223,3 +223,14 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
 - A signed build on a real iPhone: Sign in with Apple, Google sign-in, push delivery, Universal Links, and the photo picker and cropper on device.
 - The app against a running backend end to end; the JSON contract is checked by the decoding test.
 - Dark mode, small iPhones, and large text, before release.
+
+## Accounts and news email (October 13, 2026)
+
+- **Sign-in is general, not just for clans.** The top of About You shows **Sign in**, then your account (`AccountSection`, `AccountView` in `App/ClanAccount.swift`). The campfire's sign-in is the same screen with the clans intro. Internally the account is still `clan_people`.
+- **Email:** Apple (`.email` scope) and Google (`openid email profile`) give an email, and the server keeps it only when they mark it verified. Apple's Hide My Email gives a relay address (`email_private`), shown in the app as "Hidden by Apple". Apple includes the email only if it was requested the first time someone signed in. Anyone who signed in before this change has to sign out, remove Cave Cals in their Apple ID's Sign in with Apple list, and sign in again.
+- **News opt-in:** a second checkbox at sign-in, off by default, plus a switch in Account. `news_opt_in`, `news_opt_in_at`, and `news_opt_out_at` are on the person (migration `0006_account_email.sql`).
+- **Sending:** `/admin/email` (Amazon SES over SMTP): write in plain text, send a test, then type SEND to email everyone opted in, at about 10 a second inside the request (fine for a few thousand). Each email has the unsubscribe link, `List-Unsubscribe` one-click headers, and the postal address (CAN-SPAM). There's also a CSV export and a history (`email_campaigns`).
+- **Owner setup:**
+  - In Vercel: `SES_SMTP_HOST`, `SES_SMTP_PORT` (587), `SES_SMTP_USER`, `SES_SMTP_PASS`, `EMAIL_FROM` (a verified SES identity, for example `Cave Cals <hello@cavecals.com>`), and `EMAIL_POSTAL_ADDRESS`.
+  - In the Apple Developer site, under Sign in with Apple for Email Communication, add the sending domain or address so relay addresses deliver.
+  - In Google Cloud Console → Data access, add the `email` scope.

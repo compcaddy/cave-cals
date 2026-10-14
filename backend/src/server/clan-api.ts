@@ -121,6 +121,7 @@ function adultByBirth(year: number | null, month: number | null, now = new Date(
 
 const meUpdate = z.object({
   displayName: z.string().max(200).optional(),
+  newsOptIn: z.boolean().optional(),
   birthYear: z.number().int().min(1900).max(new Date().getUTCFullYear()).optional(),
   birthMonth: z.number().int().min(1).max(12).optional(),
   alertPrefs: z.record(z.enum([...new Set(Object.values(ALERT_SWITCH))] as [string, ...string[]]), z.boolean()).optional(),
@@ -160,6 +161,10 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       if (update.displayName !== undefined) set.displayName = cleanDisplayName(update.displayName);
       if (update.birthYear !== undefined) set.birthYear = update.birthYear;
       if (update.birthMonth !== undefined) set.birthMonth = update.birthMonth;
+      if (update.newsOptIn !== undefined) {
+        set.newsOptIn = update.newsOptIn;
+        if (update.newsOptIn) set.newsOptInAt = new Date(); else set.newsOptOutAt = new Date();
+      }
       if (update.alertPrefs) set.alertPrefs = { ...((await me(personId)).alertPrefs as object), ...update.alertPrefs };
       if (Object.keys(set).length) await db.update(clanPeople).set(set).where(eq(clanPeople.id, personId));
       return profile(await me(personId));
@@ -422,6 +427,7 @@ function profile(person: typeof clanPeople.$inferSelect) {
   return {
     personId: person.id, displayName: person.displayName, photoId: person.photoId, birthYear: person.birthYear, birthMonth: person.birthMonth,
     alertPrefs: person.alertPrefs, needsName: !person.displayName,
+    email: person.email, emailPrivate: person.emailPrivate, newsOptIn: person.newsOptIn,
   };
 }
 async function nextAnonNumber(clanId: string) {

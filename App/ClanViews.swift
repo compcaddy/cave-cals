@@ -15,9 +15,9 @@ struct ClansScreen: View {
         NavigationStack(path: $path) {
             Group {
                 if !clans.signedIn {
-                    ClanSignInView()
+                    ClanSignInView(context: .clans)
                 } else if clans.me?.needsName == true {
-                    ClanProfileView(firstTime: true)
+                    AccountView(firstTime: true)
                 } else {
                     list
                 }
@@ -30,7 +30,7 @@ struct ClansScreen: View {
                 if clans.signedIn && clans.me?.needsName != true {
                     ToolbarItem(placement: .topBarLeading) {
                         NavigationLink(value: ClanRoute.profile) { CaveIcon(.person, size: 22) }
-                            .accessibilityLabel("Clan profile").accessibilityIdentifier("clanProfile")
+                            .accessibilityLabel("Account").accessibilityIdentifier("clanProfile")
                     }
                 }
             }
@@ -38,7 +38,7 @@ struct ClansScreen: View {
                 switch route {
                 case .clan(let id): ClanDetailView(clanId: id).hapticOnPush()
                 case .challenge(let clanId): ChallengeBoardView(clanId: clanId).hapticOnPush()
-                case .profile: ClanProfileView().hapticOnPush()
+                case .profile: AccountView().hapticOnPush()
                 }
             }
         }
@@ -747,7 +747,7 @@ struct ClanNotificationSettingsSection: View {
                 ForEach(switches, id: \.key) { item in
                     Toggle(item.title, isOn: Binding(get: { prefs[item.key] ?? true }, set: { save(item.key, $0) }))
                 }
-                NavigationLink("Clan profile") { ClanProfileView().hapticOnPush() }
+                NavigationLink("Account") { AccountView().hapticOnPush() }
             } header: { Text("Clans") } footer: {
                 Text("Mute a single clan from its settings. Your food stays private; clanmates see only whether your day counted.").font(.cave(.caption2))
             }

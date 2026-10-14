@@ -23,12 +23,13 @@ enum ClanSignIn {
     @MainActor static func send(_ fields: [String: Any]) async throws {
         let result = try await AIBackend.shared.clanSignIn(fields.merging(["acceptedTerms": true]) { a, _ in a })
         await ClanStore.shared.didSignIn(session: result.session)
-        UsageStats.shared.event("clan.signIn", ["provider": fields["provider"] as? String ?? "", "new": result.isNew ? "yes" : "no"])
+        UsageStats.shared.event("account.signIn", ["provider": fields["provider"] as? String ?? "", "new": result.isNew ? "yes" : "no",
+                                                   "news": fields["newsOptIn"] as? Bool == true ? "yes" : "no"])
     }
 
     /// Google: the system sign-in window with PKCE (the same window Google's SDK uses), then the code is swapped
     /// for an ID token here. No client secret: it's an iOS client.
-    @MainActor static func google(anchor: ASPresentationAnchor) async throws {
+    @MainActor static func google(anchor: ASPresentationAnchor, newsOptIn: Bool) async throws {
         guard let clientID = googleClientID else { throw ClanError(code: "not_configured", message: "Google sign-in isn’t set up yet.") }
         let scheme = "com.googleusercontent.apps." + clientID.replacingOccurrences(of: ".apps.googleusercontent.com", with: "")
         let redirect = "\(scheme):/oauth2redirect"
@@ -39,7 +40,7 @@ enum ClanSignIn {
         var auth = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
         auth.queryItems = [
             .init(name: "client_id", value: clientID), .init(name: "redirect_uri", value: redirect), .init(name: "response_type", value: "code"),
-            .init(name: "scope", value: "openid profile"), .init(name: "code_challenge", value: challenge),
+            .init(name: "scope", value: "openid email profile"), .init(name: "code_challenge", value: challenge),
             .init(name: "code_challenge_method", value: "S256"), .init(name: "nonce", value: sha256(nonce)), .init(name: "state", value: state),
             .init(name: "prompt", value: "select_account"),
         ]
@@ -69,7 +70,7 @@ enum ClanSignIn {
         guard let idToken = try? JSONDecoder().decode(Tokens.self, from: data).id_token else {
             throw ClanError(code: "invalid_sign_in", message: "Google sign-in didn’t finish. Please try again.")
         }
-        try await send(["provider": "google", "identityToken": idToken, "rawNonce": nonce])
+        try await send(["provider": "google", "identityToken": idToken, "rawNonce": nonce, "newsOptIn": newsOptIn])
     }
     private final class AnchorProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
         static var key = 0
@@ -79,9 +80,13 @@ enum ClanSignIn {
     }
 }
 
-/// The campfire's first screen for someone signed out: what clans are, the rules, and the sign-in buttons.
+/// Signing in to a Cave Cals account (optional; the diary never needs one). From About You it's just the
+/// account; from the campfire it also explains clans. "Email me Cave Cals news" starts off.
 struct ClanSignInView: View {
+    enum Context { case account, clans }
+    var context: Context = .clans
     @State private var agreed = false
+    @State private var news = false
     @State private var busy = false
     @State private var message: String?
     @State private var appleNonce = ClanSignIn.rawNonce()
@@ -90,32 +95,55 @@ struct ClanSignInView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                Image("CaveCampfire").renderingMode(.template).resizable().scaledToFit()
-                    .frame(width: 84, height: 84).foregroundStyle(Color.caveOrange).padding(.top, 12).accessibilityHidden(true)
-                VStack(spacing: 8) {
-                    Text("Clans").font(.cave(.largeTitle))
-                    Text("Keep each other on track around the fire.").font(.cave(.callout)).foregroundStyle(.secondary)
+                if context == .clans {
+                    Image("CaveCampfire").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 84, height: 84).foregroundStyle(Color.caveOrange).padding(.top, 12).accessibilityHidden(true)
+                    VStack(spacing: 8) {
+                        Text("Clans").font(.cave(.largeTitle))
+                        Text("Keep each other on track around the fire.").font(.cave(.callout)).foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        point("flame", "Streaks and challenges with friends, family, or your coach.")
+                        point("eye.slash", "Your food stays private. Clanmates see only whether your day counted.")
+                        point("person.crop.circle.badge.questionmark", "Join as a Cave person if you’d rather not show your name.")
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
+                    Text("Sign in to start or join a clan.").font(.cave(.callout)).foregroundStyle(.secondary)
+                } else {
+                    CaveIcon(.person, size: 64).foregroundStyle(Color.caveOrange).padding(.top, 12)
+                    VStack(spacing: 8) {
+                        Text("Your Cave Cals account").font(.cave(.title)).multilineTextAlignment(.center)
+                        Text("Optional. Your food diary stays on your iPhone either way.").font(.cave(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        point("flame", "Start or join clans with friends, family, or your coach.")
+                        point("envelope", "Hear about new features, if you want to.")
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
                 }
-                VStack(alignment: .leading, spacing: 14) {
-                    point("flame", "Streaks and challenges with friends, family, or your coach.")
-                    point("eye.slash", "Your food stays private. Clanmates see only whether your day counted.")
-                    point("person.crop.circle.badge.questionmark", "Join as a Cave person if you’d rather not show your name.")
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
                 Button { agreed.toggle() } label: {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: agreed ? "checkmark.square.fill" : "square").font(.title3).foregroundStyle(Color.caveOrange)
-                        Text("I agree to the clan rules: no hateful, sexual, or bullying names or photos. Reported people can be removed.")
+                        Text("I agree to the terms, including the clan rules: no hateful, sexual, or bullying names or photos.")
                             .font(.cave(.footnote)).foregroundStyle(Color.primary).multilineTextAlignment(.leading)
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }
                 .hapticFeel(.selection)
                 .accessibilityIdentifier("clanAgree")
                 .accessibilityValue(agreed ? "Checked" : "Not checked")
+                Button { news.toggle() } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: news ? "checkmark.square.fill" : "square").font(.title3).foregroundStyle(Color.caveOrange)
+                        Text("Email me Cave Cals news and tips. Unsubscribe anytime.")
+                            .font(.cave(.footnote)).foregroundStyle(Color.primary).multilineTextAlignment(.leading)
+                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .hapticFeel(.selection)
+                .accessibilityIdentifier("newsOptIn")
+                .accessibilityValue(news ? "Checked" : "Not checked")
                 Link("Read the terms", destination: URL(string: "https://cavecals.com/terms")!).font(.cave(.footnote))
                 VStack(spacing: 12) {
                     SignInWithAppleButton(.signIn) { request in
                         appleNonce = ClanSignIn.rawNonce()
-                        request.requestedScopes = [.fullName]
+                        request.requestedScopes = [.fullName, .email]
                         request.nonce = ClanSignIn.sha256(appleNonce)
                     } onCompletion: { result in apple(result) }
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
@@ -156,7 +184,7 @@ struct ClanSignInView: View {
         case .success(let authorization):
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }) else { return }
-            var fields: [String: Any] = ["provider": "apple", "identityToken": token, "rawNonce": appleNonce]
+            var fields: [String: Any] = ["provider": "apple", "identityToken": token, "rawNonce": appleNonce, "newsOptIn": news]
             if let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) { fields["authorizationCode"] = code }
             if let name = credential.fullName?.givenName, !name.isEmpty { fields["name"] = name }
             run { try await ClanSignIn.send(fields) }
@@ -164,13 +192,14 @@ struct ClanSignInView: View {
     }
     private func google() {
         guard let anchor = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
-        run { try await ClanSignIn.google(anchor: anchor) }
+        let news = news
+        run { try await ClanSignIn.google(anchor: anchor, newsOptIn: news) }
     }
     private func developer() {
         let key = "clan.devSubject"
         let subject = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(subject, forKey: key)
-        run { try await ClanSignIn.send(["provider": "dev", "devSubject": subject, "name": "Tester"]) }
+        run { try await ClanSignIn.send(["provider": "dev", "devSubject": subject, "name": "Tester", "newsOptIn": news]) }
     }
     private func run(_ work: @escaping () async throws -> Void) {
         busy = true; message = nil
@@ -292,10 +321,11 @@ struct AvatarCropper: View {
     }
 }
 
-// MARK: Profile
+// MARK: Account
 
-/// Your clan profile: photo, name, birth month (for weight challenges), and the account.
-struct ClanProfileView: View {
+/// Your Cave Cals account: photo and name (what clanmates see), email and news, birth month (for weight
+/// challenges), sign out, and delete.
+struct AccountView: View {
     @State private var clans = ClanStore.shared
     @State private var name = ""
     @State private var birthMonth = 0
@@ -305,6 +335,7 @@ struct ClanProfileView: View {
     @State private var busy = false
     @State private var message: String?
     @State private var confirmDelete = false
+    @State private var news = false
     @Environment(\.dismiss) private var dismiss
     var firstTime = false
 
@@ -339,6 +370,19 @@ struct ClanProfileView: View {
             } header: { Text("Birthday") } footer: {
                 Text("Only needed for weight challenges, which are for adults. Never shown to anyone.").font(.cave(.caption2))
             }
+            if !firstTime {
+                Section {
+                    if let email = clans.me?.email {
+                        LabeledContent("Email", value: clans.me?.emailPrivate == true ? "Hidden by Apple" : email)
+                            .accessibilityIdentifier("accountEmail")
+                    }
+                    Toggle("Email me Cave Cals news", isOn: $news).accessibilityIdentifier("accountNews")
+                } header: { Text("Email") } footer: {
+                    Text(clans.me?.email == nil
+                         ? "Your sign-in didn’t share an email. To add one, sign out, then sign in again and allow your email."
+                         : "Now and then: new features and tips. Every email has an unsubscribe link.").font(.cave(.caption2))
+                }
+            }
             if firstTime {
                 Section {
                     Button { saveName(); if !name.trimmingCharacters(in: .whitespaces).isEmpty { dismiss() } } label: {
@@ -347,21 +391,27 @@ struct ClanProfileView: View {
                 }
             } else {
                 Section {
-                    Button("Sign out of clans") { signOut() }
-                    Button("Delete clan account", role: .destructive) { confirmDelete = true }.accessibilityIdentifier("clanDeleteAccount")
+                    Button("Sign out") { signOut() }.accessibilityIdentifier("accountSignOut")
+                    Button("Delete account", role: .destructive) { confirmDelete = true }.accessibilityIdentifier("clanDeleteAccount")
                 } footer: {
-                    Text("Deleting removes your clan profile, photo, and history from Cave Cals’ server and takes you out of every clan. Your food diary stays on this iPhone.").font(.cave(.caption2))
+                    Text("Deleting removes your account, email, photo, and clan history from Cave Cals’ server and takes you out of every clan. Your food diary stays on this iPhone.").font(.cave(.caption2))
                 }
             }
             if let message { Section { Text(message).foregroundStyle(.red).font(.cave(.footnote)) } }
         }
         .caveScreenBackground()
         .tapOutsideClosesKeyboard()
-        .navigationTitle(firstTime ? "Your clan profile" : "Clan profile").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(firstTime ? "Your name" : "Account").navigationBarTitleDisplayMode(.inline)
         .overlay { if busy { ProgressView().controlSize(.large) } }
         .onAppear {
             name = clans.me?.displayName ?? ""
             birthMonth = clans.me?.birthMonth ?? 0; birthYear = clans.me?.birthYear ?? 0
+            news = clans.me?.newsOptIn ?? false
+        }
+        .onChange(of: news) { _, value in
+            guard value != (clans.me?.newsOptIn ?? false) else { return }
+            UsageStats.shared.event("account.news", ["on": value ? "yes" : "no"])
+            Task { try? await update(["newsOptIn": value]) }
         }
         .onChange(of: birthMonth) { saveBirth() }
         .onChange(of: birthYear) { saveBirth() }
@@ -375,10 +425,10 @@ struct ClanProfileView: View {
         .fullScreenCover(item: Binding(get: { cropping.map(CropItem.init) }, set: { if $0 == nil { cropping = nil } })) { item in
             AvatarCropper(image: item.image, onDone: { data in cropping = nil; upload(data) }, onCancel: { cropping = nil })
         }
-        .confirmationDialog("Delete your clan account?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete clan account", role: .destructive) { Haptics.play(.warning); deleteAccount() }.hapticFeel(.none)
+        .confirmationDialog("Delete your Cave Cals account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) { Haptics.play(.warning); deleteAccount() }.hapticFeel(.none)
             Button("Cancel", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)
-        } message: { Text("You’ll leave every clan. This can’t be undone.") }
+        } message: { Text("You’ll leave every clan and stop getting Cave Cals emails. This can’t be undone.") }
     }
     private struct CropItem: Identifiable { let image: UIImage; var id: ObjectIdentifier { ObjectIdentifier(image) } }
     private func update(_ fields: [String: Any]) async throws {
@@ -431,9 +481,62 @@ struct ClanProfileView: View {
         Task {
             do {
                 let _: [String: Bool] = try await ClanClient.shared.call("clan/account/delete")
-                clans.signedOut(); UsageStats.shared.event("clan.accountDeleted"); dismiss()
+                clans.signedOut(); UsageStats.shared.event("account.deleted"); dismiss()
             } catch { message = error.localizedDescription }
             busy = false
+        }
+    }
+}
+
+// MARK: About You
+
+/// The top of About You: "Sign in" while signed out, otherwise your photo, name, and email.
+struct AccountSection: View {
+    @State private var clans = ClanStore.shared
+    @State private var signingIn = false
+    var body: some View {
+        Section {
+            if clans.signedIn, let me = clans.me {
+                NavigationLink { AccountView().hapticOnPush() } label: {
+                    HStack(spacing: 12) {
+                        ClanAvatar(photoId: me.photoId, name: me.displayName.isEmpty ? "?" : me.displayName, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(me.displayName.isEmpty ? "Your account" : me.displayName).foregroundStyle(Color.primary)
+                            if let email = me.email, me.emailPrivate != true {
+                                Text(email).font(.cave(.footnote)).foregroundStyle(Color.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                }.accessibilityIdentifier("account")
+            } else {
+                Button { signingIn = true } label: {
+                    HStack(spacing: 12) {
+                        CaveIcon(.person, size: 26).foregroundStyle(Color.caveOrange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Sign in").foregroundStyle(Color.caveOrange)
+                            Text("Optional: clans and Cave Cals news").font(.cave(.footnote)).foregroundStyle(Color.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        CaveIcon(.chevronRight, size: 16).foregroundStyle(Color.secondary)
+                    }.contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("accountSignIn")
+            }
+        }
+        .task { if clans.signedIn && clans.me == nil { await clans.refresh() } }
+        .sheet(isPresented: $signingIn) {
+            NavigationStack {
+                Group {
+                    if clans.signedIn && clans.me?.needsName == true { AccountView(firstTime: true) }
+                    else { ClanSignInView(context: .account) }
+                }
+                .caveScreenBackground()
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(clans.signedIn ? "Done" : "Cancel") { signingIn = false }.hapticButtonStyle(.automatic) } }
+            }
+        }
+        .onChange(of: clans.me?.needsName) { _, needsName in
+            // Signed in with a name already: nothing more to ask.
+            if signingIn, clans.signedIn, needsName == false { signingIn = false }
         }
     }
 }

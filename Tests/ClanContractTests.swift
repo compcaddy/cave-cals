@@ -9,7 +9,10 @@ final class ClanContractTests: XCTestCase {
         return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
     }
     func testProfileAndPreview() throws {
-        XCTAssertEqual(try sample("me", as: ClanProfile.self).displayName, "Ana")
+        let me = try sample("me", as: ClanProfile.self)
+        XCTAssertEqual(me.displayName, "Ana")
+        XCTAssertEqual(me.email, "ana@example.com")
+        XCTAssertEqual(me.newsOptIn, true)
         let preview = try sample("preview", as: ClanPreview.self)
         XCTAssertEqual(preview.name, "The Cavemen")
         XCTAssertFalse(preview.alreadyMember)

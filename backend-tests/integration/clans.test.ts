@@ -11,6 +11,7 @@ import { clanEntrants, clanPeople, clans, clanSessions, clanIdentities } from '.
 import { api } from '../../backend/src/server/api';
 import { photoResponse } from '../../backend/src/server/clan-api';
 import { runClanJobs } from '../../backend/src/server/clan-jobs';
+import { unsubscribe, unsubscribeToken } from '../../backend/src/server/email';
 import { addDays, localDay } from '../../backend/src/server/clan-rules';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -49,8 +50,8 @@ async function call(path: string, body: object, session?: string): Promise<Resul
   const response = await api(new Request(`http://localhost:3000/api/v1/${path}`, { method: 'POST', headers, body: JSON.stringify(body) }), path);
   return { status: response.status, body: await response.json() };
 }
-async function person(name: string) {
-  const result = await call('clan/auth/signin', { nonce: 'local', provider: 'dev', devSubject: `${run}-${name}`, name, acceptedTerms: true });
+async function person(name: string, extra: object = {}) {
+  const result = await call('clan/auth/signin', { nonce: 'local', provider: 'dev', devSubject: `${run}-${name}`, name, acceptedTerms: true, ...extra });
   assert.equal(result.status, 200, JSON.stringify(result.body));
   people.push(result.body.personId);
   await call('clan/days', { timeZone: zone, days: [{ day: localDay(new Date(), zone), logged: false, fullDay: false, percentOfGoal: null, goalOk: true, doneEating: false }] }, result.body.session);
@@ -64,14 +65,25 @@ test('sign-in needs the clan rules, and makes a person with their first name', a
   const refused = await call('clan/auth/signin', { nonce: 'local', provider: 'dev', devSubject: `${run}-x` });
   assert.equal(refused.status, 400);
   assert.equal(refused.body.error.code, 'terms_required');
-  ana = await person('Ana Smith'); ben = await person('Ben'); cal = await person('Cal');
+  ana = await person('Ana Smith', { devEmail: `ana-${run}@example.com`, newsOptIn: true }); ben = await person('Ben'); cal = await person('Cal');
   const again = await call('clan/auth/signin', { nonce: 'local', provider: 'dev', devSubject: `${run}-Ana Smith` });
   assert.equal(again.body.personId, ana.personId);
   assert.equal(again.body.isNew, false);
   const me = (await call('clan/me', {}, ana.session)).body;
   assert.equal(me.displayName, 'Ana');
-  sample('me', me);
+  sample('me', { ...me, email: 'ana@example.com' });
   assert.equal((await call('clan/me', {}, 'not-a-session')).status, 401);
+});
+
+test('the account keeps the verified email and the news choice, and unsubscribe links turn it off', async () => {
+  const me = (await call('clan/me', {}, ana.session)).body;
+  assert.deepEqual([me.email, me.emailPrivate, me.newsOptIn], [`ana-${run}@example.com`, false, true]);
+  assert.equal((await call('clan/me', {}, ben.session)).body.newsOptIn, false);
+  assert.equal((await call('clan/me/update', { newsOptIn: false }, ana.session)).body.newsOptIn, false);
+  await call('clan/me/update', { newsOptIn: true }, ana.session);
+  assert.equal(await unsubscribe(ana.personId, 'not-the-token'), false);
+  assert.equal(await unsubscribe(ana.personId, unsubscribeToken(ana.personId)), true);
+  assert.equal((await call('clan/me', {}, ana.session)).body.newsOptIn, false);
 });
 
 test('names are filtered', async () => {

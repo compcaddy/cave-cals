@@ -43,6 +43,13 @@
       "when": 1791920625938,
       "tag": "0005_clans",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791948046236,
+      "tag": "0006_account_email",
+      "breakpoints": true
     }
   ]
 }

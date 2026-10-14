@@ -1,9 +1,12 @@
 {
-  "personId": "08f6c243-a7d8-4ed4-9af6-118565ab742a",
+  "personId": "9c2e5cfa-3c69-4484-b307-4d4902a823c8",
   "displayName": "Ana",
   "photoId": null,
   "birthYear": null,
   "birthMonth": null,
   "alertPrefs": {},
-  "needsName": false
+  "needsName": false,
+  "email": "ana@example.com",
+  "emailPrivate": false,
+  "newsOptIn": true
 }

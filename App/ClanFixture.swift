@@ -41,7 +41,8 @@ enum ClanFixture {
     private static var today: String { ClanDay.string(Date()) }
     private static func day(_ back: Int) -> String { ClanDay.adding(-back, to: today) }
     private static var me: [String: Any] {
-        ["personId": "me", "displayName": "Phil", "photoId": NSNull(), "birthYear": NSNull(), "birthMonth": NSNull(), "alertPrefs": [String: Bool](), "needsName": false]
+        ["personId": "me", "displayName": "Phil", "photoId": NSNull(), "birthYear": NSNull(), "birthMonth": NSNull(), "alertPrefs": [String: Bool](), "needsName": false,
+         "email": "phil@example.com", "emailPrivate": false, "newsOptIn": true]
     }
     private static var summary: [String: Any] {
         ["id": "fixture-challenge", "kind": "streak", "name": "Streak", "status": "active", "dayNumber": 19, "totalDays": NSNull(),
