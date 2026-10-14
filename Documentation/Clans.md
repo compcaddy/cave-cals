@@ -158,7 +158,7 @@ There's **one active challenge per clan**. The database allows several, so that 
 
 **Push:** HTTP/2 to APNs (`node:http2`) with a .p8 key (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`).
 
-**Database:** `0005_clans.sql` is applied to production (October 13, 2026). The `clans-dev` Neon branch was used for development and its integration tests (`backend-tests/integration/clans.test.ts` refuses any other database).
+**Database:** `0005_clans.sql` is applied to production (October 13, 2026). The `clans-dev` Neon branch used during development was deleted October 13. To run `backend-tests/integration/clans.test.ts` again, create a development branch, point `.env.development.local` at it with `NEON_TEST_BRANCH=<name>`, and run the migrations there; the test refuses the production database.
 
 ## In the app
 
@@ -198,13 +198,13 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
 
 ## Built so far (backend)
 
-- **Tables:** `drizzle/0005_clans.sql` (13 new tables, nothing existing changes), applied only to the `clans-dev` Neon branch (`br-snowy-firefly-ax06ipux`). The worktree's `.env.development.local` points there.
+- **Tables:** `drizzle/0005_clans.sql` (13 new tables, nothing existing changes), applied to production October 13.
 - **Server:** `backend/src/server/clan-*.ts`.
   - `clan-rules` holds the pure scoring: locks, made days, accountability cells, every challenge type, and invite codes.
   - `clan-auth` verifies Apple and Google tokens, runs sessions, and seals and revokes Apple tokens.
   - `clan-api` holds the routes, `clan-board` the boards and members as each viewer sees them, `clan-jobs` the cron, `clan-push` APNs and alerts, `clan-photos` photos, and `clan-names` the name filter.
 - **Routes:** `POST /api/v1/clan/auth/signin` is App Attest–verified like other paid routes; owner test access and local development work too. Every other `POST /api/v1/clan/...` route uses the `x-clan-session` header. Photos are at `GET /api/v1/clan-photo/<id>`. The cron is `GET /api/cron/clans`, every 15 minutes. There's also `/join/<CODE>`, `/.well-known/apple-app-site-association`, and `/admin/reports`.
-- **Tests:** `backend-tests/clan-rules.test.ts` and `clan-auth.test.ts` (unit), and `backend-tests/integration/clans.test.ts` (against clans-dev: `NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`).
+- **Tests:** `backend-tests/clan-rules.test.ts` and `clan-auth.test.ts` (unit), and `backend-tests/integration/clans.test.ts` (against a Neon development branch, never production: `NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`).
 - **Local development sign-in:** provider `dev` with a `devSubject`, on localhost with `DEV_API_TOKEN` only.
 
 ## Built so far (app)

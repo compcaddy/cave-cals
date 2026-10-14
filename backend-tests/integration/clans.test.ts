@@ -1,4 +1,4 @@
-// Clans against the isolated clans-dev Neon branch, through the real API routes with local development
+// Clans against a Neon development branch (never production), through the real API routes with local development
 // sign-in. Run: NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,9 +30,9 @@ const people: string[] = [], clanIds: string[] = [];
 const zone = 'America/Los_Angeles';
 
 before(() => {
-  // Refuse to touch any database other than the clans development branch.
-  assert.equal(process.env.NEON_TEST_BRANCH, 'clans-dev', 'Set NEON_TEST_BRANCH=clans-dev in .env.development.local.');
-  assert.ok(process.env.DATABASE_URL?.includes('ep-old-dawn-axeue4t9'), 'Refusing to test against a different database.');
+  // Only ever a development branch: never production (its endpoint is ep-weathered-sun-ax6ytvmw).
+  assert.ok(process.env.NEON_TEST_BRANCH && process.env.NEON_TEST_BRANCH !== 'production', 'Set NEON_TEST_BRANCH to a Neon development branch in .env.development.local.');
+  assert.ok(process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('ep-weathered-sun-ax6ytvmw'), 'Refusing to test against the production database.');
   env.NODE_ENV = 'development'; delete env.VERCEL; env.LOCAL_UPLOADS = 'true';
 });
 after(async () => {
