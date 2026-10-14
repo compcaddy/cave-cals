@@ -39,7 +39,7 @@ enum ClanSignIn {
         var auth = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
         auth.queryItems = [
             .init(name: "client_id", value: clientID), .init(name: "redirect_uri", value: redirect), .init(name: "response_type", value: "code"),
-            .init(name: "scope", value: "openid email profile"), .init(name: "code_challenge", value: challenge),
+            .init(name: "scope", value: "openid profile"), .init(name: "code_challenge", value: challenge),
             .init(name: "code_challenge_method", value: "S256"), .init(name: "nonce", value: sha256(nonce)), .init(name: "state", value: state),
             .init(name: "prompt", value: "select_account"),
         ]

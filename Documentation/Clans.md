@@ -215,7 +215,8 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
 - **Ranges are percentages only.** Clan ranges are at or under, within X%, or up to X% over. Progress's "up to 100 calories over" isn't offered, because the server only sees percentages.
 - **Weight eligibility:** joining a weight challenge asks for a birth month and year if they aren't set, plus "pregnant, breastfeeding, or getting care for an eating disorder?" That answer stays on the phone. The saved plan doesn't keep the doctor-plan switch, so it's asked here.
 - **Tests:** `Tests/ClanTests.swift` covers reports, weight averages, invite links, and strip lines. `Tests/ClanContractTests.swift` decodes the real responses in `Tests/Fixtures/clans/`; refresh them with `SAVE_CLAN_SAMPLES=1 NODE_ENV=development npx tsx --test backend-tests/integration/clans.test.ts`. `UITests/ClanUITests.swift` uses `--clans-fixture`.
-- **Privacy policy and terms** have Clans sections. Update their effective dates when clans ship.
+- **Privacy policy:** the Clans and Google user data sections were published on `main` October 13, 2026 (for Google's OAuth review). They say Clans is "coming in an upcoming version"; drop that phrase when clans ships. The **terms**' Clans section exists only on this branch, so update its effective date at release.
+- **Google sign-in** asks only for `openid profile`, so no email is ever received.
 
 ## Not verified yet
 
