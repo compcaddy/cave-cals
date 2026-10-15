@@ -22,7 +22,7 @@ final class WeightTrackingUITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: profile)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         profile.tap()
-        XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Me"].waitForExistence(timeout: 5))
     }
     private func openWeightProgress() {
         app.buttons["progress"].tap()
@@ -51,7 +51,7 @@ final class WeightTrackingUITests: XCTestCase {
     func testOptionalReminderDismissalAndTrackingOff() {
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
         enableWeight()
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
         app.buttons["dismissWeighIn"].tap()
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
@@ -62,7 +62,7 @@ final class WeightTrackingUITests: XCTestCase {
         let toggle = app.switches["trackWeight"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 3)); toggleTracking()
         XCTAssertFalse(app.buttons["todayWeight"].exists)
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         XCTAssertFalse(app.buttons["weighInReminder"].exists)
     }
     func testFirstWeighInOffersAppleHealth() {
@@ -96,7 +96,7 @@ final class WeightTrackingUITests: XCTestCase {
     }
     func testWeighInEditChartAndDelete() {
         enableWeight()
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         app.buttons["weighInReminder"].tap()
         let amount = app.textFields["weightAmount"]
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
@@ -136,7 +136,7 @@ final class WeightTrackingUITests: XCTestCase {
         let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Delete weigh-in", "deleteWeight")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3)); confirm.tap()
         XCTAssertTrue(app.buttons["todayWeight"].waitForExistence(timeout: 5))
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
     }
     func testWeekPickerLoadsDaysWithoutMovingWeightsAndProtectsEdits() {
@@ -202,7 +202,7 @@ final class WeightTrackingUITests: XCTestCase {
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap(); amount.typeText("180.5")
         app.buttons["saveWeight"].tap()
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         openWeightProgress()
         XCTAssertTrue(app.otherElements["weightChart"].waitForExistence(timeout: 5))
         app.buttons["weightChartRangePrevious"].tap()

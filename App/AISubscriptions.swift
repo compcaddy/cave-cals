@@ -283,6 +283,67 @@ struct OnboardingUpgradeView: View {
     private func finish() { dismissalGate.request(onComplete) }
 }
 
+/// Settings' one-line Cave Cals+ row (October 14, 2026): status at a glance, the full card a tap away,
+/// so Settings doesn't open on a 190-pt logo.
+struct AISubscriptionRow: View {
+    let subscriptions: AISubscriptions
+
+    var body: some View {
+        Section {
+            NavigationLink { CaveCalsPlusView(subscriptions: subscriptions).hapticOnPush() } label: {
+                HStack(spacing: 12) {
+                    CaveIcon(.plus, size: 26).foregroundStyle(Color.caveOrange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Cave Cals+").foregroundStyle(Color.primary)
+                        if let detail {
+                            Text(detail).font(.cave(.footnote)).foregroundStyle(Color.secondary)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    status
+                }
+                .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("caveCalsPlusRow")
+        }
+    }
+
+    /// Nothing until the membership is known, so a member is never told to upgrade.
+    @ViewBuilder private var status: some View {
+        if let account = subscriptions.account {
+            if account.active {
+                Text("Active").foregroundStyle(Color.secondary)
+            } else {
+                Text("Upgrade").foregroundStyle(Color.caveOrange)
+            }
+        } else if subscriptions.busy {
+            ProgressView()
+        }
+    }
+
+    private var detail: String? {
+        guard let account = subscriptions.account, !account.active, account.canScan else { return nil }
+        return account.freeScansRemaining == 1 ? "1 free scan left" : "\(account.freeScansRemaining) free scans left"
+    }
+}
+
+/// Settings → Cave Cals+: the full membership card, with the paywall pushed from here.
+struct CaveCalsPlusView: View {
+    let subscriptions: AISubscriptions
+    @State private var showingPaywall = false
+
+    var body: some View {
+        HapticForm {
+            AISubscriptionSection(subscriptions: subscriptions) { showingPaywall = true }
+        }
+        .caveScreenBackground()
+        .navigationTitle("Cave Cals+").navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showingPaywall) {
+            AIUpgradePaywall(subscriptions: subscriptions, trigger: .settings, onDismissRequested: { showingPaywall = false })
+        }
+    }
+}
+
 struct AISubscriptionSection: View {
     @Environment(AppStore.self) private var store
     let subscriptions: AISubscriptions

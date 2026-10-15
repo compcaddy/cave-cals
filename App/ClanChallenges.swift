@@ -383,7 +383,7 @@ struct WeightEligibilitySheet: View {
         NavigationStack {
             HapticForm {
                 if !weights.tracking {
-                    Section { Text("Turn on Track weight in About You first, so your weigh-ins can count.").font(.cave(.callout)) }
+                    Section { Text("Turn on Track weight on the Me page first, so your weigh-ins can count.").font(.cave(.callout)) }
                 }
                 if let planAge, planAge < 18 {
                     Section { Text("Weight challenges are for adults 18 and older. Logging and streak challenges are open to you.").font(.cave(.callout)) }

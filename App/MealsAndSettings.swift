@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Person icon: the user's own goals and tracking choices.
+/// Person icon ("Me"): the user's own goals, tracking choices, and account.
 struct ProfileView: View {
     @State private var aiSubscriptions = AISubscriptions()
     @Environment(AppStore.self) private var store
@@ -10,6 +10,9 @@ struct ProfileView: View {
     @State private var showingPaywall = false
     @State private var weightEditor: WeightEditorRoute?
     @Environment(WeightStore.self) private var weights
+    /// Signed in, the account leads the page; signed out, the plan does and Sign in sits near the bottom.
+    /// Read once per opening, so signing in or out here doesn't move the row (and close its sheet) mid-flow.
+    @State private var accountLeads = ClanStore.shared.signedIn
     private var planTitle: String { weights.caloriePlan == nil ? "Build a calorie plan" : "Update calorie plan" }
 
     /// Under the goal: "Help me decide" for a hand-set goal, or "Update calorie plan" while weight isn't tracked
@@ -31,8 +34,8 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             HapticForm {
-                // The optional Cave Cals account (clans and news) leads About You.
-                AccountSection()
+                // The optional Cave Cals account (clans and news) leads once signed in.
+                if accountLeads { AccountSection() }
                 // With no goal yet, the calculator leads About You. Once a goal exists it lives under the goal.
                 if store.profile?.dailyGoal == nil {
                 Section {
@@ -74,12 +77,14 @@ struct ProfileView: View {
                 MacroSettingsSection()
                 WeightProfileSections(editor: $weightEditor) { planningCalories = true }
                 AppleHealthLinkSection()
+                if !accountLeads { AccountSection() }
                 if AppEnvironment.isDevelopment { DevTestDataSection() }
                 AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
             }.caveScreenBackground()
             // Every row, whether a button, switch or link, shares one height; whole rows are the tap targets.
             .environment(\.defaultMinListRowHeight, 60)
-            .navigationTitle("About You").navigationBarTitleDisplayMode(.inline)
+            // Titled "Me" since October 14, 2026 (was About You); the header button's VoiceOver label stays "About You".
+            .navigationTitle("Me").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) } }
             .fullScreenCover(isPresented: $adjustingGoal) {
                 SetupView(goal: store.profile?.dailyGoal, isAdjustingGoal: true)
@@ -101,7 +106,6 @@ struct SettingsView: View {
     @State private var aiSubscriptions = AISubscriptions()
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var showingPaywall = false
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
     @AppStorage(AppStore.showsHomeQuickAddKey) private var showsHomeQuickAdd = true
     @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDay = true
@@ -113,10 +117,25 @@ struct SettingsView: View {
         NavigationStack {
             HapticForm {
                 if AppEnvironment.isDevelopment { DevTestDataSection() }
-                AISubscriptionSection(subscriptions: aiSubscriptions) { showingPaywall = true }
+                // One line here; the full card is a tap away and at the bottom of About You (October 14, 2026).
+                AISubscriptionRow(subscriptions: aiSubscriptions)
                 if AIConfiguration.developerSettingsAvailable {
                     Section { NavigationLink("Developer settings") { AIDeveloperSettings().hapticOnPush() } }
                 }
+                // Ordered by how often things change: logging and Home, then look and feel, then data.
+                Section {
+                    Toggle("Show Quick Start on new days", isOn: $showsHomeQuickAdd)
+                        .accessibilityIdentifier("showHomeQuickAdd")
+                    Toggle("Show “Done eating” button", isOn: $showsFinishDay)
+                        .accessibilityIdentifier("showFinishDay")
+                    Toggle("Show clan status", isOn: $showsClanStatus)
+                        .accessibilityIdentifier("showClanStatus")
+                } header: { Text("Home") } footer: {
+                    Text("Quick Start shows your usual first foods until you log another way that day. “Done eating for today” appears from 6 pm or at 90% of your goal; a day marked done counts as complete in Progress. Clan status is a line above your calories while you’re in a clan challenge.").font(.cave(.caption2))
+                }
+                MealTypeSettingsSection()
+                LogReminderSettingsSection()
+                ClanNotificationSettingsSection()
                 Section("Appearance") {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
@@ -131,20 +150,11 @@ struct SettingsView: View {
                 } footer: {
                     Text("Taps as you use the app, and a rumble as calories count up after you log food.").font(.cave(.caption2))
                 }
-                Section {
-                    Toggle("Show Quick Start on new days", isOn: $showsHomeQuickAdd)
-                        .accessibilityIdentifier("showHomeQuickAdd")
-                    Toggle("Show “Done eating” button", isOn: $showsFinishDay)
-                        .accessibilityIdentifier("showFinishDay")
-                    Toggle("Show clan status", isOn: $showsClanStatus)
-                        .accessibilityIdentifier("showClanStatus")
-                } header: { Text("Home") } footer: {
-                    Text("Quick Start shows your usual first foods until you log another way that day. “Done eating for today” appears from 6 pm or at 90% of your goal; a day marked done counts as complete in Progress. Clan status is a line above your calories while you’re in a clan challenge.").font(.cave(.caption2))
-                }
-                MealTypeSettingsSection()
-                LogReminderSettingsSection()
-                ClanNotificationSettingsSection()
                 AppleHealthSection()
+                Section("iCloud") {
+                    Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
+                    Text(AppEnvironment.isDevelopment ? "iCloud is disabled in Cave Cals Dev. Test data stays on this device, separate from your normal app." : "Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device. Food and weigh-ins can optionally be shared to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                }
                 SavedNutritionSettingsSection()
                 let hidden = store.activeHiddenQuickAddFoods()
                 if !hidden.isEmpty {
@@ -174,10 +184,6 @@ struct SettingsView: View {
                         Text("Hidden foods return after two weeks, or sooner if you log them again.").font(.cave(.caption2))
                     }
                 }
-                Section("iCloud") {
-                    Label { Text(store.syncStatus) } icon: { CaveIcon(store.cloudEnabled ? .cloud : .phone, size: 24) }
-                    Text(AppEnvironment.isDevelopment ? "iCloud is disabled in Cave Cals Dev. Test data stays on this device, separate from your normal app." : "Your food entries are saved on this iPhone. With iCloud enabled, they also sync to your other iPhones using the same Apple Account. Weight history stays on this device. Food and weigh-ins can optionally be shared to Apple Health.").font(.cave(.footnote)).foregroundStyle(.secondary)
-                }
                 if !AppEnvironment.isDevelopment { UsageStatsSettingsSection() }
                 TellTheTribeSection()
                 Section("About") {
@@ -192,9 +198,6 @@ struct SettingsView: View {
             }.caveScreenBackground()
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.hapticButtonStyle(.automatic) } }
-            .navigationDestination(isPresented: $showingPaywall) {
-                AIUpgradePaywall(subscriptions: aiSubscriptions, trigger: .settings, onDismissRequested: { showingPaywall = false })
-            }
             .task { await store.checkCloud(); await aiSubscriptions.refresh(regularLogCount: store.regularLogCount) }
         }
     }

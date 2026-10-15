@@ -66,7 +66,7 @@ final class ECCUITests: XCTestCase {
         app.buttons["dismissFinishDay"].tap()
         assertFooterPosition()
         app.buttons["profile"].tap()
-        XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Me"].waitForExistence(timeout: 5))
         XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://home")!)
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         assertFooterPosition()
@@ -225,11 +225,11 @@ final class ECCUITests: XCTestCase {
     }
     func testWidgetSearchLinkFocusesSearchAndBackgroundLinkReturnsHome() {
         app.buttons["profile"].tap()
-        XCTAssertTrue(app.navigationBars["About You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Me"].waitForExistence(timeout: 5))
         XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://log/add")!)
         XCTAssertTrue(app.buttons["Quick Add"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.navigationBars["About You"].exists)
+        XCTAssertFalse(app.navigationBars["Me"].exists)
         app.textFields["foodSearch"].typeText("Banana")
         XCUIDevice.shared.system.open(URL(string: "\(testAppURLScheme)://home")!)
         XCTAssertTrue(app.otherElements["calorieSummary"].waitForExistence(timeout: 5))

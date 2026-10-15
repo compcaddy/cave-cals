@@ -394,7 +394,7 @@ struct OnboardingView: View {
                 }.padding(.vertical, 10)
             }.padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-            Text("You can change these anytime in About You.").font(.cave(.footnote)).foregroundStyle(.secondary)
+            Text("You can change these anytime on the Me page.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         case 6:
             if let estimate {

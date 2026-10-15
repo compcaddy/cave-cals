@@ -10,6 +10,7 @@ struct ProgressScreen: View {
     @State private var reviewDate: Date?
     @State private var printReport: ProgressPrintDocument?
     @State private var showPrint = false
+    @State private var weightEditor: WeightEditorRoute?
     private var data: ProgressData {
         ProgressData(drafts: store.entries.map(EntryDraft.init), records: weights.records,
                      finishedDays: store.finishedDates(), firstWeekday: firstWeekday, goal: { store.goal($0) })
@@ -28,16 +29,25 @@ struct ProgressScreen: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Weight history").font(.cave(.title2)).bold()
                         ProgressWeightChart(data: data, unit: weights.unit)
+                        if weights.tracking { todayWeightButton }
                         NavigationLink { WeightHistoryView().hapticOnPush() } label: {
                             HStack { Text("All weigh-ins"); Spacer(); CaveIcon(.chevronRight, size: 16) }
                                 .frame(minHeight: 44).contentShape(Rectangle())
                         }.accessibilityIdentifier("weightHistory")
                         if !weights.tracking {
-                            Text("Turn on Track weight in About You to log weigh-ins.")
+                            Text("Turn on Track weight on the Me page to log weigh-ins.")
                                 .font(.cave(.footnote)).foregroundStyle(Color.secondary)
                         }
                     }.progressCard()
                     ProgressPhotosCard(firstWeekday: firstWeekday)
+                    ProgressTrendsCard(data: data, foods: store.entries.map {
+                        ProgressTrends.Food(timestamp: $0.timestamp, createdAt: $0.createdAt, calories: $0.totalCalories)
+                    })
+                    ProgressHabitsCard(data: data, foods: store.entries.map { entry in
+                        HabitFood(timestamp: entry.timestamp, createdAt: entry.createdAt, calories: entry.totalCalories,
+                                  name: entry.foodDisplayName, macros: MacroNutrients.decode(entry.macrosPerServingData)?.scaled(entry.servings))
+                    }, goal: { store.goal($0) })
+                    // A setting, so it sits after the reports rather than between them (October 14, 2026).
                     VStack(alignment: .leading, spacing: 12) {
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 12) { Text("Weekday Start"); Spacer(minLength: 0); weekStartPicker }
@@ -46,13 +56,6 @@ struct ProgressScreen: View {
                         Text("Applies to charts, weekly recaps, photos, and printed reports.")
                             .font(.cave(.footnote)).foregroundStyle(Color.secondary)
                     }.progressCard()
-                    ProgressTrendsCard(data: data, foods: store.entries.map {
-                        ProgressTrends.Food(timestamp: $0.timestamp, createdAt: $0.createdAt, calories: $0.totalCalories)
-                    })
-                    ProgressHabitsCard(data: data, foods: store.entries.map { entry in
-                        HabitFood(timestamp: entry.timestamp, createdAt: entry.createdAt, calories: entry.totalCalories,
-                                  name: entry.foodDisplayName, macros: MacroNutrients.decode(entry.macrosPerServingData)?.scaled(entry.servings))
-                    }, goal: { store.goal($0) })
                 }.padding(20)
             }
             .background(Color.caveBackground)
@@ -75,7 +78,31 @@ struct ProgressScreen: View {
                 if let printReport { ProgressPrintPreview(document: printReport) }
             }
             .onChange(of: store.progressSettings.firstWeekday) { _, _ in reviewDate = nil }
+            .sheet(item: $weightEditor) { route in
+                WeightEditorSheet(record: route.record, unit: weights.unit)
+            }
         }
+    }
+
+    /// Logs or edits today's weigh-in from the chart, like About You's Today's weight row.
+    private var todayWeightButton: some View {
+        let today = weights.record(on: Date())
+        return Button { weightEditor = WeightEditorRoute(record: today) } label: {
+            HStack(spacing: 12) {
+                Text("Today’s weight").foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    CaveIcon(.pencil, size: 22).foregroundStyle(Color.caveOrange)
+                    Text(today.map { weights.unit.text($0.kilograms) } ?? "Log")
+                        .font(.cave(.title3))
+                        .foregroundStyle(today == nil ? Color.caveOrange : Color.primary)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .hapticButtonStyle(.plain)
+        .accessibilityIdentifier("progressTodayWeight")
     }
 
     private var weekStartPicker: some View {

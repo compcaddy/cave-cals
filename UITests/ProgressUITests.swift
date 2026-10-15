@@ -95,7 +95,7 @@ final class ProgressUITests: XCTestCase {
         app.buttons["profile"].tap()
         XCTAssertFalse(app.segmentedControls["weightChartRange"].exists)
         XCTAssertTrue(app.buttons["todayWeight"].exists)
-        app.navigationBars["About You"].buttons["Done"].tap()
+        app.navigationBars["Me"].buttons["Done"].tap()
         app.buttons["progress"].tap()
         let picker = app.buttons["progressWeekStart"]
         reveal(picker)

@@ -176,7 +176,7 @@ struct AppleHealthSection: View {
             }
         } header: { Text("Apple Health") } footer: {
             Text("Calories & macros shares the calories, protein, carbs, fat and fiber of foods you log from the day you turn it on, and keeps them updated when you edit or delete. Weigh-ins shares all your weigh-ins"
-                 + (weights.tracking ? "." : " once Track weight is on in About You.")
+                 + (weights.tracking ? "." : " once you turn on Track weight on the Me page.")
                  + " Cave Cals never reads your Health data. Pausing sharing leaves what’s already in Apple Health.")
                 .font(.cave(.caption2))
         }
