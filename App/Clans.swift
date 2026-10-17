@@ -79,7 +79,7 @@ enum ChallengeKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .loggingDays: "Logging days"
         case .onTargetDays: "On-target days"
-        case .teamTotal: "Team total"
+        case .teamTotal: "Clan goal"
         case .survivor: "Survivor"
         case .streak: "Streak"
         case .weightLoss: "Weight loss"
@@ -91,7 +91,7 @@ enum ChallengeKind: String, Codable, CaseIterable, Identifiable {
         case .loggingDays: "A point for every full day logged. Most points wins."
         case .onTargetDays: "A point for every full day in your range. Most points wins."
         case .survivor: "Miss a day without a life left and you’re out. Last one standing wins."
-        case .teamTotal: "Everyone’s days add up toward one clan goal."
+        case .teamTotal: "Pick a number of days for the whole clan to reach together, like 100 in 3 weeks. Every day someone logs adds one. Hit it before time runs out."
         case .weightLoss: "Most % lost wins. Credit stops at 1% a week, so slow and steady wins."
         }
     }

@@ -98,7 +98,7 @@ final class ClanUITests: XCTestCase {
         capture("setup 07 new collab")
         app.buttons["challengeKind-teamTotal"].tap()
         Thread.sleep(forTimeInterval: 0.6)
-        capture("setup 08 team total")
+        capture("setup 08 clan goal")
         app.buttons["Back"].tap(); app.buttons["Cancel"].tap()
         app.buttons["startCompetition"].tap()
         XCTAssertTrue(app.buttons["challengeKind-logging"].waitForExistence(timeout: 5))

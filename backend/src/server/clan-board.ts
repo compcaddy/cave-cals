@@ -13,7 +13,7 @@ export type MemberRow = typeof clanMembers.$inferSelect;
 export type PersonRow = typeof clanPeople.$inferSelect;
 export type ChallengeRow = typeof clanChallenges.$inferSelect;
 export const CHALLENGE_NAMES: Record<ChallengeKind, string> = {
-  loggingDays: 'Logging days', onTargetDays: 'On-target days', teamTotal: 'Team total', survivor: 'Survivor', streak: 'Streak', weightLoss: 'Weight loss',
+  loggingDays: 'Logging days', onTargetDays: 'On-target days', teamTotal: 'Clan goal', survivor: 'Survivor', streak: 'Streak', weightLoss: 'Weight loss',
 };
 export const ruleOf = (value: unknown): ClanRule => clanRuleSchema.safeParse(value).data ?? DEFAULT_RULE;
 

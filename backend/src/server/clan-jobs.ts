@@ -67,7 +67,7 @@ export async function finishChallenge(challenge: ChallengeRow, clan: ClanRow, no
     if (record) await db.update(clans).set({ bestStreak: length }).where(eq(clans.id, clan.id));
     body = `Streak over at ${length} ${length === 1 ? 'day' : 'days'}.${record && length > 1 ? ' New clan record!' : ''}`;
   } else if (challenge.kind === 'teamTotal' && result.team) {
-    body = result.team.reached ? `Team goal reached! ${result.team.target} days together.` : `Team total ended at ${result.team.total} of ${result.team.target}.`;
+    body = result.team.reached ? `Clan goal reached! ${result.team.target} days.` : `Clan goal ended at ${result.team.total} of ${result.team.target} days.`;
   } else body = `${name} is over. ${winnerLine(winnerNames)}`;
   const final = {
     endedOn: result.endedOn ?? localDay(now, 'UTC'), manual, winners: result.winners, winnerNames, streak: result.streak ?? null, team: result.team ?? null, record,

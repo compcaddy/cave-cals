@@ -23,7 +23,7 @@ enum ChallengeOption: String, Identifiable {
     var title: String {
         switch self {
         case .streak: "Streak"
-        case .teamTotal: "Team total"
+        case .teamTotal: "Clan goal"
         case .survivor: "Survivor"
         case .weightLoss: "Weight loss"
         case .logging: "Logging"
@@ -149,10 +149,14 @@ struct NewChallengeView: View {
                     if saves > 0 { Text("A missed day uses one automatically.").font(.cave(.caption2)) }
                 }
             }
-            if option == .logging || option == .teamTotal {
-                Section("Length") { Stepper("\(length) days", value: $length, in: 7...90, step: 7) }
+            if option == .teamTotal {
+                Section {
+                    Stepper("\(teamTarget) days", value: $teamTarget, in: 10...2000, step: 10).accessibilityIdentifier("clanGoalDays")
+                } header: { Text("Goal") }
             }
-            if option == .teamTotal { Section("Clan goal") { Stepper("\(teamTarget) days together", value: $teamTarget, in: 10...2000, step: 10) } }
+            if option == .logging || option == .teamTotal {
+                Section(option == .teamTotal ? "Time to reach it" : "Length") { Stepper("\(length) days", value: $length, in: 7...90, step: 7) }
+            }
             if option == .weightLoss {
                 Section {
                     Stepper("\(weeks) weeks", value: $weeks, in: 2...12)
@@ -247,6 +251,8 @@ struct ChallengeCard: View {
         if let total = board.totalDays { return "Day \(min(max(1, board.dayNumber), total)) of \(total)" }
         return "Day \(max(1, board.dayNumber))"
     }
+    /// What a clan goal counts: "logged days" or "on-target days".
+    private var goalDays: String { board.settings.basis == "onTarget" ? "on-target days" : "logged days" }
     private var winnerNames: [String] { board.entrants.filter { board.winners.contains($0.personId) }.map(\.name) }
     @ViewBuilder private var headline: some View {
         if board.status == "ended" { result } else { running }
@@ -264,7 +270,7 @@ struct ChallengeCard: View {
         case .teamTotal:
             if let team = board.team {
                 ProgressView(value: Double(min(team.total, team.target)), total: Double(team.target)).tint(.caveOrange)
-                Text(team.reached ? "Goal reached! \(team.target) days together." : "\(team.total) of \(team.target) days together.")
+                Text(team.reached ? "Goal reached! \(team.target) \(goalDays)." : "\(team.total) of \(team.target) \(goalDays).")
                     .font(.cave(.callout))
             }
         default:
@@ -299,7 +305,7 @@ struct ChallengeCard: View {
         case .teamTotal:
             if let team = board.team {
                 ProgressView(value: Double(min(team.total, team.target)), total: Double(team.target)).tint(.caveOrange)
-                Text("\(team.total) of \(team.target) days together").font(.cave(.callout))
+                Text("\(team.total) of \(team.target) \(goalDays)").font(.cave(.callout))
             }
         default:
             let leaders = board.entrants.filter { $0.rank == 1 }.map(\.name)

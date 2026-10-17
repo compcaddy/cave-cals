@@ -134,7 +134,7 @@ const challengeCreate = z.object({
   clanId: uuid, kind: z.enum(CHALLENGE_KINDS), settings: challengeSettingsSchema,
   savesCount: z.number().int().min(0).max(10).default(0), savesPeriod: z.enum(SAVES_PERIODS).default('challenge'),
   startsOn: day,
-  // Logging days, on-target days, and team totals: 3–90 days. Survivor: optional (none = last one standing).
+  // Logging days, on-target days, and clan goals (teamTotal): 3–90 days. Survivor: optional (none = last one standing).
   // Weight loss: 2–12 weeks. Streaks have no end.
   lengthDays: z.number().int().min(3).max(90).optional(),
   weeks: z.number().int().min(2).max(12).optional(),

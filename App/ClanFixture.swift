@@ -172,20 +172,20 @@ enum ClanFixture {
             ], endedOn: day(-2), streak: ["length": 12, "brokeOn": day(-2), "record": 23])
         case ("team", "start"):
             let s = day(1)
-            b = Board(kind: "teamTotal", name: "Team total", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "upcoming",
+            b = Board(kind: "teamTotal", name: "Clan goal", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "upcoming",
                       entrants: ["me", "ana", "ben", "cal", "anon", "dee"].map { entrant($0, startsOn: s) },
                       team: ["total": 0, "target": 100, "reached": false])
         case ("team", "mid"):
             let s = day(-10)
             let points = ["me": 10, "ana": 11, "ben": 7, "cal": 10, "anon": 9, "dee": 11]
-            b = Board(kind: "teamTotal", name: "Team total", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "active",
+            b = Board(kind: "teamTotal", name: "Clan goal", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "active",
                       entrants: ["ana", "dee", "me", "cal", "anon", "ben"].map { id in
                           entrant(id, points: points[id]!, madeToday: ["ana", "dee", "cal"].contains(id), marks: id == "ben" ? "mxmmxmm " : id == "anon" ? "mmmxmmm " : "mmmmmmm ", startsOn: s)
                       }, team: ["total": 58, "target": 100, "reached": false])
         case ("team", "end"):
             let s = day(-19)
             let points = ["me": 17, "ana": 18, "ben": 14, "cal": 17, "anon": 16, "dee": 18]
-            b = Board(kind: "teamTotal", name: "Team total", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "ended",
+            b = Board(kind: "teamTotal", name: "Clan goal", startsOn: s, endsOn: ClanDay.adding(20, to: s), status: "ended",
                       entrants: ["ana", "dee", "me", "cal", "anon", "ben"].map { entrant($0, points: points[$0]!, marks: "mmmmm   ", startsOn: s) },
                       winners: ["ana", "dee", "me", "cal", "anon", "ben"], endedOn: day(-3), team: ["total": 100, "target": 100, "reached": true])
         case ("survivor", "start"):
