@@ -242,7 +242,7 @@ Chat (with moderation), public clans, coach dashboards, several challenges at on
 
 ## October 17, 2026 changes
 
-Live on the backend as `dpl_6LDdUTcS2LcZDD2VGU1d2G9sAtt2` (source `9d76525`). Migration `0007` was applied to production through Neon (in one transaction, with its `drizzle.__drizzle_migrations` row) because the local production env has only the pooled URL; the one existing clan became `approval`. The app side ships with the next build.
+Live on the backend as `` (the range follow-up; first deployed as `dpl_6LDdUTcS2LcZDD2VGU1d2G9sAtt2` from `9d76525`). Migration `0007` was applied to production through Neon (in one transaction, with its `drizzle.__drizzle_migrations` row) because the local production env has only the pooled URL; the one existing clan became `approval`. The app side ships with the next build.
 
 - **Clans screen:** "No clans yet", with a line about tracking together (more likely to hit goals) and collabs vs. competitions. Clans you asked to join show as "Waiting for an admin to let you in".
 - **Start a clan:** the name field's placeholder rotates every 2.5 s through The Fire Keepers, Mammoth Hunters, Club Club, Stone Age Squad, and Bone Appétit (`CreateClanSheet.nameIdeas`; no man/woman/person names). No Cave Cals+ note: it comes up only when an admin lets a third person in (an alert, then the paywall; approving again after buying).
