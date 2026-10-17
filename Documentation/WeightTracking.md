@@ -13,17 +13,35 @@ Implemented locally September 18, 2026. This is not evidence of a TestFlight upl
 
 ## Storage
 
-`WeightStore` stores a versioned JSON document in Application Support/WeightTracking/weights-v1.json using atomic writes and complete-until-first-authentication file protection. The folder is excluded from backups. These records deliberately do not enter the existing CloudKit-backed SwiftData store. There is no backend request, AI analysis, analytics payload, or Health import involved.
+`WeightStore` stores a versioned JSON document in Application Support/WeightTracking/weights-v1.json using atomic writes and complete-until-first-authentication file protection. The folder is excluded from backups. These records deliberately do not enter the existing CloudKit-backed SwiftData store. There is no backend request, AI analysis, or analytics payload involved. Weights read from Apple Health (see below) are stored in the same file.
 
-Local history does not transfer through Cave Cals iCloud sync and is lost if the app is deleted. Health copies remain in Apple Health when sharing has succeeded; this version does not import them after reinstall. Corrupt/unsupported files are left untouched and writes are blocked with an error rather than replacing history with an empty store.
+Local history does not transfer through Cave Cals iCloud sync and is lost if the app is deleted. Health copies remain in Apple Health when sharing has succeeded, and since October 17, 2026 they come back after a reinstall when Weigh-ins is turned on again (see Apple Health import). Corrupt/unsupported files are left untouched and writes are blocked with an error rather than replacing history with an empty store.
 
 ## Apple Health export
 
-The app requests write permission only for HealthKit body mass. Enabling **Save to Apple Health** exports existing and future Cave Cals entries. Permission denial does not prevent local weight logging. Turning sharing off preserves existing Health entries and pauses further updates/deletions.
+The app requests write permission only for HealthKit body mass (and, since October 17, 2026, read permission for body mass too; see Apple Health import). Enabling **Save to Apple Health** exports existing and future Cave Cals entries. Permission denial does not prevent local weight logging. Turning sharing off preserves existing Health entries and pauses further updates/deletions.
 
 Every record has a stable sync identifier and a monotonically increasing revision. HealthKit sync metadata replaces earlier versions and makes retries safe. A persisted exported revision tracks pending changes across app restarts. Operations serialize, and an edit/deletion during an export cannot accidentally acknowledge an older revision as current. Failed exports retry on foregrounding or via **Retry sharing**.
 
 Deleted measurements are cleared locally immediately; only a tombstone with identity/revision remains until HealthKit acknowledges deletion. Deletion predicates include the exact sync identifier and this app’s source. Other apps’ Health entries are never modified. Corrections/deletions are sent only while sharing is enabled; they resume when sharing is enabled again.
+
+## Apple Health import (October 17, 2026, local)
+
+The **Weigh-ins** switch now syncs both ways. Turning it on asks Apple to write and read body mass in one sheet; nothing else is read. People who turned it on before this (write only) see **Bring in weigh-ins from Apple Health** in Settings → Apple Health until Apple's sheet has asked about reading (`statusForAuthorizationRequest`; iOS never says whether reading was allowed). Otherwise that spot shows **Sync now** (export, then import), which replaced Retry sharing.
+
+Rules (`WeightHealthImport.merge`, unit-tested in `Tests/WeightTrackingTests.swift`):
+
+- One weigh-in a day. A weigh-in logged in Cave Cals always wins its day.
+- Otherwise the day shows its first reading from another app. A reading that syncs in later but was taken earlier that day replaces it (same record), and when the shown reading is deleted in Apple Health the next one takes over, or the day empties.
+- Deletions are only inferred when some other app's weigh-ins came back at all, because iOS answers "nothing" when reading is declined.
+- Cave Cals' own samples (recognized by their sync identifier, from before a reinstall or from another iPhone) come back as the same weigh-ins with their revision, so later edits replace them in Health. A pending local deletion is never brought back.
+- Future-dated and impossible readings are skipped.
+- Imported records carry `healthSampleID` and `healthSource` and are never written back to Health. Saving one unchanged keeps it imported; editing it clears both fields, so it becomes an ordinary Cave Cals weigh-in (shared like any other, never replaced). Deleting another app's reading removes it locally only and adds its sample to `ignoredHealthSamples`, so it never returns (a later reading that day still can).
+- Clan weight challenges use only weigh-ins logged in Cave Cals; anything with a `healthSource` is left out, so Health data never reaches the backend. The challenge screens say so.
+
+When it runs: on opening and returning to the app (after export), from Sync now, and from an `HKObserverQuery` set up as the store is created at launch. Background delivery (`enableBackgroundDelivery`, hourly) is on while Weigh-ins is on and reading was asked, so iOS wakes Cave Cals when another app saves a weight; it needs the `com.apple.developer.healthkit.background-delivery` entitlement (added to `App/CaveCals.entitlements`). Imports only run while weight tracking is on. Apple Health is unreadable while the iPhone is locked; that error is ignored and the next opening or new weight tries again. Usage stats: event `health.weightImport` {added}, errors under `appleHealth`.
+
+Not verified yet (needs a signed iPhone): the read permission sheet, reading another app's samples, background wake-ups with the new entitlement in the provisioning profile, and the locked-device case.
 
 Trainerize currently documents body-weight import from Apple Health, but its import timing and handling of subsequent corrections/deletions belong to Trainerize. Do not claim that a successful HealthKit write verifies delivery to Trainerize.
 

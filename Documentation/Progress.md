@@ -63,8 +63,8 @@ Real AirPrint printer discovery, paper output, and sharing to third-party destin
 
 Below Weekday Start, **Trends** has one range toggle (Last 30 days, Last 90 days, All time; each ends yesterday, since today is in progress) for two charts:
 
-- **By day of the week**: the average calories of complete days falling on each weekday, in the Progress week-start order. Complete days follow the same rule as every Progress average (at least 70% of that day's goal; days marked done eating always count).
-- **By time of day**: 24 hourly columns. **Calories** shows the average calories eaten in that hour per counted day (the columns add up to a typical day); **% of day** shows the hour's share of all counted calories (they add up to 100%). Only food logged on the day it belongs to counts: food added on a later day carries the clock time it was entered, not when it was eaten. A day counts here when at least one of its foods was logged that day.
+- **By day of the week**: the average calories of complete days falling on each weekday, in the Progress week-start order. Like Weekly Recap's calorie bars, its axis runs from half the lowest average to 5% above the highest (`CalorieColumnScale`), so differences between days show. Complete days follow the same rule as every Progress average (at least 70% of that day's goal; days marked done eating always count).
+- **By time of day**: 24 hourly columns. Each shows the average calories eaten in that hour per counted day (the columns add up to a typical day). A **% of day** option was removed October 17, 2026; it looked the same as calories. Only food logged on the day it belongs to counts: food added on a later day carries the clock time it was entered, not when it was eaten. A day counts here when at least one of its foods was logged that day.
 
 Tapping a bar shows its value; each chart's caption gives the number of days it's based on. The calculation is `ProgressTrends` in `App/ProgressData.swift`.
 

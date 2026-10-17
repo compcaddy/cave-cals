@@ -29,6 +29,8 @@ import PhotosUI
     var showPaywall = false
     var problem: String?
     @ObservationIgnored var regularLogCount = 0
+    /// Where the photo was added from, for usage stats ("progress", or "weighIn" from the weigh-in screen).
+    @ObservationIgnored var origin = "progress"
     @ObservationIgnored private(set) var libraryDay = Date()
     @ObservationIgnored private var resume: (() -> Void)?
     @ObservationIgnored private var pendingCheck: Task<Bool, Never>?
@@ -240,10 +242,13 @@ private struct ProgressPhotoDeleteConfirmation: ViewModifier {
 }
 
 /// Take Photo / From Library for a day, with the free limit spelled out once it applies.
-private struct ProgressPhotoAddButtons: View {
+struct ProgressPhotoAddButtons: View {
     @Environment(ProgressPhotoStore.self) private var photos
     let adder: ProgressPhotoAdder
     let day: Date
+    var takeTitle = "Take Photo"
+    /// Runs first; returning false keeps the camera and library closed (the weigh-in screen saves the weight here).
+    var willAdd: () -> Bool = { true }
 
     var body: some View {
         let count = photos.photos(on: day).count
@@ -267,10 +272,10 @@ private struct ProgressPhotoAddButtons: View {
     }
 
     private func takeButton(_ count: Int) -> some View {
-        Button { adder.takePhoto(on: day, photosThatDay: count) } label: {
+        Button { if willAdd() { adder.takePhoto(on: day, photosThatDay: count) } } label: {
             HStack(spacing: 8) {
                 if adder.checking { ProgressView().tint(.white) } else { CaveIcon(.camera, size: 20) }
-                Text("Take Photo")
+                Text(takeTitle)
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 36)
@@ -281,7 +286,7 @@ private struct ProgressPhotoAddButtons: View {
     }
 
     private var libraryButton: some View {
-        Button { adder.chooseFromLibrary(for: day) } label: {
+        Button { if willAdd() { adder.chooseFromLibrary(for: day) } } label: {
             HStack(spacing: 8) {
                 CaveIcon(.phone, size: 20)
                 Text("From Library")
@@ -746,7 +751,7 @@ struct ProgressPhotoDetailsSheet: View {
             }
             Haptics.play(.success)
             UsageStats.shared.event("progressPhoto.saved", [
-                "source": ProgressPhoto.Source.library.rawValue,
+                "source": ProgressPhoto.Source.library.rawValue, "from": adder.origin,
                 "angle": ProgressPhotoTag.rank(clean) < ProgressPhotoTag.standard.count ? "standard" : "custom",
             ])
             onSaved(photo)

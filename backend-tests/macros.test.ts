@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import OpenAI from 'openai';
 import { estimateMacros, macroInput, validateMacros, withLegacyItems, withLegacyNetCarbs } from '../backend/src/server/macros';
 import { validateResult } from '../backend/src/server/ai';
-import { api } from '../backend/src/server/api';
+import { api, macroRequest, consumeAutoFill } from '../backend/src/server/api';
+import { APIError } from '../backend/src/server/config';
 
 test('macro contract distinguishes unknown and known zero; rejects non-finite, negative, excessive values', () => {
   assert.deepEqual(validateMacros({ protein: 0, totalCarbs: null, fiber: null, fat: 10.25 }), { protein: 0, totalCarbs: null, fiber: null, fat: 10.25 });
@@ -56,4 +57,25 @@ test('macro estimation endpoint requires authentication before any provider call
     body: JSON.stringify({ nonce: 'unused', name: 'Eggs', calories: 140, servingSize: '1 egg', servings: 2 }),
   }), 'food/macros');
   assert.equal(response.status, 401);
+});
+
+test('automatic estimates are marked separately and the flag never reaches the model input', () => {
+  const parsed = macroRequest.parse({ name: 'Cheddar cheese', calories: 230, servingSize: '2 oz', servings: 1, automatic: true });
+  const { automatic, ...input } = parsed;
+  assert.equal(automatic, true);
+  assert.deepEqual(input, { name: 'Cheddar cheese', calories: 230, servingSize: '2 oz', servings: 1 });
+  // Released apps omit it, and older payloads still parse.
+  assert.equal(macroRequest.parse({ name: 'Egg', calories: 70, servingSize: '1 egg', servings: 1 }).automatic, undefined);
+});
+
+test('the automatic-estimate safeguard stops with its own code, so the app waits until tomorrow', async () => {
+  const caps: number[] = [];
+  await consumeAutoFill('macro-auto:a:2026-10-17', 100, undefined, async (_bucket, cap) => { caps.push(cap); });
+  assert.deepEqual(caps, [100]);
+  const full = async () => { throw new APIError(429, 'usage_limit', 'The usage limit has been reached.'); };
+  await assert.rejects(consumeAutoFill('macro-auto:a:2026-10-17', 100, undefined, full),
+    (e: unknown) => e instanceof APIError && e.status === 429 && e.code === 'macro_autofill_limit');
+  const broken = async () => { throw new APIError(503, 'database', 'Down.'); };
+  await assert.rejects(consumeAutoFill('macro-auto:a:2026-10-17', 100, undefined, broken),
+    (e: unknown) => e instanceof APIError && e.code === 'database');
 });

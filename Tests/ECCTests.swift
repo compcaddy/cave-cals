@@ -667,6 +667,166 @@ import SwiftData
         XCTAssertEqual(Array(suggestions.prefix(2).map(\.id)), pinnedIDs)
         XCTAssertEqual(Set(suggestions.map(\.id)).count, suggestions.count)
     }
+    // MARK: Macro auto-fill
+
+    private final class EstimateCalls { var names: [String] = [] }
+    private func autoFillStore() throws -> (AppStore, MacroAutoFill, EstimateCalls, () -> Void) {
+        let suite = "CaveCalsTests.autofill.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+                             publishesWidget: false, preferences: preferences)
+        let calls = EstimateCalls()
+        let fill = MacroAutoFill(store: store, preferences: preferences, backfillPause: .zero) { draft in
+            calls.names.append(draft.name)
+            return MacroNutrients(protein: 5, totalCarbs: 12, fiber: 1, fat: 2).markedEstimated()
+        }
+        store.macroAutoFill = fill
+        return (store, fill, calls, { preferences.removePersistentDomain(forName: suite) })
+    }
+    private func totals(_ store: AppStore, _ name: String) -> MacroNutrients? {
+        store.entries.last { $0.name == name }.flatMap { MacroNutrients.decode($0.macrosPerServingData)?.scaled($0.servings) }
+    }
+    func testMacroAutoFillMatchesNamesWithoutTheirAmounts() {
+        XCTAssertEqual(MacroAutoFill.foodName("2 oz Cheddar Cheese"), "cheddar cheese")
+        XCTAssertEqual(MacroAutoFill.foodName("a large banana"), "banana")
+        XCTAssertEqual(MacroAutoFill.foodName("1/2 cup of rice"), "rice")
+        XCTAssertEqual(MacroAutoFill.foodName("cup"), "cup", "a lone word is kept")
+        XCTAssertEqual(MacroAutoFill.commonFood(named: "2 oz Cheddar Cheese")?.name, "Cheddar cheese")
+        XCTAssertEqual(MacroAutoFill.commonFood(named: "two bananas")?.name, "Banana")
+        XCTAssertNil(MacroAutoFill.commonFood(named: "grandma's mystery stew"))
+    }
+    func testMacroAutoFillUsesHistoryThenTheBuiltInListThenAI() async throws {
+        let (store, fill, calls, cleanup) = try autoFillStore()
+        defer { cleanup() }
+        var pizza = EntryDraft(name: "Pizza", calories: 300, timestamp: Date().addingTimeInterval(-86_400))
+        pizza.macrosPerServing = MacroNutrients(protein: 12, totalCarbs: 36, fiber: 2, fat: 10)
+        store.add([pizza])
+        // The same food again, at twice the calories: history, scaled, still marked as typed.
+        store.add([EntryDraft(name: "pizza", calories: 600)])
+        XCTAssertEqual(totals(store, "pizza"), MacroNutrients(protein: 24, totalCarbs: 72, fiber: 4, fat: 20))
+        // Not logged before, but on the built-in list: scaled from its slice by calories, marked ≈.
+        store.add([EntryDraft(name: "2 oz cheddar cheese", calories: 230)])
+        let cheddar = try XCTUnwrap(totals(store, "2 oz cheddar cheese"))
+        XCTAssertEqual(cheddar.protein, 13.1); XCTAssertEqual(cheddar.totalCarbs, 1.4)
+        XCTAssertEqual(cheddar.fiber, 0); XCTAssertEqual(cheddar.fat, 19.1)
+        XCTAssertEqual(cheddar.estimatedProtein, true)
+        // Neither: an AI estimate, filled as soon as it answers.
+        store.add([EntryDraft(name: "Mystery stew", calories: 300)])
+        // A bare number has nothing to estimate from.
+        store.add([EntryDraft(calories: 450)])
+        await fill.waitUntilIdle()
+        XCTAssertEqual(totals(store, "Mystery stew")?.protein, 5)
+        XCTAssertEqual(totals(store, "Mystery stew")?.estimatedProtein, true)
+        XCTAssertNil(store.entries.first { $0.name.isEmpty }?.macrosPerServingData.flatMap(MacroNutrients.decode)?.protein)
+        XCTAssertEqual(calls.names, ["Mystery stew"], "Only the food no local source knew asks the AI")
+        // The next stew comes from the first one's answer, without asking again.
+        store.add([EntryDraft(name: "mystery stew", calories: 600)])
+        await fill.waitUntilIdle()
+        XCTAssertEqual(totals(store, "mystery stew")?.protein, 10)
+        XCTAssertEqual(calls.names.count, 1)
+    }
+    func testMacroAutoFillKeepsTypedAmountsAndTriesEachFoodOnce() async throws {
+        let (store, fill, calls, cleanup) = try autoFillStore()
+        defer { cleanup() }
+        var stew = EntryDraft(name: "Mystery stew", calories: 300)
+        stew.macrosPerServing = MacroNutrients(protein: 20)
+        store.add([stew])
+        await fill.waitUntilIdle()
+        let filled = try XCTUnwrap(totals(store, "Mystery stew"))
+        XCTAssertEqual(filled.protein, 20, "A typed amount is never replaced")
+        XCTAssertNil(filled.estimatedProtein)
+        XCTAssertEqual(filled.totalCarbs, 12); XCTAssertEqual(filled.fat, 2)
+        // Emptying a box (same food, same calories) leaves it empty.
+        let entry = try XCTUnwrap(store.entries.first)
+        var cleared = EntryDraft(entry)
+        cleared.macrosPerServing?.totalCarbs = nil
+        XCTAssertTrue(store.update(cleared))
+        await fill.waitUntilIdle()
+        XCTAssertNil(totals(store, "Mystery stew")?.totalCarbs)
+        XCTAssertEqual(calls.names.count, 1)
+        // Changing the food's calories makes it a new try.
+        var bigger = EntryDraft(try XCTUnwrap(store.entries.first))
+        bigger.calories = 450; bigger.perServing = 450
+        XCTAssertTrue(store.update(bigger))
+        await fill.waitUntilIdle()
+        XCTAssertEqual(totals(store, "Mystery stew")?.totalCarbs, 12)
+        XCTAssertEqual(calls.names.count, 2)
+    }
+    func testMacroAutoFillStopsForTheDayAtTheSafeguard() async throws {
+        let suite = "CaveCalsTests.autofillLimit.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+                             publishesWidget: false, preferences: preferences)
+        var calls = 0
+        let fill = MacroAutoFill(store: store, preferences: preferences, backfillPause: .zero) { _ in
+            calls += 1
+            throw AIServiceError(code: "macro_autofill_limit", message: "Automatic macro estimates are paused until tomorrow.")
+        }
+        store.macroAutoFill = fill
+        store.add([EntryDraft(name: "Mystery stew", calories: 300), EntryDraft(name: "Gloop", calories: 200)])
+        await fill.waitUntilIdle()
+        XCTAssertEqual(calls, 1, "No more requests once the daily safeguard is reached")
+        XCTAssertTrue(fill.isPaused)
+        XCTAssertEqual(fill.queue.count, 2, "Both wait for tomorrow")
+        // Another food that day only queues.
+        store.add([EntryDraft(name: "Grub", calories: 100)])
+        await fill.waitUntilIdle()
+        XCTAssertEqual(calls, 1)
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        let lateEvening = utc.date(from: DateComponents(year: 2026, month: 10, day: 17, hour: 23, minute: 30))!
+        XCTAssertEqual(MacroAutoFill.secondsUntilServerTomorrow(now: lateEvening), 30 * 60 + 60)
+    }
+    func testMacroAutoFillBackfillsTheLast30DaysOnce() async throws {
+        let (store, fill, calls, cleanup) = try autoFillStore()
+        defer { cleanup() }
+        // Logged before auto-fill existed: straight into the store, not through add.
+        for (name, days) in [("Recent stew", 10.0), ("Old stew", 40.0)] {
+            store.context.insert(CalorieEntry(draft: EntryDraft(name: name, calories: 300, timestamp: Date().addingTimeInterval(-days * 86_400))))
+        }
+        store.commit()
+        fill.sweep()
+        await fill.waitUntilIdle()
+        XCTAssertEqual(totals(store, "Recent stew")?.protein, 5)
+        XCTAssertNil(totals(store, "Old stew")?.protein, "Only the last 30 days are backfilled")
+        fill.sweep()
+        await fill.waitUntilIdle()
+        XCTAssertEqual(calls.names, ["Recent stew"])
+        // Not tracking macros: nothing is filled.
+        store.saveGoal(2000)
+        store.setTracksMacros(false)
+        store.add([EntryDraft(name: "Another stew", calories: 300)])
+        await fill.waitUntilIdle()
+        XCTAssertNil(totals(store, "Another stew")?.protein)
+        XCTAssertEqual(calls.names.count, 1)
+    }
+    func testFoodsRemovedFromQuickStartStayOutUntilUnhidden() throws {
+        let suite = "CaveCalsTests.quickStart.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let config = ModelConfiguration(schema: Persistence.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let store = AppStore(container: try ModelContainer(for: Persistence.schema, configurations: [config]),
+                             publishesWidget: false, preferences: preferences)
+        let cereal = "name:life cereal"
+        store.setPinned(true, foodID: cereal)
+        store.hideFromQuickStart(foodID: cereal, name: "Life cereal")
+        XCTAssertEqual(store.hiddenQuickStartIDs, [cereal])
+        XCTAssertEqual(store.toast, "Life cereal removed from Quick Start")
+        // Quick Add is untouched: no snooze, and the pin stays.
+        XCTAssertTrue(store.hiddenQuickAddIDs().isEmpty)
+        XCTAssertTrue(store.isPinned(cereal))
+        store.undo()
+        XCTAssertTrue(store.hiddenQuickStartIDs.isEmpty)
+        // No time limit, and logging the food doesn't bring it back; it survives reopening.
+        store.hideFromQuickStart(foodID: cereal, name: "Life cereal")
+        store.add([EntryDraft(name: "Life cereal", calories: 300)])
+        let reopened = AppStore(container: store.container, publishesWidget: false, preferences: preferences)
+        XCTAssertEqual(reopened.hiddenQuickStartFoods, [HiddenQuickStartFood(id: cereal, name: "Life cereal")])
+        reopened.unhideQuickStart(cereal)
+        XCTAssertTrue(reopened.hiddenQuickStartIDs.isEmpty)
+    }
     func testHiddenQuickAddFoodsSnoozeForTwoWeeksAndReturnWhenLogged() throws {
         let suite = "CaveCalsTests.hidden.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -10,7 +10,24 @@ Macro tracking is on by default and can be hidden in You → Track macros. Optio
 - FatSecret Premier v5 preserves protein, total carbs, fiber, and fat for the same selected serving as calories. Basic search preserves protein, total carbs, and fat when present; missing fiber stays unknown. Contradictory provider fiber is discarded without losing valid total carbs. Attribution follows the existing FatSecret food IDs.
 - Open Food Facts `carbohydrates-total` includes fiber and is preferred. Otherwise add `fiber` to its available `carbohydrates` value. Both must be known to reconstruct total carbohydrates. Nutrients use the same serving/100 g basis as calories. Unknown values remain unknown.
 - Photo, voice, and website meal imports request full-portion grams, then divide by the normalized serving count once. Their values are marked estimated. Existing photo/voice allowance and paid website-import rules stay intact.
-- Manual/common/older foods can request **Estimate values using AI**. Only that entry’s name, portion and calories are sent; populated nutrient fields are preserved. Edits to the food/portion during the request prevent a stale estimate from being applied. Nothing automatically backfills historical entries or invents macros for a calorie-only shortcut.
+- Manual/common/older foods can request **Estimate values using AI**. Only that entry’s name, portion and calories are sent; populated nutrient fields are preserved. Edits to the food/portion during the request prevent a stale estimate from being applied. A calorie-only shortcut (a bare number) never gets macros invented.
+
+## Automatic fill-in (October 17, 2026)
+
+While **Track macros** is on, `MacroAutoFill` (`App/Macros.swift`, unit-tested in `ECCTests`) fills blank macros on named foods without a button:
+
+- **When:** right after any food is added or edited (`AppStore.add`/`update` call `consider`), and on every opening/return to the app over the last 30 days (`sweep`, which is also the one-time backfill). Turning Track macros on runs a sweep. A food qualifies when it has a name of at least two characters, calories above zero, and a blank protein, carbs, or fat.
+- **Sources, in order, per blank nutrient:** (1) the same food logged before with macros (same Quick Add identity, or the same name without its amount), the most complete recent one, scaled by calories, keeping its estimate marks; (2) the built-in food list when the name, or the name without a leading amount ("2 oz", "a large", "two"), or its singular, exactly matches a food or alias (`CommonFoods.matching`), scaled by calories and marked ≈; (3) an AI estimate (`food/macros` with `automatic: true`), marked ≈.
+- Local sources are applied synchronously in one save. AI estimates queue behind each other (App Attest needs one request at a time); fresh foods go to the front, backfill items are spaced 2.5 s apart to stay under the server's 30-requests-a-minute cap. A `macro_autofill_limit` reply (the 100-a-day safeguard) stops AI fill-ins until midnight UTC; a `usage_limit` reply (the per-minute cap) pauses 65 s (an hour after three in a row); three other failures in a row pause ten minutes or until the next opening.
+- Never replaces a typed or existing amount (`AppStore.fillMissingMacros`, not counted as an edit; a filled fiber that would exceed typed carbs is dropped). Each entry is tried once per name/calories/servings (`macroAutoFillTried.v1`, pruned to the last 30 days), so a box someone empties stays empty until the food itself changes.
+- Off under `--uitesting`/`--screenshots` unless a DEBUG test adds `--macro-autofill` (UI test `testMacrosFillInAutomaticallyAfterLogging` uses it with `--macro-estimate-fixture`).
+- Stats counts: `macroAutoFill.history`, `macroAutoFill.builtIn`, `macroAutoFill.ai`; errors under `macroEstimate` (once per session).
+
+Backend deployed October 17, 2026 as `dpl_4utW6jUoXVgVpqL7X6pyqtg6jt3w` (source `22a2fd7` plus only `api.ts`, `food-search.ts`, and the privacy page). The automatic path needs App Attest, so it's unit-tested rather than verified live; it needs a signed iPhone check.
+
+## Barcodes (October 17, 2026)
+
+The scanner asks our backend's `POST /api/v1/foods/barcode` first (FatSecret Premier's `food/barcode/find-by-id/v2`, curated label data, default serving with macros), then Open Food Facts when FatSecret doesn't know the product or can't be reached. Barcodes are sent to FatSecret as GTIN-13 (UPC-A gains a leading zero, EAN-8 is zero-padded). The lookup uses its own OAuth token with the `barcode` scope, so search keeps working if the account lacks it (the barcode call then fails and Open Food Facts answers). Any blanks left either way are filled by `MacroAutoFill`.
 
 ## Resetting saved food nutrition
 
@@ -22,7 +39,7 @@ Existing diary entries (including their calories and macros), saved meals, barco
 
 ## Backend
 
-`POST /api/v1/food/macros` requires the same signed device authentication as other private endpoints. Input: name, calories (whole amount), servingSize, servings. Output: protein/totalCarbs/fiber/fat, each a required number or null. No subscription is required and no successful-scan counter is incremented. The endpoint consumes existing account/day/month and global AI budgets, plus `MACRO_ESTIMATE_DAILY_LIMIT` (default 10 per account/day). Invalid requests fail before AI reservation. This limits free AI cost without changing the ten-scan introductory allowance.
+`POST /api/v1/food/macros` requires the same signed device authentication as other private endpoints. Input: name, calories (whole amount), servingSize, servings. Output: protein/totalCarbs/fiber/fat, each a required number or null. No subscription is required and no successful-scan counter is incremented. Requests from the editor and macro sheet consume the existing account/day/month and global AI budgets, plus `MACRO_ESTIMATE_DAILY_LIMIT` (default 10 per account/day). Requests with `automatic: true` (the app's background fill-in, since October 17, 2026) skip all of those and the scan allowance; they only count toward a safeguard, `MACRO_AUTOFILL_DAILY_LIMIT` (default 100 per account/day, the owner's choice) and `MACRO_AUTOFILL_GLOBAL_DAILY_LIMIT` (default 50,000/day), plus the general 30-requests-a-minute account cap. Reaching either safeguard answers `macro_autofill_limit` (429), and the app stops automatic estimates until the server's day turns over (midnight UTC), keeping the waiting foods queued. Invalid requests fail before any reservation. Neither kind changes the ten-scan introductory allowance or when the upgrade appears.
 
 Use `FATSECRET_API_TIER=premier` only after approval. Keep credentials and Fixie configuration server-side. No additional database migration is needed for the backend.
 

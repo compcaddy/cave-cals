@@ -71,8 +71,26 @@ actor FatSecretSearch: FoodSearchService {
         }
         return page
     }
+    /// FatSecret Premier's curated label data through our backend. Nil when FatSecret doesn't know the barcode
+    /// (or the backend predates barcode lookup); the scanner then asks Open Food Facts.
+    func lookup(barcode: String) async throws -> FoodResult? {
+        struct Reply: Decodable { let result: FoodResult? }
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/v1/foods/barcode"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["barcode": barcode])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw FoodServiceError.unavailable }
+        if http.statusCode == 429 { throw FoodServiceError.rateLimited }
+        guard (200...299).contains(http.statusCode) else { throw FoodServiceError.unavailable }
+        guard let food = try JSONDecoder().decode(Reply.self, from: data).result else { return nil }
+        guard food.id.hasPrefix("fatsecret:"), !food.name.isEmpty, food.calories.isFinite, food.calories >= 0,
+              food.calories <= 100_000, food.macros?.isValid ?? true else { throw FoodServiceError.unavailable }
+        return food
+    }
 }
 protocol BarcodeLookupService: Sendable { func lookup(barcode: String) async throws -> FoodResult? }
+extension FatSecretSearch: BarcodeLookupService {}
 
 enum FoodServiceError: LocalizedError {
     case unavailable, rateLimited, serverUnavailable, offline, timedOut

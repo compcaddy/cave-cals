@@ -20,7 +20,7 @@ PLAN, MACROS, AND PROGRESS
 • Weekly Recap compares your week with the last one, and prints a one-page report.
 
 APPLE HEALTH AND ICLOUD
-• Optionally share calories, macros, and weigh-ins with Apple Health. Cave Cals never reads your Health data.
+• Optionally sync with Apple Health: share calories, macros, and weigh-ins, and bring in weigh-ins from your smart scale or other apps. Cave Cals reads only your weight.
 • Your diary stays on your iPhone, with private iCloud sync when available. Weight history and Progress Photos stay on this device; Progress Photos are included in its backups.
 • An optional morning reminder nudges you only on days nothing is logged yet.
 

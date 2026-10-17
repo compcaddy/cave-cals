@@ -111,6 +111,7 @@ struct SettingsView: View {
     @AppStorage(AppStore.showsFinishDayKey) private var showsFinishDay = true
     @AppStorage(ClanStore.showsStatusKey) private var showsClanStatus = true
     @State private var showsHiddenQuickAdd = false
+    @State private var showsHiddenQuickStart = false
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
 
     var body: some View {
@@ -184,6 +185,29 @@ struct SettingsView: View {
                         Text("Hidden foods return after two weeks, or sooner if you log them again.").font(.cave(.caption2))
                     }
                 }
+                if !store.hiddenQuickStartFoods.isEmpty {
+                    let removed = store.hiddenQuickStartFoods
+                    Section {
+                        DisclosureGroup(isExpanded: $showsHiddenQuickStart) {
+                            ForEach(removed) { food in
+                                HStack(spacing: 12) {
+                                    Text(food.name.isEmpty ? "Unnamed food" : food.name).lineLimit(2)
+                                    Spacer(minLength: 8)
+                                    Button("Unhide") { store.unhideQuickStart(food.id) }
+                                        .hapticButtonStyle(.bordered).tint(.caveOrange)
+                                        .accessibilityLabel("Unhide \(food.name)")
+                                }
+                            }
+                        } label: {
+                            Text("\(removed.count) hidden \(removed.count == 1 ? "food" : "foods")").foregroundStyle(Color.primary)
+                        }
+                        .accessibilityIdentifier("hiddenQuickStartList")
+                    } header: {
+                        Text("Hidden from Quick Start")
+                    } footer: {
+                        Text("These stay out of Quick Start until you unhide them. They still show in Quick Add.").font(.cave(.caption2))
+                    }
+                }
                 if !AppEnvironment.isDevelopment { UsageStatsSettingsSection() }
                 TellTheTribeSection()
                 Section("About") {
@@ -192,7 +216,7 @@ struct SettingsView: View {
                     Link("FatSecret Terms of Use", destination: URL(string: "https://platform.fatsecret.com/terms")!)
                     Link("Barcode data by Open Food Facts", destination: URL(string: "https://world.openfoodfacts.org")!)
                     Link("Open Database License (ODbL)", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
-                    Text("Food searches are sent through our backend to FatSecret; scanned barcodes are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account, and in Apple Health only if you turn on sharing. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. When you request macro estimates, that food’s name, portion and calories are sent to our backend and OpenAI. When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
+                    Text("Food searches and scanned barcodes are sent through our backend to FatSecret; barcodes FatSecret doesn’t know are sent to Open Food Facts. Your diary is not sent to either provider. Your profile and food diary stay on your devices and in your private iCloud account, and in Apple Health only if you turn on sharing. When you choose AI photo or voice logging, the selected media is sent to our backend and OpenAI for processing. While you track macros, a food logged without them has its name, portion and calories sent to our backend and OpenAI to fill them in (unless your history or the built-in food list already knows it). When you import a meal from a link, that public URL is sent to our backend and OpenAI. Temporary media is deleted after processing; estimates are retained briefly to support retries. Product serving sizes and calories can vary; you can edit them before adding.").font(.cave(.footnote)).foregroundStyle(.secondary)
                 }
                 legalLinks
             }.caveScreenBackground()

@@ -230,7 +230,7 @@ final class ProgressUITests: XCTestCase {
         app.buttons["progress"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
         let hourChart = app.descendants(matching: .any)["trendsHourChart"].firstMatch
-        reveal(app.segmentedControls["trendsHourMode"])
+        reveal(app.staticTexts["trendsWeekdayDetail"])
         let weekdayDetail = app.staticTexts["trendsWeekdayDetail"]
         XCTAssertTrue(weekdayDetail.label.hasPrefix("Average calories on complete days · based on"), weekdayDetail.label)
         let weekdayChart = app.descendants(matching: .any)["trendsWeekdayChart"].firstMatch
@@ -241,10 +241,16 @@ final class ProgressUITests: XCTestCase {
         XCTAssertTrue(hourDetail.label.hasPrefix("Average calories in each hour"), hourDetail.label)
         // Bring the whole hour chart on screen first; a coordinate tap doesn't scroll.
         reveal(hourDetail)
+        // Revealing the caption can leave the chart's top under the navigation bar; drag it down into view.
+        if hourChart.frame.minY < app.navigationBars["Progress"].frame.maxY {
+            let window = app.windows.firstMatch
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+                .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
+        }
         Thread.sleep(forTimeInterval: 0.8)
         XCTAssertTrue(tap(hourChart, at: CGVector(dx: 0.56, dy: 0.4), until: hourDetail, contains: "cals a day"), hourDetail.label)
-        app.segmentedControls["trendsHourMode"].buttons["% of day"].tap()
-        XCTAssertTrue(waitForLabel(hourDetail, containing: "% of the day’s calories"), hourDetail.label)
+        // Calories only; the % of day option was removed October 17, 2026 (it looked the same).
+        XCTAssertFalse(app.segmentedControls["trendsHourMode"].exists)
         app.segmentedControls["trendsRange"].buttons["All time"].tap()
     }
     /// Taps a chart until the detail line changes (a tap can land while the page is still settling).

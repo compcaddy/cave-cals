@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FatSecretClient, normalizeFoods, foodSearchInput } from '../backend/src/server/food-search';
+import { FatSecretClient, normalizeFoods, normalizeBarcodeFood, gtin13, barcodeInput, foodSearchInput } from '../backend/src/server/food-search';
 import { APIError } from '../backend/src/server/config';
 import { api } from '../backend/src/server/api';
 const options = { clientID: 'fixture-id', clientSecret: 'fixture-secret', premier: false };
@@ -116,4 +116,57 @@ test('Premier macros use the selected serving and preserve unknown fiber, zero, 
   assert.equal(normalize({ carbohydrate: '0' })?.totalCarbs, 0);
   assert.equal(normalize({ carbohydrate: '5', fiber: '8' })?.fiber, undefined);
   for (const value of ['NaN', 'Infinity', '-1', '100001', '', ' ']) assert.equal(normalize({ protein: value })?.protein, undefined);
+});
+
+test('barcodes become GTIN-13 for FatSecret', () => {
+  assert.equal(gtin13('012000161155'), '0012000161155');
+  assert.equal(gtin13('5000112546415'), '5000112546415');
+  assert.equal(gtin13('96385074'), '0000096385074');
+  assert.equal(gtin13('00012000161155'), '0012000161155');
+  assert.equal(gtin13('10012000161152'), undefined);
+  assert.equal(gtin13('1234567'), undefined);
+  assert.equal(barcodeInput.safeParse({ barcode: '012000161155' }).success, true);
+  for (const barcode of ['12345', 'abc012000161155', '012000161155 ']) assert.equal(barcodeInput.safeParse({ barcode }).success, false);
+});
+test('barcode lookup uses its own token scope and returns the default serving with macros', async () => {
+  const scopes: string[] = [];
+  let lookups = 0;
+  const client = new FatSecretClient({ ...options, premier: true }, fetcher(async (url, init) => {
+    if (url.includes('/connect/token')) { scopes.push(String(new URLSearchParams(String(init?.body)).get('scope'))); return token(); }
+    if (url.includes('/foods/search/')) return json({ foods_search: { total_results: '0' } });
+    lookups++;
+    assert.equal(new URL(url).pathname, '/rest/food/barcode/find-by-id/v2');
+    assert.equal(new URL(url).searchParams.get('barcode'), '0012000161155');
+    return json({ food: { food_id: '555', food_name: 'Diet Cola', brand_name: 'Fizz', servings: { serving: [
+      { serving_id: '0', serving_description: '100 ml', calories: '0', protein: '0', carbohydrate: '0', fat: '0' },
+      { serving_id: '9', is_default: '1', serving_description: '1 can (12 fl oz)', calories: '140', protein: '0', carbohydrate: '39', fiber: '0', fat: '0' },
+    ] } } });
+  }));
+  await client.search('cola');
+  const found = await client.barcode('012000161155');
+  assert.deepEqual(found, { id: 'fatsecret:555', name: 'Diet Cola', brand: 'Fizz', calories: 140, servingDescription: '1 can (12 fl oz)',
+    barcode: '012000161155', macros: { protein: 0, fat: 0, totalCarbs: 39, fiber: 0 } });
+  assert.deepEqual(scopes, ['premier', 'barcode'], 'search keeps its own token');
+  assert.equal(lookups, 1);
+});
+test('unknown barcodes return null; a missing barcode scope fails without breaking search; Basic never looks up', async () => {
+  assert.equal(normalizeBarcodeFood({ error: { code: 211, message: 'No food item detected' } }, '1'), null);
+  assert.equal(normalizeBarcodeFood({ food: { food_id: '0' } }, '1'), null);
+  assert.throws(() => normalizeBarcodeFood({ food: { food_id: '5', food_name: 'Broken' } }, '1'), APIError);
+  const unknown = new FatSecretClient({ ...options, premier: true }, fetcher(async url => url.includes('/connect/token') ? token() : json({ error: { code: 211 } })));
+  assert.equal(await unknown.barcode('012000161155'), null);
+  let searches = 0;
+  const denied = new FatSecretClient({ ...options, premier: true }, fetcher(async (url, init) => {
+    if (url.includes('/connect/token')) {
+      return new URLSearchParams(String(init?.body)).get('scope') === 'barcode' ? json({ error: 'invalid_scope' }, 400) : token();
+    }
+    searches++; return json({ foods_search: { total_results: '0' } });
+  }));
+  await assert.rejects(denied.barcode('012000161155'), APIError);
+  assert.deepEqual(await denied.search('cola'), { results: [], cacheLifetime: 3600 });
+  assert.equal(searches, 1);
+  let calls = 0;
+  const basic = new FatSecretClient(options, fetcher(async () => { calls++; return token(); }));
+  assert.equal(await basic.barcode('012000161155'), null);
+  assert.equal(calls, 0);
 });

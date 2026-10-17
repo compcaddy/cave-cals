@@ -114,7 +114,7 @@ struct NewChallengeView: View {
                 Section {
                     Stepper("\(weeks) weeks", value: $weeks, in: 2...12)
                 } header: { Text("Length") } footer: {
-                    Text("Compares your average weigh-in on days 1–3 with your average on the last 3 days. Credit stops at 1% of body weight a week. For adults only; only the % is shared.").font(.cave(.caption2))
+                    Text("Compares your average weigh-in on days 1–3 with your average on the last 3 days. Credit stops at 1% of body weight a week. For adults only; only the % is shared. Weigh-ins from Apple Health don’t count.").font(.cave(.caption2))
                 }
             }
             Section {
@@ -384,6 +384,8 @@ struct WeightEligibilitySheet: View {
             HapticForm {
                 if !weights.tracking {
                     Section { Text("Turn on Track weight on the Me page first, so your weigh-ins can count.").font(.cave(.callout)) }
+                } else if weights.healthSharing {
+                    Section { Text("Only weigh-ins you log in Cave Cals count. Ones brought in from Apple Health stay private.").font(.cave(.callout)) }
                 }
                 if let planAge, planAge < 18 {
                     Section { Text("Weight challenges are for adults 18 and older. Logging and streak challenges are open to you.").font(.cave(.callout)) }

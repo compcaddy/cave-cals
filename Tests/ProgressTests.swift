@@ -101,8 +101,12 @@ import SwiftData
         XCTAssertEqual(trends.hours[8].calories, 750)
         XCTAssertEqual(trends.hours[12].calories, 750)
         XCTAssertEqual(trends.hours[18].calories, 0)
-        XCTAssertEqual(trends.hours[8].share, 0.5)
-        XCTAssertEqual(trends.hours.map(\.share).reduce(0, +), 1, accuracy: 0.0001)
+    }
+    func testCalorieColumnsStartAtHalfTheLowestDay() {
+        XCTAssertEqual(CalorieColumnScale.domain([2100, 2400, 2250]), 1050...2520)
+        XCTAssertEqual(CalorieColumnScale.domain([1800]), 900...1890)
+        XCTAssertNil(CalorieColumnScale.domain([]))
+        XCTAssertNil(CalorieColumnScale.domain([0]))
     }
     func testCalendarPeriodsAndCustomWeekStart() {
         let monday = ProgressCalendar(firstWeekday: 2, calendar: calendar)

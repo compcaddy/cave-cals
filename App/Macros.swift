@@ -106,3 +106,282 @@ struct MacroSummary {
 extension Double {
     var macroText: String { formatted(.number.grouping(.never).precision(.fractionLength(0...1))) }
 }
+
+/// Fills blank macros on named foods by itself, so people tracking macros rarely see a "+" on Home (October 17,
+/// 2026). Right after a food is saved, and over the last 30 days on opening, each blank protein, carb, fiber, or
+/// fat is filled from the first source that has it:
+/// 1. the same food logged before with macros, scaled by calories;
+/// 2. the built-in food list, when the name (amounts like "2 oz" aside) clearly matches one, scaled by calories (≈);
+/// 3. an AI estimate (≈), sent as `automatic`, which never counts toward scans or the AI budget.
+/// Typed amounts are never replaced. Each food is tried once per name, calories, and servings, so a box someone
+/// empties stays empty until the food itself changes. Bare calorie numbers have nothing to go on and stay blank.
+@MainActor final class MacroAutoFill {
+    typealias Estimator = @MainActor (EntryDraft) async throws -> MacroNutrients
+    static let triedKey = "macroAutoFillTried.v1"
+    static let lookback: TimeInterval = 30 * 86_400
+
+    private weak var store: AppStore?
+    private let estimate: Estimator
+    private let preferences: UserDefaults
+    /// Spacing between backfill requests, which keeps them under the server's per-minute cap. Fresh foods skip it.
+    private let backfillPause: Duration
+    /// Waiting for an AI estimate; fresh foods go to the front.
+    private(set) var queue: [UUID] = []
+    private var fresh = Set<UUID>()
+    private var worker: Task<Void, Never>?
+    private var resumeTask: Task<Void, Never>?
+    private var failures = 0
+    private var limitHits = 0
+    private var reportedError = false
+    /// Entry ID → the name, calories, and servings it was last tried with.
+    private var tried: [String: String]
+
+    init(store: AppStore, preferences: UserDefaults = .standard, backfillPause: Duration = .milliseconds(2500),
+         estimate: Estimator? = nil) {
+        self.store = store
+        self.preferences = preferences
+        self.backfillPause = backfillPause
+        self.estimate = estimate ?? { try await AIBackend.shared.estimateMacros(for: $0, automatic: true) }
+        tried = preferences.dictionary(forKey: Self.triedKey) as? [String: String] ?? [:]
+    }
+
+    /// UI tests and screenshots keep their blanks, unless a DEBUG UI test opts in with `--macro-autofill`.
+    static var isAllowed: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        #if DEBUG
+        if arguments.contains("--macro-autofill") { return true }
+        #endif
+        return !arguments.contains { $0 == "--uitesting" || $0 == "--screenshots" }
+    }
+
+    /// A named food with calories and a blank protein, carbs, or fat (fiber alone doesn't show on Home).
+    static func needsMacros(_ entry: CalorieEntry) -> Bool {
+        guard entry.name.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2, entry.totalCalories > 0 else { return false }
+        let totals = MacroNutrients.decode(entry.macrosPerServingData)?.scaled(entry.servings)
+        return MacroKind.primary.contains { totals?[keyPath: $0.keyPath] == nil }
+    }
+    static func signature(_ entry: CalorieEntry) -> String {
+        "\(normalizedFoodName(entry.name))|\(entry.totalCalories.rounded())|\(entry.servings)|\(entry.servingDescription)"
+    }
+
+    // MARK: Matching names
+
+    nonisolated private static let amountWords: Set<String> = [
+        "a", "an", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "dozen", "half",
+        "quarter", "couple", "few", "some", "of", "x", "oz", "ounce", "ounces", "fl", "g", "gram", "grams", "kg",
+        "lb", "lbs", "pound", "pounds", "ml", "l", "liter", "liters", "cup", "cups", "c", "tbsp", "tablespoon",
+        "tablespoons", "tsp", "teaspoon", "teaspoons", "slice", "slices", "piece", "pieces", "serving", "servings",
+        "scoop", "scoops", "can", "cans", "bottle", "bottles", "glass", "glasses", "bowl", "bowls", "plate", "plates",
+        "handful", "handfuls", "small", "medium", "large",
+    ]
+    /// The food's name without a leading amount: "2 oz cheddar cheese" → "cheddar cheese".
+    nonisolated static func foodName(_ name: String) -> String {
+        var words = normalizedFoodName(name).split(separator: " ").map(String.init)
+        while let first = words.first, words.count > 1, first.allSatisfy(\.isNumber) || amountWords.contains(first) {
+            words.removeFirst()
+        }
+        return words.joined(separator: " ")
+    }
+    /// A built-in food whose name or alias matches exactly (also without the amount, and singular).
+    static func commonFood(named name: String) -> CommonFood? {
+        let bare = foodName(name)
+        var tries = [normalizedFoodName(name), bare]
+        if bare.hasSuffix("es") { tries.append(String(bare.dropLast(2))) }
+        if bare.hasSuffix("s") { tries.append(String(bare.dropLast())) }
+        for candidate in tries where !candidate.isEmpty {
+            if let food = CommonFoods.matching(candidate), food.calories > 0, food.macrosPerServing?.hasValues == true { return food }
+        }
+        return nil
+    }
+
+    // MARK: Local sources
+
+    /// Foods already logged with macros, most recent first, by identity and by name.
+    struct History {
+        private var byFood: [String: [CalorieEntry]] = [:]
+        private var byName: [String: [CalorieEntry]] = [:]
+        init(_ entries: [CalorieEntry]) {
+            for entry in entries.sorted(by: { $0.timestamp > $1.timestamp }) where entry.totalCalories > 0 {
+                guard MacroNutrients.decode(entry.macrosPerServingData)?.hasValues == true else { continue }
+                byFood[FoodHistory.foodID(for: entry), default: []].append(entry)
+                let name = MacroAutoFill.foodName(entry.name)
+                if !name.isEmpty { byName[name, default: []].append(entry) }
+            }
+        }
+        /// The kinds asked for, from the most recent log of this food that has the most of them, scaled by calories.
+        func macros(for entry: CalorieEntry, kinds: [MacroKind]) -> MacroNutrients? {
+            let candidates = (byFood[FoodHistory.foodID(for: entry)] ?? []) + (byName[MacroAutoFill.foodName(entry.name)] ?? [])
+            var best: (source: CalorieEntry, macros: MacroNutrients, count: Int)?
+            for source in candidates where source.id != entry.id {
+                guard let macros = MacroNutrients.decode(source.macrosPerServingData)?.scaled(source.servings) else { continue }
+                let count = kinds.filter { macros[keyPath: $0.keyPath] != nil }.count
+                if count > (best?.count ?? 0) { best = (source, macros, count) }
+            }
+            guard let best else { return nil }
+            return MacroAutoFill.portion(of: best.macros, kinds: kinds, ratio: entry.totalCalories / best.source.totalCalories)
+        }
+    }
+
+    /// `kinds` from `totals`, scaled and rounded to 0.1 g, keeping each one's estimate mark.
+    nonisolated static func portion(of totals: MacroNutrients, kinds: [MacroKind], ratio: Double, estimated: Bool? = nil) -> MacroNutrients? {
+        guard ratio.isFinite, ratio > 0 else { return nil }
+        var result = MacroNutrients()
+        for kind in kinds {
+            guard let value = totals[keyPath: kind.keyPath] else { continue }
+            result[keyPath: kind.keyPath] = (value * ratio * 10).rounded() / 10
+            result[keyPath: kind.estimateKeyPath] = estimated ?? totals[keyPath: kind.estimateKeyPath]
+        }
+        return result.hasValues ? result : nil
+    }
+
+    static func blanks(_ entry: CalorieEntry) -> [MacroKind] {
+        let totals = MacroNutrients.decode(entry.macrosPerServingData)?.scaled(entry.servings)
+        return MacroKind.allCases.filter { totals?[keyPath: $0.keyPath] == nil }
+    }
+
+    /// Fills what history and the built-in list can, in one save. Returns the foods still needing an AI estimate.
+    @discardableResult private func fillLocally(_ candidates: [CalorieEntry]) -> [UUID] {
+        guard let store, !candidates.isEmpty else { return [] }
+        let history = History(store.entries)
+        var found: [UUID: MacroNutrients] = [:]
+        var fromHistory = 0, fromList = 0
+        for entry in candidates {
+            var blanks = Self.blanks(entry)
+            var totals = MacroNutrients()
+            if let past = history.macros(for: entry, kinds: blanks) {
+                totals = totals.fillingMissing(from: past); fromHistory += 1
+                blanks = blanks.filter { totals[keyPath: $0.keyPath] == nil }
+            }
+            if !blanks.isEmpty, let food = Self.commonFood(named: entry.name), let macros = food.macrosPerServing,
+               let listed = Self.portion(of: macros, kinds: blanks, ratio: entry.totalCalories / food.calories, estimated: true) {
+                totals = totals.fillingMissing(from: listed); fromList += 1
+            }
+            if totals.hasValues { found[entry.id] = totals }
+        }
+        if !found.isEmpty, store.fillMissingMacros(found) > 0 {
+            if fromHistory > 0 { UsageStats.shared.count("macroAutoFill.history", by: fromHistory) }
+            if fromList > 0 { UsageStats.shared.count("macroAutoFill.builtIn", by: fromList) }
+        }
+        var remaining: [UUID] = []
+        for id in candidates.map(\.id) {
+            guard let entry = store.entries.first(where: { $0.id == id }) else { continue }
+            if Self.needsMacros(entry) { remaining.append(id) } else { markTried(entry) }
+        }
+        return remaining
+    }
+
+    private func markTried(_ entry: CalorieEntry) {
+        tried[entry.id.uuidString] = Self.signature(entry)
+        preferences.set(tried, forKey: Self.triedKey)
+    }
+    private func untried(_ entry: CalorieEntry) -> Bool { tried[entry.id.uuidString] != Self.signature(entry) }
+
+    // MARK: Triggers
+
+    /// Just logged or edited: local sources now, then an AI estimate next in line.
+    func consider(_ ids: [UUID]) {
+        guard Self.isAllowed, let store, store.tracksMacros else { return }
+        let wanted = Set(ids)
+        let candidates = store.entries.filter { wanted.contains($0.id) && Self.needsMacros($0) && untried($0) }
+        let remaining = fillLocally(candidates)
+        guard !remaining.isEmpty else { return }
+        queue.removeAll { remaining.contains($0) }
+        queue.insert(contentsOf: remaining, at: 0)
+        fresh.formUnion(remaining)
+        startWorker()
+    }
+
+    /// On opening: foods from the last 30 days still blank and not tried yet (this is also the one-time backfill),
+    /// newest first, behind anything just logged.
+    func sweep(now: Date = Date()) {
+        guard Self.isAllowed, let store, store.tracksMacros else { return }
+        let since = now.addingTimeInterval(-Self.lookback)
+        let recent = store.entries.filter { $0.timestamp >= since }
+        let recentIDs = Set(recent.map(\.id.uuidString))
+        if tried.keys.contains(where: { !recentIDs.contains($0) }) {
+            tried = tried.filter { recentIDs.contains($0.key) }
+            preferences.set(tried, forKey: Self.triedKey)
+        }
+        let candidates = recent.filter { Self.needsMacros($0) && untried($0) }.sorted { $0.timestamp > $1.timestamp }
+        let queued = Set(queue)
+        queue.append(contentsOf: fillLocally(candidates).filter { !queued.contains($0) })
+        startWorker()
+    }
+
+    // MARK: AI estimates
+
+    static func secondsUntilServerTomorrow(now: Date = Date()) -> Int {
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        let tomorrow = utc.startOfDay(for: now).addingTimeInterval(86_400)
+        return max(60, Int(tomorrow.timeIntervalSince(now)) + 60)
+    }
+    /// Paused by a limit or failures; a sweep only queues until it resumes.
+    var isPaused: Bool { resumeTask != nil }
+
+    /// Tests: waits until the queue has been worked through (or paused).
+    func waitUntilIdle() async {
+        while let worker { await worker.value }
+    }
+
+    private func startWorker() {
+        guard worker == nil, resumeTask == nil, !queue.isEmpty else { return }
+        worker = Task { [weak self] in
+            await self?.work()
+            self?.worker = nil
+        }
+    }
+    private func resume(after delay: Duration) {
+        resumeTask?.cancel()
+        resumeTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.resumeTask = nil
+            self?.startWorker()
+        }
+    }
+
+    private func work() async {
+        while !queue.isEmpty {
+            guard let store, store.tracksMacros else { queue.removeAll(); fresh.removeAll(); return }
+            let id = queue.removeFirst()
+            let isFresh = fresh.remove(id) != nil
+            guard let entry = store.entries.first(where: { $0.id == id }), Self.needsMacros(entry), untried(entry) else { continue }
+            // An answer for the same food logged on another day may cover this one now.
+            guard !fillLocally([entry]).isEmpty, let current = store.entries.first(where: { $0.id == id }) else { continue }
+            let snapshot = EntryDraft(current), signature = Self.signature(current)
+            do {
+                let estimate = try await estimate(snapshot)
+                failures = 0; limitHits = 0
+                if let latest = store.entries.first(where: { $0.id == id }), Self.signature(latest) == signature {
+                    if estimate.hasValues, store.fillMissingMacros([id: estimate]) > 0 { UsageStats.shared.count("macroAutoFill.ai") }
+                    markTried(latest)
+                }
+            } catch is CancellationError {
+                return
+            } catch let error as AIServiceError where error.code == "macro_autofill_limit" {
+                // The daily safeguard (100 a person): stop until the server's day turns over (midnight UTC).
+                queue.insert(id, at: 0); if isFresh { fresh.insert(id) }
+                resume(after: .seconds(Self.secondsUntilServerTomorrow()))
+                return
+            } catch let error as AIServiceError where error.code == "usage_limit" {
+                // The server's per-minute (or daily) cap: wait, then pick up where this left off.
+                queue.insert(id, at: 0); if isFresh { fresh.insert(id) }
+                limitHits += 1
+                resume(after: limitHits >= 3 ? .seconds(3600) : .seconds(65))
+                return
+            } catch let error as AIServiceError where error.code == "invalid_estimate" {
+                markTried(current)
+            } catch {
+                // Offline or unavailable: stop after a few in a row; the next opening (or ten minutes) tries again.
+                failures += 1
+                if !reportedError, !(error is URLError) { reportedError = true; UsageStats.shared.error(.macroEstimate, error) }
+                if failures >= 3 {
+                    queue.insert(id, at: 0); if isFresh { fresh.insert(id) }
+                    resume(after: .seconds(600))
+                    return
+                }
+            }
+            if !isFresh, !queue.isEmpty, fresh.isEmpty { try? await Task.sleep(for: backfillPause) }
+        }
+    }
+}

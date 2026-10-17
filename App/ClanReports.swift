@@ -37,7 +37,7 @@ struct ClanDayReport: Codable, Equatable {
     }
 }
 
-/// Weight challenges: the phone works out the % change from its own weigh-ins (which never leave it).
+/// Weight challenges: the phone works out the % change from weigh-ins logged in Cave Cals (which never leave it).
 struct ClanWeightReport: Equatable {
     var startReady: Bool
     var changePct: Double?
@@ -125,7 +125,8 @@ struct ClanWeightReport: Equatable {
     }
     private func sendWeights() {
         guard let weights, weights.tracking else { return }
-        let byDay = Dictionary(grouping: weights.records.filter { !$0.deleted }, by: { ClanDay.string($0.date) })
+        // Weigh-ins read from Apple Health never leave the iPhone, so only ones logged in Cave Cals count.
+        let byDay = Dictionary(grouping: weights.records.filter { !$0.deleted && !$0.readFromHealth }, by: { ClanDay.string($0.date) })
             .compactMapValues { $0.max { $0.revision < $1.revision }?.kilograms }
         let today = ClanDay.string(Date())
         for clan in clans {

@@ -77,6 +77,6 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Share the food (calories and macros) and weigh-ins you log in Cave Cals with Apple Health so your connected apps can use them.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Cave Cals uses Apple Health to keep the weigh-ins you choose to share up to date. Cave Cals does not read your Health history.</string>
+	<string>Cave Cals reads your weight from Apple Health so weigh-ins from your scale or other apps show up in Cave Cals. It reads nothing else.</string>
 </dict>
 </plist>

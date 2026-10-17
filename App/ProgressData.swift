@@ -373,8 +373,6 @@ struct ProgressTrends {
         let hour: Int
         /// Average calories eaten in this hour on a counted day.
         let calories: Double
-        /// This hour's share of all counted calories (the 24 add up to 1).
-        let share: Double
         var id: Int { hour }
     }
     /// In the Progress week-start order.
@@ -405,8 +403,18 @@ struct ProgressTrends {
             counted.insert(day)
         }
         hourDays = counted.count
-        let all = sums.reduce(0, +), days = Double(max(counted.count, 1))
-        hours = (0..<24).map { Hour(hour: $0, calories: sums[$0] / days, share: all > 0 ? sums[$0] / all : 0) }
+        let days = Double(max(counted.count, 1))
+        hours = (0..<24).map { Hour(hour: $0, calories: sums[$0] / days) }
+    }
+}
+
+/// Calorie columns (Weekly Recap's daily calories, Trends by weekday) don't start at zero: days usually sit within a
+/// few hundred calories of each other, which zero-based bars flatten. The axis runs from half the lowest value to 5%
+/// above the highest (owner's request, October 17, 2026). Nil without values.
+enum CalorieColumnScale {
+    static func domain(_ values: [Double]) -> ClosedRange<Double>? {
+        guard let low = values.min(), let high = values.max(), high > 0 else { return nil }
+        return max(0, low * 0.5)...(high * 1.05)
     }
 }
 

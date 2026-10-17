@@ -281,13 +281,19 @@ private struct RecapMiniChart: View {
     let unit: WeightUnit
     let weight: Bool
     private var domain: ClosedRange<Double> {
-        let values = days.compactMap { weight ? $0.weight.map(unit.display) : $0.calories }
-        let low = weight ? (values.min() ?? 0) : 0
+        guard weight else {
+            // Complete days set the scale, so today's partial total doesn't pull the floor back down to zero.
+            let complete = days.filter { $0.status == .complete }.compactMap(\.calories)
+            return CalorieColumnScale.domain(complete.isEmpty ? days.compactMap(\.calories) : complete) ?? 0...1
+        }
+        let values = days.compactMap { $0.weight.map(unit.display) }
+        let low = values.min() ?? 0
         let high = values.max() ?? 1
-        let padding = weight ? max(0.2, (high - low) * 0.3) : max(1, high * 0.1)
-        return max(0, low - (weight ? padding : 0))...max(1, high + padding)
+        let padding = max(0.2, (high - low) * 0.3)
+        return max(0, low - padding)...max(1, high + padding)
     }
     var body: some View {
+        let domain = domain
         Chart {
             ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                 if weight, let value = day.weight {
@@ -299,8 +305,10 @@ private struct RecapMiniChart: View {
                     PointMark(x: .value("Day", index), y: .value("Weight", unit.display(value)))
                         .foregroundStyle(Color.caveOrange).symbolSize(10)
                 } else if !weight, let value = day.calories {
+                    // A day below the floor (usually today, still in progress) keeps a short faded stub.
                     RectangleMark(xStart: .value("Day", Double(index) - 0.28), xEnd: .value("Day", Double(index) + 0.28),
-                                  yStart: .value("Calories", 0), yEnd: .value("Calories", value))
+                                  yStart: .value("Calories", domain.lowerBound),
+                                  yEnd: .value("Calories", max(value, domain.lowerBound + (domain.upperBound - domain.lowerBound) * 0.03)))
                         .foregroundStyle(Color.caveOrange.opacity(day.status == .complete ? 0.7 : 0.22))
                 }
             }
@@ -526,8 +534,10 @@ struct ProgressWeightChart: View {
                             LineMark(x: .value("Date", bucket.center), y: .value("Weight", unit.display(weight)),
                                      series: .value("Segment", segment(at: index, in: buckets)))
                                 .foregroundStyle(Color.caveOrange)
+                                // The same smooth curve and small dots as Weekly Recap's weight chart.
+                                .interpolationMethod(.monotone)
                             PointMark(x: .value("Date", bucket.center), y: .value("Weight", unit.display(weight)))
-                                .foregroundStyle(Color.caveOrange)
+                                .foregroundStyle(Color.caveOrange).symbolSize(10)
                                 .accessibilityLabel(bucket.start.formatted(date: .abbreviated, time: .omitted))
                                 .accessibilityValue(unit.text(weight))
                         }
@@ -571,14 +581,8 @@ struct ProgressTrendsCard: View {
     @Environment(AppStore.self) private var store
     /// Synced with the other Progress settings.
     private var range: ProgressTrendRange { store.progressSettings.trendsRange }
-    @State private var hourMode: HourMode = .calories
     @State private var selectedWeekday: String?
     @State private var selectedHour: String?
-
-    enum HourMode: String, CaseIterable, Identifiable {
-        case calories = "Calories", share = "% of day"
-        var id: Self { self }
-    }
 
     var body: some View {
         let trends = ProgressTrends(foods: foods, data: data, range: range)
@@ -603,16 +607,7 @@ struct ProgressTrendsCard: View {
                     .accessibilityIdentifier("trendsWeekdayDetail")
             }
 
-            HStack(alignment: .firstTextBaseline) {
-                Text("By time of day").font(.cave(.headline))
-                Spacer(minLength: 8)
-                Picker("Show", selection: $hourMode) {
-                    ForEach(HourMode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).fixedSize().hapticSelection(on: hourMode)
-                .accessibilityIdentifier("trendsHourMode")
-            }
-            .padding(.top, 8)
+            Text("By time of day").font(.cave(.headline)).padding(.top, 8)
             if trends.hourDays == 0 {
                 emptyNote
             } else {
@@ -630,9 +625,6 @@ struct ProgressTrendsCard: View {
             selectedWeekday = nil; selectedHour = nil
             UsageStats.shared.event("progress.trends", ["range": new.statName])
         }
-        .onChange(of: hourMode) { _, new in
-            UsageStats.shared.event("progress.trends", ["hours": new == .calories ? "calories" : "share"])
-        }
     }
 
     private var emptyNote: some View {
@@ -645,14 +637,17 @@ struct ProgressTrendsCard: View {
     private func short(_ weekday: Int) -> String { data.dates.calendar.shortWeekdaySymbols[weekday - 1] }
 
     private func weekdayChart(_ trends: ProgressTrends) -> some View {
-        Chart(trends.weekdays) { day in
-            BarMark(x: .value("Day", short(day.weekday)), y: .value("Calories", day.average ?? 0))
+        let domain = CalorieColumnScale.domain(trends.weekdays.compactMap(\.average)) ?? 0...1
+        return Chart(trends.weekdays.filter { $0.average != nil }) { day in
+            BarMark(x: .value("Day", short(day.weekday)), yStart: .value("Calories", domain.lowerBound),
+                    yEnd: .value("Calories", day.average ?? domain.lowerBound))
                 .foregroundStyle(Color.caveOrange.opacity(selectedWeekday == nil || selectedWeekday == short(day.weekday) ? 1 : 0.35))
                 .cornerRadius(4)
                 .accessibilityLabel(data.dates.calendar.weekdaySymbols[day.weekday - 1])
                 .accessibilityValue(day.average.map { "\($0.calorieText) calories on average, \(day.days) days" } ?? "No complete days")
         }
         .chartXScale(domain: trends.weekdays.map { short($0.weekday) })
+        .chartYScale(domain: domain)
         .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) }
         .chartXSelection(value: $selectedWeekday)
         .chartGesture { proxy in SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) } }
@@ -674,11 +669,9 @@ struct ProgressTrendsCard: View {
 
     private static let hourLabels = ["0": "12a", "6": "6a", "12": "12p", "18": "6p"]
 
-    private func hourValue(_ hour: ProgressTrends.Hour) -> Double { hourMode == .calories ? hour.calories : hour.share * 100 }
-
     private func hourChart(_ trends: ProgressTrends) -> some View {
         Chart(trends.hours) { hour in
-            BarMark(x: .value("Hour", String(hour.hour)), y: .value(hourMode.rawValue, hourValue(hour)))
+            BarMark(x: .value("Hour", String(hour.hour)), y: .value("Calories", hour.calories))
                 .foregroundStyle(Color.caveOrange.opacity(selectedHour == nil || selectedHour == String(hour.hour) ? 1 : 0.35))
                 .cornerRadius(2)
                 .accessibilityLabel(hourRange(hour.hour))
@@ -697,7 +690,7 @@ struct ProgressTrendsCard: View {
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                 AxisGridLine()
-                AxisValueLabel { Text(value.as(Double.self).map { hourMode == .calories ? $0.calorieText : "\(Int($0))%" } ?? "") }
+                AxisValueLabel { Text(value.as(Double.self).map(\.calorieText) ?? "") }
             }
         }
         .chartXSelection(value: $selectedHour)
@@ -707,10 +700,7 @@ struct ProgressTrendsCard: View {
         .accessibilityIdentifier("trendsHourChart")
     }
 
-    private func hourText(_ hour: ProgressTrends.Hour) -> String {
-        hourMode == .calories ? "\(hour.calories.calorieText) cals a day"
-            : "\((hour.share * 100).formatted(.number.precision(.fractionLength(0))))% of the day’s calories"
-    }
+    private func hourText(_ hour: ProgressTrends.Hour) -> String { "\(hour.calories.calorieText) cals a day" }
 
     /// "12 PM – 1 PM"
     private func hourRange(_ hour: Int) -> String {
@@ -726,7 +716,6 @@ struct ProgressTrendsCard: View {
             return "\(hourRange(hour.hour)): \(hourText(hour))"
         }
         let days = "\(trends.hourDays) \(trends.hourDays == 1 ? "day" : "days")"
-        return (hourMode == .calories ? "Average calories in each hour" : "Share of the day’s calories in each hour")
-            + " · based on \(days). Tap a bar."
+        return "Average calories in each hour · based on \(days). Tap a bar."
     }
 }

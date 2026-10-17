@@ -418,7 +418,7 @@ struct AIInputSheet: View {
                     } label: {
                         HStack(spacing: 10) {
                             CaveIcon(.check, size: 22)
-                            Text("Add All")
+                            Text(remainingCalories.map { "Add All – \($0.calorieText) cals" } ?? "Add All")
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
@@ -427,7 +427,7 @@ struct AIInputSheet: View {
                     .hapticFeel(.success)
                     .disabled(remainingDrafts.isEmpty || !remainingDrafts.allSatisfy(\.isValid))
                     .accessibilityIdentifier("aiAdd")
-                    .accessibilityLabel("Add All")
+                    .accessibilityLabel(remainingCalories.map { "Add All, \($0.calorieText) calories" } ?? "Add All")
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     if drafts.count > 1 {
@@ -501,6 +501,12 @@ struct AIInputSheet: View {
 
     private var remainingDrafts: [EntryDraft] {
         drafts.filter { !addedDraftIDs.contains($0.id) }
+    }
+
+    /// What Add All would log; rows already added on their own aren't counted again.
+    private var remainingCalories: Double? {
+        let remaining = remainingDrafts
+        return remaining.isEmpty ? nil : remaining.reduce(0) { $0 + $1.calories }
     }
 
     @ViewBuilder private var reviewUndoBanner: some View {

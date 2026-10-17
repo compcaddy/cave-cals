@@ -168,16 +168,29 @@ struct AppleHealthSection: View {
             }))
             .disabled(!weights.tracking || weights.connecting || !weights.healthAvailable)
             .accessibilityIdentifier("shareWeightHealth")
-            if weights.connecting || weights.syncing { ProgressView(weights.connecting ? "Connecting…" : "Sharing weigh-ins…") }
+            if weights.connecting || weights.syncing || weights.importing {
+                ProgressView(weights.connecting ? "Connecting…" : "Syncing weigh-ins…")
+            }
             if let message = weights.healthMessage { Text(message).font(.cave(.footnote)).foregroundStyle(.secondary) }
             if !weights.healthAvailable { Text("Apple Health is unavailable on this device.").font(.cave(.footnote)).foregroundStyle(.secondary) }
-            if weights.tracking && weights.healthSharing && weights.pendingCount > 0 {
-                Button("Retry sharing") { Task { await weights.syncHealth() } }.disabled(weights.syncing)
+            if weights.tracking && weights.healthSharing {
+                // Sharing turned on before Cave Cals read weigh-ins: Apple hasn't asked about reading yet.
+                if weights.healthReadRequested == false {
+                    Button("Bring in weigh-ins from Apple Health") { Task { await weights.allowHealthImport() } }
+                        .disabled(weights.connecting)
+                        .accessibilityIdentifier("importWeightHealth")
+                } else {
+                    Button("Sync now") { Task { await weights.syncHealth() } }
+                        .disabled(weights.connecting || weights.syncing || weights.importing)
+                        .accessibilityIdentifier("syncWeightHealth")
+                }
             }
         } header: { Text("Apple Health") } footer: {
-            Text("Calories & macros shares the calories, protein, carbs, fat and fiber of foods you log from the day you turn it on, and keeps them updated when you edit or delete. Weigh-ins shares all your weigh-ins"
-                 + (weights.tracking ? "." : " once you turn on Track weight on the Me page.")
-                 + " Cave Cals never reads your Health data. Pausing sharing leaves what’s already in Apple Health.")
+            Text("Calories & macros shares the calories, protein, carbs, fat and fiber of foods you log from the day you turn it on, and keeps them updated when you edit or delete. "
+                 + "Weigh-ins syncs both ways"
+                 + (weights.tracking ? "" : " once you turn on Track weight on the Me page")
+                 + ": it shares your weigh-ins and brings in the ones your scale or other apps save to Apple Health, one a day (the day’s first reading, unless you logged one here). "
+                 + "Cave Cals reads only your weight from Apple Health. Pausing leaves what’s already in both places.")
                 .font(.cave(.caption2))
         }
     }
@@ -210,6 +223,7 @@ struct AppleHealthLinkSection: View {
 
 struct WeightEditorSheet: View {
     @Environment(WeightStore.self) private var weights
+    @Environment(ProgressPhotoStore.self) private var photos
     @Environment(\.dismiss) private var dismiss
     let record: WeightRecord?
     let unit: WeightUnit
@@ -221,10 +235,17 @@ struct WeightEditorSheet: View {
     @State private var confirmingDelete = false
     @State private var pendingDate: Date?
     @State private var confirmingDayChange = false
+    /// A progress photo for the selected day, right from the weigh-in. The weight is saved first.
+    @State private var photoAdder: ProgressPhotoAdder
+    /// Set once Take Photo opens the camera: closing it closes the weigh-in too.
+    @State private var leavesAfterCamera = false
+    @State private var photoSaved = false
     @FocusState private var focused: Bool
 
     init(record: WeightRecord? = nil, unit: WeightUnit) {
         self.record = record; self.unit = unit
+        let adder = ProgressPhotoAdder(); adder.origin = "weighIn"
+        _photoAdder = State(initialValue: adder)
         _date = State(initialValue: record?.date ?? Date())
         let amount = record.map { unit.editingText($0.kilograms) } ?? ""
         _amount = State(initialValue: amount); _loaded = State(initialValue: amount)
@@ -265,8 +286,21 @@ struct WeightEditorSheet: View {
                     }
                 } header: {
                     Text(date, format: .dateTime.weekday(.wide).month(.abbreviated).day())
+                } footer: {
+                    if let record = selectedRecord, record.fromOtherApp {
+                        HStack(spacing: 6) {
+                            AppleHealthIcon(size: 16)
+                            // Weights typed into the Health app itself list "Health" as their source.
+                            Text(record.healthSource.map { $0 == "Health" ? "Added in Apple Health" : "From \($0) via Apple Health" }
+                                 ?? "From Apple Health")
+                        }
+                        .font(.cave(.caption))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("weightHealthSource")
+                    }
                 }
                 if let error = weights.error { Section { Text(error).foregroundStyle(.red) } }
+                photoSection
                 if selectedRecord != nil {
                     Section {
                         Button("Delete weigh-in", role: .destructive) { confirmingDelete = true }
@@ -294,7 +328,9 @@ struct WeightEditorSheet: View {
                     if let record = selectedRecord, weights.delete(record.id) { dismiss() }
                 }.hapticFeel(.none)
             } message: {
-                Text(weights.healthSharing ? "It will also be removed from Apple Health when sharing completes." : "If previously shared, its Apple Health copy will be removed when you resume sharing.")
+                Text(selectedRecord?.fromOtherApp == true ? "It stays in Apple Health, but Cave Cals won’t bring this reading back."
+                     : weights.healthSharing ? "It will also be removed from Apple Health when sharing completes."
+                     : "If previously shared, its Apple Health copy will be removed when you resume sharing.")
             }
             .confirmationDialog("Save changes?", isPresented: $confirmingDayChange, titleVisibility: .visible) {
                 Button("Save and switch") {
@@ -309,7 +345,10 @@ struct WeightEditorSheet: View {
                 }.hapticFeel(.none)
                 Button("Cancel", role: .cancel) { Haptics.play(.tap); pendingDate = nil }.hapticFeel(.none)
             }
-            .onAppear { loadDay(date) }
+            .progressPhotoAdding(photoAdder) { _ in photoSaved = true }
+            .onChange(of: photoAdder.camera == nil) { _, closed in if closed && leavesAfterCamera { dismiss() } }
+            .onChange(of: photoAdder.importing == nil) { _, closed in if closed && photoSaved { dismiss() } }
+            .onAppear { loadDay(date); photos.loadIfNeeded() }
             .task {
                 guard record == nil, weights.records.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(300))
@@ -350,6 +389,34 @@ struct WeightEditorSheet: View {
             .accessibilityLabel("Type weight")
             .accessibilityIdentifier("typeWeight")
         }
+    }
+    /// The selected day's photos, then Take Photo / From Library for that day.
+    @ViewBuilder private var photoSection: some View {
+        let dayPhotos = photos.photos(on: date)
+        Section {
+            if !dayPhotos.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(dayPhotos.prefix(4)) { ProgressPhotoThumbnail(photo: $0, cornerRadius: 10).frame(maxWidth: 64) }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(dayPhotos.count == 1 ? "1 progress photo" : "\(dayPhotos.count) progress photos")
+                .accessibilityIdentifier("weighInPhotos")
+            }
+            ProgressPhotoAddButtons(adder: photoAdder, day: date, takeTitle: dayPhotos.isEmpty ? "Take Photo" : "Take Another",
+                                    willAdd: saveBeforePhoto)
+        } header: { Text("Progress photo") }
+    }
+    /// Saves the weight before the camera or library opens, so it can't be lost behind them. Without a valid
+    /// weight (the very first weigh-in, not typed yet) the photo goes ahead on its own.
+    private func saveBeforePhoto() -> Bool {
+        focused = false
+        if valid {
+            guard saveSelectedDay() else { return false }
+            loaded = amount
+        }
+        leavesAfterCamera = true
+        return true
     }
     private func saveSelectedDay() -> Bool {
         guard valid, let kilograms else { return false }
@@ -524,10 +591,13 @@ struct WeightHistoryView: View {
                     HStack {
                         Text(record.date, format: .dateTime.month(.abbreviated).day().year())
                         Spacer()
+                        if record.fromOtherApp { AppleHealthIcon(size: 18) }
                         Text(weights.unit.text(record.kilograms))
                         CaveIcon(.pencil, size: 18).foregroundStyle(.secondary)
                     }.foregroundStyle(.primary).frame(minHeight: 44)
-                }.accessibilityIdentifier("weight-\(record.id)")
+                }
+                .accessibilityValue(record.fromOtherApp ? "From Apple Health" : "")
+                .accessibilityIdentifier("weight-\(record.id)")
             }
         }.caveScreenBackground()
         .navigationTitle("Weigh-ins")
@@ -580,7 +650,8 @@ struct AppleHealthOfferSheet: View {
         VStack(spacing: 18) {
             AppleHealthIcon(size: 64).padding(.top, 28)
             Text("Sync with Apple Health").font(.cave(.title)).accessibilityAddTraits(.isHeader)
-            Text("Share what you track with Apple Health and apps that use it.")
+            Text(weights.tracking ? "Share what you track with Apple Health, and bring in weigh-ins from your scale or other apps."
+                 : "Share what you track with Apple Health and apps that use it.")
                 .font(.cave(.subheadline)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             VStack(spacing: 0) {
                 row("Calories & macros", isOn: nutritionBinding, busy: nutrition.connecting,

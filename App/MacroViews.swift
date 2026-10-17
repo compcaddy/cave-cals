@@ -503,6 +503,7 @@ struct MacroBreakdownSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if entries.isEmpty {
                             Text("Nothing logged on this day yet.").font(.cave(.subheadline)).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 24)
                         } else {
                             VStack(spacing: 6) {
                                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
@@ -522,10 +523,13 @@ struct MacroBreakdownSheet: View {
                                 .accessibilityIdentifier("macroBreakdownNote")
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 }
+                // Full width even with nothing logged, so the sheet's own background never shows at the sides.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .onChange(of: focused) { old, new in
                     if let old { commit(old) }
                     editing = new
@@ -549,6 +553,8 @@ struct MacroBreakdownSheet: View {
             }
         }
         .onAppear(perform: load)
+        // Blank macros filled in the background (MacroAutoFill) show up in boxes nobody is typing in.
+        .onChange(of: store.entriesRevision) { showFilledBlanks() }
         .onDisappear { if let editing { commit(editing) } }
     }
 
@@ -755,6 +761,16 @@ struct MacroBreakdownSheet: View {
             for kind in MacroKind.primary {
                 let cell = Cell(entry: entry.id, kind: kind)
                 if texts[cell] == nil { texts[cell] = Self.text(amount(entry, kind)) }
+            }
+        }
+    }
+
+    private func showFilledBlanks() {
+        for entry in entries {
+            for kind in MacroKind.primary {
+                let cell = Cell(entry: entry.id, kind: kind)
+                guard cell != focused, cell != editing, texts[cell] ?? "" == "", amount(entry, kind) != nil else { continue }
+                texts[cell] = Self.text(amount(entry, kind))
             }
         }
     }

@@ -75,6 +75,11 @@ struct BarcodeSheet: View {
                 if store.add([known]) { loading = false; dismiss(); return }
             }
             var draft = store.localBarcode(cleaned)
+            // FatSecret's curated label data first; Open Food Facts when FatSecret doesn't know it or can't answer.
+            if draft == nil, let found = try? await FatSecretSearch.shared.lookup(barcode: cleaned) {
+                draft = found.draft; draft?.barcode = cleaned
+            }
+            guard !Task.isCancelled else { return }
             if draft == nil {
                 do { draft = try await OpenFoodFacts.shared.lookup(barcode: cleaned)?.draft }
                 catch {

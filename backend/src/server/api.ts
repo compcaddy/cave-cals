@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { foodSearchClient, foodSearchInput, limitFoodSearch } from './food-search';
+import { barcodeInput, foodSearchClient, foodSearchInput, limitFoodSearch } from './food-search';
 import { APIError, errorResponse, readLimited, positiveInt } from './config';
 import { authenticate, challenge, register, issueTrialKey, trialKeyPattern, OWNER_TEST_KEY } from './auth';
 import { products, entitlement, requirePaid, verifyPurchase, applyNotification } from './apple';
@@ -7,7 +7,7 @@ import { signUpload, uploadInput } from './storage';
 import { analyze, describe, describeInput, importRecipeUploads, reserveAIUsage } from './analysis';
 import { importMealFromText, importMealFromWebsite, MAX_RECIPE_PAGES, MAX_RECIPE_TEXT } from './ai';
 import { estimateMacros, macroInput, withLegacyItems, withLegacyNetCarbs } from './macros';
-import { consume, tomorrow, limitPublic } from './rate-limit';
+import { consume, tomorrow, limitPublic, utcDay } from './rate-limit';
 import { database } from './db';
 import { accounts } from './schema';
 import { authorizedTestAccess, ownerTestAccess } from './test-access';
@@ -27,11 +27,24 @@ export const mealImportInput = z.union([
   z.object({ text: z.string().trim().min(20).max(MAX_RECIPE_TEXT).refine(value => !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) }),
   z.object({ uploadIds: z.array(z.string().uuid()).min(1).max(MAX_RECIPE_PAGES).refine(ids => new Set(ids).size === ids.length) }),
 ]);
+// `automatic` marks the app's own background fill-ins (released apps omit it).
+export const macroRequest = macroInput.extend({ automatic: z.boolean().optional() });
+/** A distinct code tells the app to stop filling until tomorrow, rather than retrying like the per-minute cap. */
+export async function consumeAutoFill(bucket: string, cap: number, tx: Parameters<typeof consume>[3],
+  take: typeof consume = consume) {
+  try { await take(bucket, cap, tomorrow(), tx); }
+  catch (error) {
+    if (error instanceof APIError && error.code === 'usage_limit') {
+      throw new APIError(429, 'macro_autofill_limit', 'Automatic macro estimates are paused until tomorrow.');
+    }
+    throw error;
+  }
+}
 export async function api(request: Request, path: string): Promise<Response> {
   try {
     if (request.method !== 'POST') throw new APIError(405, 'method', 'Use POST.');
     if (!request.headers.get('content-type')?.startsWith('application/json')) throw new APIError(415, 'content_type', 'Use application/json.');
-    const raw = (await readLimited(request, path === 'foods/search' || path === 'discount/check' ? 1024 : path === 'clan/me/photo' ? MAX_PHOTO_BODY + 1024 : path === 'stats' || path === 'meal/import' ? 256 * 1024 : 64 * 1024)).toString('utf8');
+    const raw = (await readLimited(request, path === 'foods/search' || path === 'foods/barcode' || path === 'discount/check' ? 1024 : path === 'clan/me/photo' ? MAX_PHOTO_BODY + 1024 : path === 'stats' || path === 'meal/import' ? 256 * 1024 : 64 * 1024)).toString('utf8');
     let body: unknown;
     try { body = JSON.parse(raw); } catch { throw new APIError(400, 'invalid_json', 'Invalid request.'); }
     const ok = (value: unknown) => Response.json(value, { headers: { 'Cache-Control':'no-store' } });
@@ -41,6 +54,13 @@ export async function api(request: Request, path: string): Promise<Response> {
       await limitFoodSearch(request);
       const page = await provider.search(input.query);
       return ok({ ...page, results: page.results.map(food => food.macros ? { ...food, macros: withLegacyNetCarbs(food.macros) } : food) });
+    }
+    if (path === 'foods/barcode') {
+      // Unsigned like search: FatSecret Premier's curated label data. Null when unknown; the app asks Open Food Facts next.
+      const { barcode } = barcodeInput.parse(body);
+      const provider = foodSearchClient();
+      await limitFoodSearch(request);
+      return ok({ result: await provider.barcode(barcode) });
     }
     if (path === 'device/challenge') {
       const input = z.object({ keyId: keySchema, purpose: z.enum(['register','request']) }).parse(body);
@@ -122,10 +142,18 @@ export async function api(request: Request, path: string): Promise<Response> {
       return ok(withLegacyItems(await describe(identity, text, undefined, regularLogCount)));
     }
     if (path === 'food/macros') {
-      const input = macroInput.parse(body);
-      // Free, explicit text estimates: authenticated and budgeted, no scan allowance consumed.
+      const { automatic, ...input } = macroRequest.parse(body);
       await database().transaction(async tx => {
-        await consume(`macro-estimate:${identity.accountId}:${new Date().toISOString().slice(0,10)}`, positiveInt('MACRO_ESTIMATE_DAILY_LIMIT', 10), tomorrow(), tx);
+        if (automatic) {
+          // The app fills blank macros on its own right after logging (and once for the last 30 days). These never
+          // touch the scan allowance or the AI budget that scans and the upgrade use; only a safeguard applies:
+          // 100 a person a day (owner's choice, October 17, 2026), then the app stops filling until tomorrow.
+          await consumeAutoFill(`macro-auto:${identity.accountId}:${utcDay()}`, positiveInt('MACRO_AUTOFILL_DAILY_LIMIT', 100), tx);
+          await consumeAutoFill(`macro-auto-global:${utcDay()}`, positiveInt('MACRO_AUTOFILL_GLOBAL_DAILY_LIMIT', 50000), tx);
+          return;
+        }
+        // Free, explicit text estimates: authenticated and budgeted, no scan allowance consumed.
+        await consume(`macro-estimate:${identity.accountId}:${utcDay()}`, positiveInt('MACRO_ESTIMATE_DAILY_LIMIT', 10), tomorrow(), tx);
         await reserveAIUsage(identity, tx);
       });
       return ok(withLegacyNetCarbs(await estimateMacros(input)));

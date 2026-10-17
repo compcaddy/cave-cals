@@ -139,6 +139,38 @@ final class WeightTrackingUITests: XCTestCase {
         app.navigationBars["Me"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["weighInReminder"].waitForExistence(timeout: 5))
     }
+    /// Take Photo on the weigh-in saves the weight first, and closing the camera closes the weigh-in.
+    func testWeighInSavesThenTakesAProgressPhoto() {
+        enableWeight()
+        app.navigationBars["Me"].buttons["Done"].tap()
+        app.buttons["weighInReminder"].tap()
+        let amount = app.textFields["weightAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText("180.5")
+        let take = app.buttons["progressPhotoTake"].firstMatch
+        XCTAssertTrue(take.waitForExistence(timeout: 3))
+        XCTAssertEqual(take.label, "Take Photo")
+        take.tap()
+        let shutter = app.buttons["progressPhotoShutter"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 5))
+        let timer = app.buttons["progressPhotoTimer"]
+        if timer.value as? String != "Off" { timer.tap() }
+        shutter.tap()
+        let use = app.buttons["progressPhotoUse"]
+        XCTAssertTrue(use.waitForExistence(timeout: 5)); use.tap()
+        let done = app.buttons["progressPhotoDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5)); done.tap()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["weighInReminder"].exists, "The weight was saved before the camera opened")
+        openProfile()
+        XCTAssertTrue(app.buttons["todayWeight"].label.contains("180.5"))
+        app.buttons["todayWeight"].tap()
+        let thumbnails = app.descendants(matching: .any)["weighInPhotos"]
+        XCTAssertTrue(thumbnails.waitForExistence(timeout: 5))
+        XCTAssertEqual(thumbnails.label, "1 progress photo")
+        XCTAssertEqual(app.buttons["progressPhotoTake"].firstMatch.label, "Take Another")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Weigh-in with its progress photo"; shot.lifetime = .keepAlways; add(shot)
+    }
     func testWeekPickerLoadsDaysWithoutMovingWeightsAndProtectsEdits() {
         enableWeight()
         app.buttons["todayWeight"].tap()

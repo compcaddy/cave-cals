@@ -554,6 +554,24 @@ final class ECCUITests: XCTestCase {
         XCTAssertTrue(carbsTotal.label.hasPrefix("Carbs ≈"), carbsTotal.label)
     }
 
+    /// Blank macros fill in by themselves right after logging: the built-in list for cheddar, the AI (fixture) for
+    /// a food nothing local knows. No "+" is left on Home.
+    func testMacrosFillInAutomaticallyAfterLogging() {
+        app.terminate()
+        app.launchArguments += ["--macro-autofill", "--macro-estimate-fixture"]
+        app.launch()
+        XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 10))
+        quickAdd("gloop 300")
+        let protein = app.descendants(matching: .any)["dailyMacro-protein"].firstMatch
+        XCTAssertTrue(protein.waitForExistence(timeout: 5))
+        let estimated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Protein ≈5 g"), object: protein)
+        XCTAssertEqual(XCTWaiter.wait(for: [estimated], timeout: 5), .completed, protein.label)
+        quickAdd("cheddar 230")
+        let both = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Protein ≈18.1 g"), object: protein)
+        XCTAssertEqual(XCTWaiter.wait(for: [both], timeout: 5), .completed, protein.label)
+        XCTAssertFalse(app.descendants(matching: .any)["dailyMacro-fat"].firstMatch.label.contains("+"))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Macros filled in"; shot.lifetime = .keepAlways; add(shot)
+    }
     /// Macros typed for one food fill the same food's other entries, even a box just tapped.
     func testMacroBreakdownSharesMacrosWithTheSameFood() {
         quickAdd("pizza 300")

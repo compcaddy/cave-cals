@@ -12,6 +12,7 @@ import WidgetKit
     private static let pinnedFoodIDsKey = "pinnedFoodIDs.v1"
     private static let pinnedMealIDsKey = "pinnedMealIDs.v1"
     private static let hiddenQuickAddKey = "hiddenQuickAddFoods.v1"
+    private static let hiddenQuickStartKey = "hiddenQuickStartFoods.v1"
     private static let homeQuickAddKey = "homeQuickAddDay.v1"
     private static let commonFoodDefaultsKey = "commonFoodDefaults.v1"
     private static let resetCommonFoodIDsKey = "resetCommonFoodIDs.v1"
@@ -39,6 +40,8 @@ import WidgetKit
     private(set) var pinnedFoodIDs: [String]
     private(set) var pinnedMealIDs: [String]
     private(set) var hiddenQuickAddFoods: [HiddenQuickAddFood]
+    /// Foods kept out of Home's Quick Start (long-press → Remove from Quick Start) until unhidden in Settings.
+    private(set) var hiddenQuickStartFoods: [HiddenQuickStartFood]
     private(set) var homeQuickAdd: HomeQuickAddDay?
     /// Day key → when that day was marked done eating. Local to this iPhone.
     private(set) var finishedDays: [String: Date]
@@ -55,6 +58,8 @@ import WidgetKit
     @ObservationIgnored private(set) var entriesRevision = 0
     /// Called after every successful reload of the diary (local saves, iCloud imports, Siri).
     @ObservationIgnored var entriesDidChange: (([CalorieEntry]) -> Void)?
+    /// Fills blank macros right after foods are logged or edited (set up by the app; nil in tests and previews).
+    @ObservationIgnored var macroAutoFill: MacroAutoFill?
     private var undoAction: (() -> Void)?
     private var toastTask: Task<Void, Never>?
     var profile: UserProfile? { profiles.sorted { $0.updatedAt > $1.updatedAt }.first }
@@ -70,6 +75,8 @@ import WidgetKit
         pinnedMealIDs = preferences.stringArray(forKey: Self.pinnedMealIDsKey) ?? []
         hiddenQuickAddFoods = preferences.data(forKey: Self.hiddenQuickAddKey)
             .flatMap { try? JSONDecoder().decode([HiddenQuickAddFood].self, from: $0) } ?? []
+        hiddenQuickStartFoods = preferences.data(forKey: Self.hiddenQuickStartKey)
+            .flatMap { try? JSONDecoder().decode([HiddenQuickStartFood].self, from: $0) } ?? []
         homeQuickAdd = persistsUsage ? preferences.data(forKey: Self.homeQuickAddKey)
             .flatMap { try? JSONDecoder().decode(HomeQuickAddDay.self, from: $0) } : nil
         finishedDays = persistsUsage ? preferences.data(forKey: Self.finishedDaysKey)
@@ -204,6 +211,23 @@ import WidgetKit
         preferences.set(try? JSONEncoder().encode(live), forKey: Self.hiddenQuickAddKey)
         hiddenQuickAddFoods = live
     }
+    var hiddenQuickStartIDs: Set<String> { Set(hiddenQuickStartFoods.map(\.id)) }
+    /// Keeps a food out of Quick Start for good (it still shows in Quick Add); Settings can bring it back.
+    func hideFromQuickStart(foodID: String, name: String) {
+        guard !foodID.isEmpty, !hiddenQuickStartIDs.contains(foodID) else { return }
+        saveHiddenQuickStartFoods(hiddenQuickStartFoods + [HiddenQuickStartFood(id: foodID, name: name)])
+        UsageStats.shared.event("quickStart.remove")
+        let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        feedback("\(label.isEmpty ? "Food" : label) removed from Quick Start") { [weak self] in self?.unhideQuickStart(foodID) }
+    }
+    func unhideQuickStart(_ foodID: String) {
+        saveHiddenQuickStartFoods(hiddenQuickStartFoods.filter { $0.id != foodID })
+    }
+    private func saveHiddenQuickStartFoods(_ foods: [HiddenQuickStartFood]) {
+        guard foods != hiddenQuickStartFoods else { return }
+        preferences.set(try? JSONEncoder().encode(foods), forKey: Self.hiddenQuickStartKey)
+        hiddenQuickStartFoods = foods
+    }
     /// Home's Quick Add picks show on an empty day and stay while they're being used, until
     /// another way of logging (search, voice, meal scan, barcode) is used that day.
     func showsHomeQuickAdd(on date: Date) -> Bool {
@@ -290,7 +314,9 @@ import WidgetKit
     @discardableResult func setTracksMacros(_ enabled: Bool) -> Bool {
         guard let profile else { return false }
         profile.tracksMacros = enabled; profile.updatedAt = Date()
-        return commit()
+        guard commit() else { return false }
+        if enabled { macroAutoFill?.sweep() }
+        return true
     }
     @discardableResult func saveMacroGoals(_ values: MacroNutrients) -> Bool {
         guard values.isValidGoal, let profile else { return false }
@@ -360,6 +386,7 @@ import WidgetKit
         let method = method ?? LogMethod(source: drafts[0].source)
         UsageStats.shared.itemsAdded(drafts.count, method: method)
         lastAddedID = ids.last
+        macroAutoFill?.consider(ids)
         feedback(message ?? "\(drafts.first!.name.isEmpty ? "Entry" : drafts.first!.name) added · \(drafts.reduce(0) { $0 + $1.calories.rounded() }.calorieText) cal") { [weak self] in
             guard let self else { return }; self.entries.filter { ids.contains($0.id) }.forEach(self.context.delete)
             if self.commit() { UsageStats.shared.itemsUndone(drafts.count, method: method) }
@@ -371,9 +398,30 @@ import WidgetKit
         let movedMeal = entry.mealType != draft.mealType
         retainGoal(draft.timestamp); entry.apply(draft); cacheBarcode(draft)
         guard commit() else { return false }
+        macroAutoFill?.consider([entry.id])
         UsageStats.shared.count(.edits)
         if movedMeal { UsageStats.shared.count(.mealMoves) }
         return true
+    }
+    /// Blank macros filled by `MacroAutoFill` (totals for each whole entry). Only blanks change, nothing typed is
+    /// replaced, and it isn't counted as an edit. One save for the batch; returns how many entries changed.
+    @discardableResult func fillMissingMacros(_ found: [UUID: MacroNutrients]) -> Int {
+        let byID = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var changed = 0
+        for (id, totals) in found {
+            guard let entry = byID[id] else { continue }
+            var draft = EntryDraft(entry)
+            let current = draft.totalMacros ?? MacroNutrients()
+            var merged = current.fillingMissing(from: totals)
+            // Never let a filled-in fiber contradict carbs someone typed.
+            if !merged.isValid { merged.fiber = current.fiber; merged.estimatedFiber = current.estimatedFiber }
+            guard merged.isValid, merged != current else { continue }
+            draft.macrosPerServing = merged.scaled(1 / max(draft.servings, 0.0001))
+            entry.apply(draft); cacheBarcode(draft)
+            changed += 1
+        }
+        guard changed > 0 else { return 0 }
+        return commit() ? changed : 0
     }
     /// After a food's macros are set (Home's macro sheet or the editor), the same food logged on other days gets
     /// them too, scaled by calories (a double portion gets double), so it's complete everywhere and adding it again
@@ -549,6 +597,11 @@ struct HomeQuickAddDay: Codable, Equatable {
     var day: String
     var used = false
     var dismissed = false
+}
+
+struct HiddenQuickStartFood: Codable, Equatable, Identifiable {
+    let id: String
+    let name: String
 }
 
 struct HiddenQuickAddFood: Codable, Equatable, Identifiable {

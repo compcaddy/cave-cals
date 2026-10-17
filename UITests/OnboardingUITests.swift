@@ -280,7 +280,10 @@ final class OnboardingUITests: XCTestCase {
         next()
         skipOffer()
         XCTAssertTrue(app.textFields["foodSearch"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.label, "Protein 0 g")
+        // With no macro goals, an empty day leaves the macro columns off Home; macros are still tracked.
+        XCTAssertFalse(app.descendants(matching: .any)["dailyMacro-protein"].firstMatch.exists)
+        app.buttons["profile"].tap()
+        XCTAssertEqual(app.switches["trackMacros"].firstMatch.value as? String, "1")
     }
     func testEditedMacroTargetsStayPutAndSave() {
         basics(); goalWeight("80"); next(); next()

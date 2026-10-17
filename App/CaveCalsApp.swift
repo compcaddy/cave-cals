@@ -110,6 +110,7 @@ import CoreData
             #endif
             Persistence.shared = store
             UsageStats.shared.attach(store)
+            if MacroAutoFill.isAllowed { store.macroAutoFill = MacroAutoFill(store: store) }
             store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0); ClanReporter.shared.schedule() }
             _store = State(initialValue: store)
         }
@@ -163,6 +164,7 @@ struct RootView: View {
             Button("OK") { Haptics.play(.tap); store.error = nil }.hapticFeel(.none)
         } message: { Text(store.error ?? "") }
         .task { await store.checkCloud(); await weights.syncHealth(); await nutritionHealth.sync(store.entries) }
+        .task { store.macroAutoFill?.sweep() }
         .task { await AISubscriptions.listenForPurchases() }
         .task { LogReminders.shared.entriesChanged(store.entries); await LogReminders.shared.refreshAuthorization() }
         .task {
@@ -182,7 +184,7 @@ struct RootView: View {
         }
         .onChange(of: phase) { _, value in
             if value == .active {
-                store.refresh(); UsageStats.shared.appBecameActive()
+                store.refresh(); UsageStats.shared.appBecameActive(); store.macroAutoFill?.sweep()
                 Task { await store.checkCloud(); await weights.syncHealth(); await LogReminders.shared.refreshAuthorization() }
             }
             // Counts go out as the app leaves the screen, in one small request.

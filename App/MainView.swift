@@ -420,7 +420,7 @@ struct MainView: View {
                 .padding(.horizontal, 20).padding(.top, 2).padding(.bottom, 2)
         }
         DailySummaryCard(day: selected, calories: store.total(selected), calorieGoal: store.goal(selected),
-                         macros: store.tracksMacros ? MacroSummary(store.dayEntries(selected).map(EntryDraft.init)) : nil,
+                         macros: summaryMacros,
                          macroGoals: store.macroGoals(selected), isVisible: sheet == nil, shown: $summaryFigures,
                          openMacro: { kind in
                              UsageStats.shared.event("macros.breakdown", ["kind": kind.rawValue])
@@ -651,6 +651,17 @@ struct MainView: View {
     }
     /// The day's log sits back a little so the totals above lead.
     private static let homeLogOpacity = 0.8
+    /// The summary card's macro columns. An empty day shows them only with a protein, carb, or fat goal to aim for;
+    /// once food is logged they show whenever macros are tracked.
+    private var summaryMacros: MacroSummary? {
+        guard store.tracksMacros else { return nil }
+        let entries = store.dayEntries(selected)
+        if entries.isEmpty {
+            let goals = store.macroGoals(selected)
+            guard MacroKind.primary.contains(where: { (goals[keyPath: $0.keyPath] ?? 0) > 0 }) else { return nil }
+        }
+        return MacroSummary(entries.map(EntryDraft.init))
+    }
     /// The selected day's food by meal, when meal types are on and something that day has one; otherwise nil
     /// and the day shows as one list under "Today".
     private var mealGroups: [MealGroup<CalorieEntry>]? {
@@ -658,11 +669,9 @@ struct MainView: View {
     }
     @ViewBuilder private var loggedRows: some View {
             let entries = store.dayEntries(selected)
-            // The first-days guide's arrows already say what to do, so "No log yet." waits until they're gone.
-            if entries.isEmpty && !showsLoggingGuide {
-                Text(Calendar.current.isDateInToday(selected)
-                     ? "No log yet."
-                     : "No food logged for this day.")
+            // An empty Today needs no message: people know they haven't logged yet. Other days say so.
+            if entries.isEmpty && !Calendar.current.isDateInToday(selected) {
+                Text("No food logged for this day.")
                     .font(.cave(.body)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -784,9 +793,10 @@ struct MainView: View {
     /// unless it's usually logged more than once a day; the next suggestion takes its place.
     private var homeQuickAddPicks: [HistoricalFood] {
         let logged = Set(store.dayEntries(today).map(FoodHistory.foodID))
+        let removed = store.hiddenQuickStartIDs
         return Array(quickStartFoods.filter { food in
-            food.id == settlingHomeQuickAddID || !logged.contains(food.id)
-                || FoodHistory.expectsAnotherToday(foodID: food.id, entries: store.entries, date: Date())
+            !removed.contains(food.id) && (food.id == settlingHomeQuickAddID || !logged.contains(food.id)
+                || FoodHistory.expectsAnotherToday(foodID: food.id, entries: store.entries, date: Date()))
         }.prefix(10))
     }
     /// Quick Start shows three rows; half of a fading fourth invites scrolling through the rest.
@@ -829,6 +839,24 @@ struct MainView: View {
                                 })
                             .padding(.leading, 14).padding(.trailing, 4)
                             .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contextMenu {
+                                Button {
+                                    store.markHomeQuickAddUsed(on: today)
+                                    edit(draft, source: "suggestion", pinFoodID: food.id, revealAfterSave: true)
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                Button { addHomeQuickAdd(draft, foodID: food.id) } label: {
+                                    Label("Add", systemImage: "plus")
+                                }.hapticFeel(.success)
+                                Button {
+                                    withAnimation { store.hideFromQuickStart(foodID: food.id, name: draft.name) }
+                                } label: {
+                                    Label("Remove from Quick Start", systemImage: "eye.slash")
+                                }
+                                .accessibilityIdentifier("removeFromQuickStart")
+                            }
                     }
                 }
             }

@@ -177,7 +177,8 @@ actor AIBackend {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AIServiceError(code:"upload_failed",message:"The upload failed. Please try again.") }
         return upload.uploadId
     }
-    func estimateMacros(for draft: EntryDraft) async throws -> MacroNutrients {
+    /// `automatic` marks `MacroAutoFill`'s background fill-ins, which never count toward scans or the AI budget.
+    func estimateMacros(for draft: EntryDraft, automatic: Bool = false) async throws -> MacroNutrients {
         #if DEBUG
         // UI tests never reach the backend: a fixed estimate stands in.
         if ProcessInfo.processInfo.arguments.contains("--macro-estimate-fixture") {
@@ -185,10 +186,10 @@ actor AIBackend {
             return MacroNutrients(protein: 5, totalCarbs: 12, fiber: 1, fat: 2).markedEstimated()
         }
         #endif
-        let result: MacroNutrients = try await signed("food/macros", fields: [
-            "name": draft.name, "calories": draft.calories,
-            "servingSize": draft.servingDescription, "servings": draft.servings
-        ])
+        var fields: [String: Any] = ["name": draft.name, "calories": draft.calories,
+                                     "servingSize": draft.servingDescription, "servings": draft.servings]
+        if automatic { fields["automatic"] = true }
+        let result: MacroNutrients = try await signed("food/macros", fields: fields)
         guard result.isValid else { throw AIServiceError(code: "invalid_estimate", message: "Couldn’t estimate macros. Try a clearer food name.") }
         return result.markedEstimated()
     }

@@ -396,7 +396,7 @@ struct ProgressPhotoCamera: View {
             }
             Haptics.play(.success)
             UsageStats.shared.event("progressPhoto.saved", [
-                "source": source.rawValue, "timer": String(timerOn), "ghost": String(ghostPhoto != nil),
+                "source": source.rawValue, "from": adder.origin, "timer": String(timerOn), "ghost": String(ghostPhoto != nil),
                 "angle": ProgressPhotoTag.rank(tag) < ProgressPhotoTag.standard.count ? "standard" : "custom",
             ])
             saved += 1
