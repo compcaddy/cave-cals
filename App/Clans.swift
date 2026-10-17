@@ -92,7 +92,7 @@ enum ChallengeKind: String, Codable, CaseIterable, Identifiable {
         case .onTargetDays: "A point for every full day in your range. Most points wins."
         case .survivor: "Miss a day without a life left and you’re out. Last one standing wins."
         case .teamTotal: "Pick a number of days for the whole clan to reach together, like 100 in 3 weeks. Every day someone logs adds one. Hit it before time runs out."
-        case .weightLoss: "Most % lost wins. Credit stops at 1% a week, so slow and steady wins."
+        case .weightLoss: "Whoever loses the biggest % of their weight wins."
         }
     }
     /// Collabs: everyone works together. Competitions: one winner (or a tie).
