@@ -68,7 +68,7 @@ struct ClansScreen: View {
                         Image("CaveCampfire").renderingMode(.template).resizable().scaledToFit().frame(width: 70, height: 70)
                             .foregroundStyle(Color.caveOrange).accessibilityHidden(true)
                         Text("No clans yet").font(.cave(.title2))
-                        Text("Friends who track together are more likely to hit their goals. Start a clan to team up on a collab, or go head to head in a competition.")
+                        Text("Small groups who track together are more likely to hit their goals. Start a clan to team up on a collab, or go head to head in a competition.")
                             .font(.cave(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity).padding(.vertical, 24)
                 }
@@ -399,7 +399,8 @@ struct ClanDetailView: View {
         Button { newChallenge = group } label: {
             VStack(spacing: 6) {
                 Image(systemName: group.symbol).font(.title2)
-                Text(group.startTitle).font(.cave(.headline)).multilineTextAlignment(.center)
+                Text(group.buttonTitle).font(.cave(.headline)).multilineTextAlignment(.center)
+                    .lineLimit(2).minimumScaleFactor(0.8).accessibilityLabel(group.startTitle)
                 Text(group.tagline).font(.cave(.footnote)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }

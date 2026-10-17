@@ -6,7 +6,9 @@ import SwiftUI
 enum ChallengeGroup: String, Identifiable {
     case collab, competition
     var id: String { rawValue }
-    var startTitle: String { self == .collab ? "Start a Collab" : "Start a Competition" }
+    var startTitle: String { self == .collab ? "Start a Collaboration" : "Start a Competition" }
+    /// On the clan page both break after "a", so the two buttons line up.
+    var buttonTitle: String { self == .collab ? "Start a\nCollaboration" : "Start a\nCompetition" }
     var tagline: String { self == .collab ? "Work together to crush your goals." : "May the best cave person win." }
     var sheetTitle: String { self == .collab ? "New Collab" : "New Competition" }
     var symbol: String { self == .collab ? "person.3.fill" : "trophy.fill" }
