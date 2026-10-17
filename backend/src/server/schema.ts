@@ -187,9 +187,18 @@ export const clans = pgTable('clans', {
   rule: jsonb('rule').notNull().default({ kind: 'atOrUnder', percent: 5 }),
   ruleChoice: text('rule_choice').notNull().default('clan'), // clan | member
   bestStreak: integer('best_streak').notNull().default(0),
+  // approval: an admin lets each person in (the default, so a guessed code isn't enough); open: the code is enough.
+  joinMode: text('join_mode').notNull().default('approval'),
   createdBy: uuid('created_by').references(() => clanPeople.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+// People waiting for an admin to let them in (clans with join_mode approval).
+export const clanJoinRequests = pgTable('clan_join_requests', {
+  clanId: uuid('clan_id').notNull().references(() => clans.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull().references(() => clanPeople.id, { onDelete: 'cascade' }),
+  anonymous: boolean('anonymous').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.clanId, t.personId] }), index('clan_join_requests_person_idx').on(t.personId)]);
 export const clanMembers = pgTable('clan_members', {
   id: uuid('id').primaryKey(),
   clanId: uuid('clan_id').notNull().references(() => clans.id, { onDelete: 'cascade' }),

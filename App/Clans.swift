@@ -95,6 +95,8 @@ enum ChallengeKind: String, Codable, CaseIterable, Identifiable {
         case .weightLoss: "Most % lost wins. Credit stops at 1% a week, so slow and steady wins."
         }
     }
+    /// Collabs: everyone works together. Competitions: one winner (or a tie).
+    var isCollab: Bool { self == .streak || self == .teamTotal }
     var symbol: String {
         switch self {
         case .streak: "flame"
@@ -144,7 +146,21 @@ struct ClanListItem: Decodable, Equatable, Identifiable {
     var unread: Int
     var challenge: ClanChallengeSummary?
 }
-struct ClanList: Decodable { var clans: [ClanListItem]; var unread: Int }
+struct ClanList: Decodable {
+    /// A clan this person asked to join, waiting for an admin.
+    struct Pending: Decodable, Equatable, Identifiable { var clanId: String; var name: String; var id: String { clanId } }
+    var clans: [ClanListItem]
+    var pending: [Pending]?
+    var unread: Int
+}
+/// Someone who asked to join; admins see their real name and photo.
+struct ClanJoinRequest: Decodable, Equatable, Identifiable {
+    var personId: String
+    var name: String
+    var photoId: String?
+    var requestedAt: String
+    var id: String { personId }
+}
 struct ClanMember: Decodable, Equatable, Identifiable, Hashable {
     var personId: String
     var name: String
@@ -231,6 +247,8 @@ struct ClanDetail: Decodable, Equatable {
         var rule: ClanRule
         var ruleChoice: String
         var bestStreak: Int
+        /// approval (an admin lets people in) or open (the code is enough). Missing from older servers.
+        var joinMode: String?
     }
     struct Me: Decodable, Equatable { var role: String; var anonymous: Bool; var muted: Bool; var rule: ClanRule?; var today: String }
     var clan: Info
@@ -239,10 +257,20 @@ struct ClanDetail: Decodable, Equatable {
     var members: [ClanMember]
     var accountability: ClanAccountability?
     var challenge: ClanBoard?
+    /// The challenge that just ended, shown with its final standings for three days.
+    var lastChallenge: ClanBoard?
+    /// People waiting to be let in (admins only).
+    var requests: [ClanJoinRequest]?
     var history: [ClanHistoryItem]
     var isAdmin: Bool { me.role == "owner" || me.role == "admin" }
 }
-struct ClanPreview: Decodable, Equatable { var clanId: String; var name: String; var memberCount: Int; var alreadyMember: Bool; var full: Bool }
+struct ClanPreview: Decodable, Equatable {
+    var clanId: String; var name: String; var memberCount: Int; var alreadyMember: Bool; var full: Bool
+    /// An admin has to let you in (missing from older servers, which let everyone in).
+    var needsApproval: Bool?
+    /// You already asked.
+    var pending: Bool?
+}
 struct ClanAlert: Decodable, Equatable, Identifiable { var id: String; var clanId: String?; var clanName: String?; var kind: String; var createdAt: String; var read: Bool }
 
 // MARK: Links
@@ -371,18 +399,19 @@ actor ClanClient {
     private(set) var signedIn = ClanClient.savedSession != nil
     private(set) var me: ClanProfile?
     private(set) var clans: [ClanListItem] = []
+    private(set) var pending: [ClanList.Pending] = []
     private(set) var unread = 0
     private(set) var loaded = false
     var error: String?
 
     func refresh() async {
         signedIn = ClanClient.savedSession != nil
-        guard signedIn else { clans = []; unread = 0; me = nil; return }
+        guard signedIn else { clans = []; pending = []; unread = 0; me = nil; return }
         do {
             async let list: ClanList = ClanClient.shared.call("clan/list")
             async let profile: ClanProfile = ClanClient.shared.call("clan/me")
             let (l, p) = try await (list, profile)
-            clans = l.clans; unread = l.unread; me = p; loaded = true; error = nil
+            clans = l.clans; pending = l.pending ?? []; unread = l.unread; me = p; loaded = true; error = nil
             ClanReporter.shared.clansChanged(l.clans)
         } catch {
             handle(error)
@@ -446,6 +475,7 @@ enum ClanStatusText {
         case .survivor:
             if c.myStatus == "out" { return "You’re out · \(c.inCount) left" }
             let lives = c.myLivesLeft ?? 0
+            if lives == 0 { return "\(c.inCount) left · You’re still in" }
             return "\(c.inCount) left · You have \(lives) \(lives == 1 ? "life" : "lives")"
         case .teamTotal:
             return c.team.map { "\($0.total) of \($0.target) days" } ?? dayOf(c) ?? ""

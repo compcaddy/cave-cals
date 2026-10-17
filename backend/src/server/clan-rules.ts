@@ -209,7 +209,8 @@ export function evaluateChallenge(input: ChallengeInput): ChallengeResult {
     const alive = (day: Day) => input.entrants.filter((e, i) => present(e, day) && (!results[i].outOn || results[i].outOn! > day));
     for (let day = startsOn; day <= result.completeThrough; day = addDays(day, 1)) {
       const standing = alive(day);
-      if (!endsOn && input.entrants.length > 1 && standing.length <= 1) {
+      // The last one standing wins right away, even with an end date still to come.
+      if (input.entrants.length > 1 && standing.length <= 1) {
         result.ended = true; result.endedOn = day;
         // Everyone left went out the same day: they share the win.
         result.winners = standing.length ? standing.map(e => e.personId)

@@ -139,6 +139,22 @@ test('Survivor: a miss without a life is out; the last one standing wins', () =>
   assert.equal(both.endedOn, '2026-10-02');
 });
 
+test('Survivor with an end date: the last one standing wins at once; otherwise everyone left at the end wins', () => {
+  const early = evaluateChallenge(challenge({ kind: 'survivor', endsOn: '2026-10-14', now: nineAM('2026-10-04', 5), days: {
+    ana: { '2026-10-01': full(), '2026-10-02': full(), '2026-10-03': full() },
+    ben: { '2026-10-01': full(), '2026-10-02': partial },
+  } }));
+  assert.ok(early.ended);
+  assert.equal(early.endedOn, '2026-10-02', 'ends the day only one is left, not on the end date');
+  assert.deepEqual(early.winners, ['ana']);
+  const days: Record<string, DayReport> = {};
+  for (let i = 0; i < 7; i++) days[addDays('2026-10-01', i)] = full();
+  const atEnd = evaluateChallenge(challenge({ kind: 'survivor', endsOn: '2026-10-07', now: nineAM('2026-10-09'), days: { ana: days, ben: days } }));
+  assert.ok(atEnd.ended);
+  assert.equal(atEnd.endedOn, '2026-10-07');
+  assert.deepEqual(atEnd.winners, ['ana', 'ben']);
+});
+
 test('Survivor lives refill each week when saves are weekly', () => {
   const days: Record<string, DayReport> = {};
   for (let i = 0; i < 9; i++) days[addDays('2026-10-01', i)] = full();

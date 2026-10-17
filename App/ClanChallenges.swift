@@ -2,19 +2,58 @@ import SwiftUI
 
 // MARK: New challenge
 
+/// Collabs: the clan works together. Competitions: one winner (ties share it).
+enum ChallengeGroup: String, Identifiable {
+    case collab, competition
+    var id: String { rawValue }
+    var startTitle: String { self == .collab ? "Start a Collab" : "Start a Competition" }
+    var tagline: String { self == .collab ? "Work together to crush your goals." : "May the best cave person win." }
+    var sheetTitle: String { self == .collab ? "New Collab" : "New Competition" }
+    var symbol: String { self == .collab ? "person.3.fill" : "trophy.fill" }
+    var options: [ChallengeOption] { self == .collab ? [.streak, .teamTotal] : [.survivor, .weightLoss, .logging] }
+}
+
+/// What the New Collab / New Competition sheets offer. Logging is one choice that sends logging days or on-target
+/// days, depending on what counts.
+enum ChallengeOption: String, Identifiable {
+    case streak, teamTotal, survivor, weightLoss, logging
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .streak: "Streak"
+        case .teamTotal: "Team total"
+        case .survivor: "Survivor"
+        case .weightLoss: "Weight loss"
+        case .logging: "Logging"
+        }
+    }
+    var pitch: String {
+        switch self {
+        case .logging: "A point for every day that counts. Most points wins."
+        case .streak: ChallengeKind.streak.pitch
+        case .teamTotal: ChallengeKind.teamTotal.pitch
+        case .survivor: ChallengeKind.survivor.pitch
+        case .weightLoss: ChallengeKind.weightLoss.pitch
+        }
+    }
+    var symbol: String { self == .logging ? ChallengeKind.loggingDays.symbol : ChallengeKind(rawValue: rawValue)?.symbol ?? "flag" }
+}
+
 struct NewChallengeView: View {
+    let group: ChallengeGroup
     let clanId: String
     let clanRule: ClanRule
     let memberCount: Int
     var onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: ChallengeKind?
+    @State private var option: ChallengeOption?
     @State private var basis = "logging"
     @State private var anyFood = false
     @State private var rule = ClanRule()
     @State private var length = 14
     @State private var weeks = 4
-    @State private var openEnded = true
+    @State private var hasEndDate = false
+    @State private var end = Date().addingTimeInterval(13 * 86_400)
     @State private var streakMode = "everyone"
     @State private var streakPercent = 80
     @State private var teamTarget = 100
@@ -29,13 +68,13 @@ struct NewChallengeView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let kind { form(kind) } else { picker }
+                if let option { form(option) } else { picker }
             }
             .caveScreenBackground()
-            .navigationTitle(kind?.title ?? "New challenge").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(option?.title ?? group.sheetTitle).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(kind == nil ? "Cancel" : "Back") { if kind == nil { dismiss() } else { kind = nil } }.hapticButtonStyle(.automatic)
+                    Button(option == nil ? "Cancel" : "Back") { if option == nil { dismiss() } else { option = nil } }.hapticButtonStyle(.automatic)
                 }
             }
             .navigationDestination(isPresented: $paywall) {
@@ -47,70 +86,72 @@ struct NewChallengeView: View {
     private var picker: some View {
         ScrollView {
             VStack(spacing: 12) {
-                ForEach(ChallengeKind.allCases) { k in
-                    Button { kind = k; basis = k == .onTargetDays ? "onTarget" : "logging" } label: {
+                ForEach(group.options) { o in
+                    Button { choose(o) } label: {
                         HStack(alignment: .top, spacing: 14) {
-                            Image(systemName: k.symbol).font(.title2).foregroundStyle(Color.caveOrange).frame(width: 34)
+                            Image(systemName: o.symbol).font(.title2).foregroundStyle(Color.caveOrange).frame(width: 34)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(k.title).font(.cave(.headline)).foregroundStyle(Color.primary)
-                                Text(k.pitch).font(.cave(.footnote)).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                                Text(o.title).font(.cave(.headline)).foregroundStyle(Color.primary)
+                                Text(o.pitch).font(.cave(.footnote)).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                             }
                             Spacer(minLength: 0)
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16)).contentShape(Rectangle())
-                    }.hapticButtonStyle(.plain).hapticFeel(.selection).accessibilityIdentifier("challengeKind-\(k.rawValue)")
+                    }.hapticButtonStyle(.plain).hapticFeel(.selection).accessibilityIdentifier("challengeKind-\(o.rawValue)")
                 }
-                Text("One challenge at a time per clan.").font(.cave(.footnote)).foregroundStyle(.secondary).padding(.top, 4)
             }.padding(16)
         }
     }
-    @ViewBuilder private func form(_ kind: ChallengeKind) -> some View {
+    private func choose(_ o: ChallengeOption) {
+        option = o; basis = "logging"; anyFood = false
+        // Survivor starts with no lives; a streak keeps one save a week.
+        saves = o == .survivor ? 0 : 1
+        savesPeriod = o == .survivor ? "challenge" : "week"
+        hasEndDate = false
+    }
+    private var endRange: ClosedRange<Date> {
+        let first = Calendar.current.startOfDay(for: start)
+        return first.addingTimeInterval(2 * 86_400)...first.addingTimeInterval(89 * 86_400)
+    }
+    @ViewBuilder private func form(_ option: ChallengeOption) -> some View {
         HapticForm {
-            Section { Text(kind.pitch).font(.cave(.callout)) }
-            if kind == .streak || kind == .survivor || kind == .teamTotal {
+            Section { Text(option.pitch).font(.cave(.callout)) }
+            if option == .streak || option == .survivor || option == .teamTotal || option == .logging {
                 Section {
                     Picker("Counts", selection: $basis) { Text("Full days logged").tag("logging"); Text("On-target days").tag("onTarget") }
-                        .hapticSelection(on: basis)
+                        .hapticSelection(on: basis).accessibilityIdentifier("challengeBasis")
                     if basis == "onTarget" { RulePicker(rule: $rule) }
+                    if option == .logging && basis == "logging" { Toggle("Any food counts", isOn: $anyFood) }
                 } header: { Text("What counts") } footer: {
-                    Text(basis == "logging" ? "A full day is at least 70% of your goal logged, or Done eating." : "A full day in range, against each person’s own goal.").font(.cave(.caption2))
+                    Text(basis == "onTarget" ? "A full day in range, against each person’s own goal."
+                         : anyFood ? "Logging anything earns the day." : "A full day is at least 70% of your goal logged, or Done eating.")
+                        .font(.cave(.caption2))
                 }
             }
-            if kind == .loggingDays {
-                Section {
-                    Toggle("Any food counts", isOn: $anyFood)
-                } footer: { Text(anyFood ? "Logging anything earns the day." : "Only full days count: at least 70% of your goal logged, or Done eating.").font(.cave(.caption2)) }
-            }
-            if kind == .onTargetDays { Section("Range") { RulePicker(rule: $rule) } }
-            if kind == .streak {
+            if option == .streak {
                 Section {
                     Picker("The day counts when", selection: $streakMode) { Text("Everyone makes it").tag("everyone"); Text("Enough of us make it").tag("percent") }
                         .hapticSelection(on: streakMode)
                     if streakMode == "percent" { Stepper("At least \(streakPercent)%", value: $streakPercent, in: 50...100, step: 10) }
                 } header: { Text("Clan streak") }
             }
-            if kind == .streak || kind == .survivor {
+            if option == .streak || option == .survivor {
                 Section {
-                    Stepper("\(saves) \(kind == .survivor ? (saves == 1 ? "life" : "lives") : (saves == 1 ? "save" : "saves"))", value: $saves, in: 0...5)
+                    Stepper("\(saves) \(option == .survivor ? (saves == 1 ? "life" : "lives") : (saves == 1 ? "save" : "saves"))", value: $saves, in: 0...5)
+                        .accessibilityIdentifier("challengeSaves")
                     if saves > 0 {
                         Picker("Every", selection: $savesPeriod) { Text("Week").tag("week"); Text("Month").tag("month"); Text("Whole challenge").tag("challenge") }
                             .hapticSelection(on: savesPeriod)
                     }
-                } header: { Text(kind == .survivor ? "Lives" : "Saves") } footer: {
-                    Text("A missed day uses one automatically, so one off day doesn’t end it.").font(.cave(.caption2))
+                } header: { Text(option == .survivor ? "Lives" : "Saves") } footer: {
+                    if saves > 0 { Text("A missed day uses one automatically.").font(.cave(.caption2)) }
                 }
             }
-            if kind == .survivor {
-                Section {
-                    Toggle("Last one standing", isOn: $openEnded)
-                    if !openEnded { Stepper("\(length) days", value: $length, in: 7...90, step: 7) }
-                } footer: { Text(openEnded ? "Runs until one person is left." : "Everyone still in at the end wins.").font(.cave(.caption2)) }
-            }
-            if kind == .loggingDays || kind == .onTargetDays || kind == .teamTotal {
+            if option == .logging || option == .teamTotal {
                 Section("Length") { Stepper("\(length) days", value: $length, in: 7...90, step: 7) }
             }
-            if kind == .teamTotal { Section("Clan goal") { Stepper("\(teamTarget) days together", value: $teamTarget, in: 10...2000, step: 10) } }
-            if kind == .weightLoss {
+            if option == .teamTotal { Section("Clan goal") { Stepper("\(teamTarget) days together", value: $teamTarget, in: 10...2000, step: 10) } }
+            if option == .weightLoss {
                 Section {
                     Stepper("\(weeks) weeks", value: $weeks, in: 2...12)
                 } header: { Text("Length") } footer: {
@@ -119,23 +160,42 @@ struct NewChallengeView: View {
             }
             Section {
                 DatePicker("Starts", selection: $start, in: Calendar.current.startOfDay(for: Date())...Date().addingTimeInterval(30 * 86_400), displayedComponents: .date)
-            } footer: { Text("Clanmates tap Join before it starts. Nobody new joins once it’s running.").font(.cave(.caption2)) }
+                if option == .survivor {
+                    Toggle("End date", isOn: $hasEndDate).accessibilityIdentifier("survivorEndDate")
+                    if hasEndDate {
+                        DatePicker("Ends", selection: $end, in: endRange, displayedComponents: .date).accessibilityIdentifier("survivorEnds")
+                    }
+                }
+            } footer: {
+                if option == .survivor {
+                    Text(hasEndDate ? "Everyone still in on the end date wins. Last one standing before then wins right away." : "Runs until one is left.")
+                        .font(.cave(.caption2))
+                }
+            }
+            .onChange(of: start) { end = min(max(end, endRange.lowerBound), endRange.upperBound) }
+            .onChange(of: hasEndDate) { if hasEndDate { end = min(max(end, endRange.lowerBound), endRange.upperBound) } }
             Section {
-                Button { create(kind) } label: { Text("Start \(kind.title.lowercased())").frame(maxWidth: .infinity) }
+                Button { create(option) } label: { Text("Start \(option.title.lowercased())").frame(maxWidth: .infinity) }
                     .disabled(busy).hapticFeel(.success).accessibilityIdentifier("createChallenge")
             }
             if let message { Section { Text(message).font(.cave(.footnote)).foregroundStyle(.red) } }
         }
     }
-    private func create(_ kind: ChallengeKind) {
+    private func create(_ option: ChallengeOption) {
         busy = true; message = nil
-        var settings: [String: Any] = ["basis": basis, "anyFood": anyFood, "streakMode": streakMode, "streakPercent": streakPercent, "teamTarget": teamTarget]
-        if basis == "onTarget" || kind == .onTargetDays { settings["rule"] = rule.json }
+        let kind: ChallengeKind = option == .logging ? (basis == "onTarget" ? .onTargetDays : .loggingDays) : ChallengeKind(rawValue: option.rawValue)!
+        var settings: [String: Any] = ["basis": basis, "anyFood": anyFood && basis == "logging", "streakMode": streakMode,
+                                       "streakPercent": streakPercent, "teamTarget": teamTarget]
+        if basis == "onTarget" { settings["rule"] = rule.json }
         var fields: [String: Any] = ["clanId": clanId, "kind": kind.rawValue, "settings": settings, "startsOn": ClanDay.string(start),
                                      "savesCount": saves, "savesPeriod": saves > 0 ? savesPeriod : "challenge"]
         switch kind {
         case .loggingDays, .onTargetDays, .teamTotal: fields["lengthDays"] = length
-        case .survivor: if !openEnded { fields["lengthDays"] = length }
+        case .survivor:
+            if hasEndDate {
+                let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: start), to: Calendar.current.startOfDay(for: end)).day ?? 13
+                fields["lengthDays"] = min(90, max(3, days + 1))
+            }
         case .weightLoss: fields["weeks"] = weeks
         case .streak: break
         }
@@ -143,7 +203,7 @@ struct NewChallengeView: View {
             do {
                 struct Created: Decodable { let challengeId: String }
                 let _: Created = try await ClanClient.shared.call("clan/challenge/create", fields)
-                UsageStats.shared.event("challenge.started", ["kind": kind.rawValue])
+                UsageStats.shared.event("challenge.started", ["kind": kind.rawValue, "group": group.rawValue])
                 Haptics.play(.success)
                 ClanReporter.shared.sendNow(force: true)
                 onCreated()
@@ -185,7 +245,46 @@ struct ChallengeCard: View {
         if let total = board.totalDays { return "Day \(min(max(1, board.dayNumber), total)) of \(total)" }
         return "Day \(max(1, board.dayNumber))"
     }
+    private var winnerNames: [String] { board.entrants.filter { board.winners.contains($0.personId) }.map(\.name) }
     @ViewBuilder private var headline: some View {
+        if board.status == "ended" { result } else { running }
+    }
+    @ViewBuilder private var result: some View {
+        switch board.kind {
+        case .streak:
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(board.streak?.length ?? 0)").font(.cave(.largeTitle)).foregroundStyle(Color.caveOrange)
+                Text("day streak").font(.cave(.headline))
+                Spacer()
+                if let record = board.streak?.record, record > 0 { Text("Record \(record)").font(.cave(.footnote)).foregroundStyle(.secondary) }
+            }
+            Text(board.streak.flatMap(\.brokeOn).map { "The fire went out \(ClanDay.label($0))." } ?? "The fire went out.").font(.cave(.callout))
+        case .teamTotal:
+            if let team = board.team {
+                ProgressView(value: Double(min(team.total, team.target)), total: Double(team.target)).tint(.caveOrange)
+                Text(team.reached ? "Goal reached! \(team.target) days together." : "\(team.total) of \(team.target) days together.")
+                    .font(.cave(.callout))
+            }
+        default:
+            HStack(spacing: 8) {
+                Image(systemName: "trophy.fill").foregroundStyle(Color.caveOrange)
+                Text(winnerLine).font(.cave(.headline))
+            }
+        }
+    }
+    private var winnerLine: String {
+        let names = winnerNames
+        if names.isEmpty { return "No winner this time" }
+        if names.count == 1 { return "\(names[0]) won!" }
+        if names.count == 2 { return "\(names[0]) and \(names[1]) won!" }
+        return "\(names.count)-way tie!"
+    }
+    @ViewBuilder private var running: some View {
+        if board.status == "upcoming" {
+            Text("\(board.entrants.count) in so far").font(.cave(.callout))
+        } else { underway }
+    }
+    @ViewBuilder private var underway: some View {
         switch board.kind {
         case .streak:
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -297,7 +396,12 @@ struct ChallengeBoardView: View {
             }
             ClanAvatar(photoId: e.photoId, name: e.name, anonymous: e.anonymous, size: 36)
             VStack(alignment: .leading, spacing: 3) {
-                Text(e.name).font(.cave(.body)).lineLimit(1).foregroundStyle(e.status == "in" ? Color.primary : .secondary)
+                HStack(spacing: 6) {
+                    Text(e.name).font(.cave(.body)).lineLimit(1).foregroundStyle(e.status == "in" ? Color.primary : .secondary)
+                    if board.winners.contains(e.personId) && !board.kind.isCollab {
+                        Image(systemName: "trophy.fill").font(.caption).foregroundStyle(Color.caveOrange).accessibilityLabel("Winner")
+                    }
+                }
                 if board.kind != .weightLoss { marks(e) }
             }
             Spacer(minLength: 6)
@@ -318,9 +422,18 @@ struct ChallengeBoardView: View {
         }.accessibilityHidden(true)
     }
     @ViewBuilder private func score(_ e: ClanEntrant, _ board: ClanBoard) -> some View {
+        if board.status == "upcoming" {
+            Text("Joined").font(.cave(.callout)).foregroundStyle(.secondary)
+        } else if board.status == "ended" && board.winners.contains(e.personId) && !board.kind.isCollab {
+            Text("Won").font(.cave(.callout)).foregroundStyle(Color.caveOrange)
+        } else if board.status == "ended" && board.kind == .streak {
+            Text("\(e.points) \(e.points == 1 ? "day" : "days")").font(.cave(.callout)).foregroundStyle(.secondary)
+        } else { runningScore(e, board) }
+    }
+    @ViewBuilder private func runningScore(_ e: ClanEntrant, _ board: ClanBoard) -> some View {
         switch board.kind {
         case .survivor:
-            Text(e.status == "out" ? "Out" : e.status == "left" ? "Left" : "\(e.livesLeft ?? 0) \((e.livesLeft ?? 0) == 1 ? "life" : "lives")")
+            Text(e.status == "out" ? "Out" : e.status == "left" ? "Left" : board.savesCount == 0 ? "In" : "\(e.livesLeft ?? 0) \((e.livesLeft ?? 0) == 1 ? "life" : "lives")")
                 .font(.cave(.callout)).foregroundStyle(e.status == "in" ? Color.caveOrange : .secondary)
         case .weightLoss:
             Text(e.creditedLossPct.map { "\($0 >= 0 ? "−" : "+")\(abs($0).formatted(.number.precision(.fractionLength(1))))%" } ?? "No weigh-in")
@@ -364,7 +477,7 @@ struct ChallengeBoardView: View {
         do {
             let detail: ClanDetail = try await ClanClient.shared.call("clan/get", ["clanId": clanId])
             isAdmin = detail.isAdmin
-            if let updated = detail.challenge { board = updated } else { dismiss() }
+            if let updated = detail.challenge ?? detail.lastChallenge { board = updated } else { dismiss() }
         } catch { message = error.localizedDescription }
     }
 }

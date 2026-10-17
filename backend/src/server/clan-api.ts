@@ -1,12 +1,12 @@
 // Clan routes (`/api/v1/clan/...`), signed in with a clan session token (`x-clan-session`). Sign-in itself goes
 // through the App Attest–verified routes in api.ts. See Documentation/Clans.md.
 import { randomInt, randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { database } from './db';
 import {
-  clanAlerts, clanBlocks, clanChallenges, clanDays, clanEntrants, clanIdentities, clanMembers, clanNudges, clanPeople, clanPushTokens,
-  clanReports, clans, clanSessions,
+  clanAlerts, clanBlocks, clanChallenges, clanDays, clanEntrants, clanIdentities, clanJoinRequests, clanMembers, clanNudges, clanPeople,
+  clanPushTokens, clanReports, clans, clanSessions,
 } from './schema';
 import { APIError } from './config';
 import { consume, tomorrow } from './rate-limit';
@@ -197,7 +197,8 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       await consume(`clan-create:${personId}:${now.toISOString().slice(0, 10)}`, 10, tomorrow());
       const id = randomUUID();
       await db.transaction(async tx => {
-        await tx.insert(clans).values({ id, name: cleanClanName(name), inviteCode: await newInviteCode(), createdBy: personId });
+        // Accountability starts on (yes/no); admins can change it. Joining needs an admin's OK unless they open it up.
+        await tx.insert(clans).values({ id, name: cleanClanName(name), inviteCode: await newInviteCode(), createdBy: personId, accountability: 'logged' });
         await tx.insert(clanMembers).values({ id: randomUUID(), clanId: id, personId, role: 'owner' });
       });
       return { clanId: id };
@@ -208,7 +209,11 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       const [clan] = await db.select().from(clans).where(eq(clans.inviteCode, normalizeInviteCode(code)));
       if (!clan) throw new APIError(404, 'code_not_found', 'That code doesn’t match a clan. Check it and try again.');
       const members = await activeMembers(clan.id);
-      return { clanId: clan.id, name: clan.name, memberCount: members.length, alreadyMember: members.some(m => m.personId === personId), full: members.length >= MAX_MEMBERS };
+      const [request] = await db.select().from(clanJoinRequests).where(and(eq(clanJoinRequests.clanId, clan.id), eq(clanJoinRequests.personId, personId)));
+      return {
+        clanId: clan.id, name: clan.name, memberCount: members.length, alreadyMember: members.some(m => m.personId === personId),
+        full: members.length >= MAX_MEMBERS, needsApproval: clan.joinMode !== 'open', pending: !!request,
+      };
     }
     case 'clan/join': {
       const { code, anonymous } = z.object({ code: z.string().max(40), anonymous: z.boolean().default(false) }).parse(body);
@@ -218,14 +223,19 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       const members = await activeMembers(clan.id);
       if (members.some(m => m.personId === personId)) return { clanId: clan.id };
       if (members.length >= MAX_MEMBERS) throw new APIError(409, 'clan_full', 'This clan is full.');
+      if (clan.joinMode !== 'open') {
+        // A code alone isn't enough: an admin lets them in (and sees who's asking, even if they'll hide in the clan).
+        const inserted = await db.insert(clanJoinRequests).values({ clanId: clan.id, personId, anonymous })
+          .onConflictDoUpdate({ target: [clanJoinRequests.clanId, clanJoinRequests.personId], set: { anonymous } }).returning({ createdAt: clanJoinRequests.createdAt });
+        const person = await me(personId);
+        if (inserted.length && Date.now() - inserted[0].createdAt.getTime() < 5_000) {
+          await sendAlerts(members.filter(isAdmin).map(m => ({ personId: m.personId, clanId: clan.id })), 'joinRequest', { personId },
+            { title: clan.name, body: `${person.displayName || 'Someone'} wants to join. Tap to let them in.` });
+        }
+        return { clanId: clan.id, pending: true };
+      }
       await requirePlusForGroup(clan.id, members.length);
-      const anonNumber = anonymous ? await nextAnonNumber(clan.id) : null;
-      try {
-        await db.insert(clanMembers).values({ id: randomUUID(), clanId: clan.id, personId, anonymous, anonNumber });
-      } catch { return { clanId: clan.id }; } // a double tap raced the unique index
-      const name = await alertName(clan.id, personId);
-      await sendAlerts(members.filter(isAdmin).map(m => ({ personId: m.personId, clanId: clan.id })), 'memberJoined', { personId },
-        { title: clan.name, body: `${name} joined the clan.` });
+      await addMember(clan, members, personId, anonymous);
       return { clanId: clan.id };
     }
     case 'clan/get': {
@@ -238,7 +248,7 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
     case 'clan/update': {
       const update = z.object({
         clanId: uuid, name: z.string().max(200).optional(), accountability: z.enum(['off', 'logged', 'percent']).optional(),
-        rule: clanRuleSchema.optional(), ruleChoice: z.enum(['clan', 'member']).optional(),
+        rule: clanRuleSchema.optional(), ruleChoice: z.enum(['clan', 'member']).optional(), joinMode: z.enum(['approval', 'open']).optional(),
       }).parse(body);
       const member = await membership(update.clanId, personId); requireAdmin(member);
       const clan = await clanRow(update.clanId);
@@ -247,6 +257,7 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       if (update.accountability) set.accountability = update.accountability;
       if (update.rule) set.rule = update.rule;
       if (update.ruleChoice) set.ruleChoice = update.ruleChoice;
+      if (update.joinMode) set.joinMode = update.joinMode;
       if (Object.keys(set).length) await db.update(clans).set(set).where(eq(clans.id, clan.id));
       if (clan.accountability === 'off' && update.accountability && update.accountability !== 'off') {
         // A heads-up, so anyone who'd rather can switch to Cave person first.
@@ -255,6 +266,23 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
           { title: set.name ?? clan.name, body: 'Accountability is on: clanmates can now see your days. You can switch to Cave person anytime.' });
       }
       return { updated: true };
+    }
+    case 'clan/request/decide': {
+      const { clanId, personId: target, approve } = z.object({ clanId: uuid, personId: uuid, approve: z.boolean() }).parse(body);
+      requireAdmin(await membership(clanId, personId));
+      const clan = await clanRow(clanId);
+      const [request] = await db.select().from(clanJoinRequests).where(and(eq(clanJoinRequests.clanId, clanId), eq(clanJoinRequests.personId, target)));
+      if (!request) return { decided: true }; // another admin got there first
+      if (approve) {
+        const members = await activeMembers(clanId);
+        if (members.length >= MAX_MEMBERS) throw new APIError(409, 'clan_full', 'This clan is full.');
+        // Letting in a third person is when Cave Cals+ comes up, for the admin doing it.
+        await requirePlusForGroup(clanId, members.length);
+        if (!members.some(m => m.personId === target)) await addMember(clan, members, target, request.anonymous);
+        await sendAlerts([{ personId: target, clanId }], 'joinApproved', { clanId }, { title: clan.name, body: 'You’re in! Welcome to the clan.' });
+      }
+      await db.delete(clanJoinRequests).where(and(eq(clanJoinRequests.clanId, clanId), eq(clanJoinRequests.personId, target)));
+      return { decided: true };
     }
     case 'clan/leave': {
       const { clanId } = z.object({ clanId: uuid }).parse(body);
@@ -423,6 +451,24 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
   throw new APIError(404, 'not_found', 'Not found.');
 }
 
+const RESULTS_SHOWN_MS = 3 * 86_400_000;
+// Admins see who's asking by their real name and photo, so they know who they're letting in.
+async function joinRequests(clanId: string) {
+  const rows = await database().select({ request: clanJoinRequests, person: clanPeople }).from(clanJoinRequests)
+    .innerJoin(clanPeople, eq(clanPeople.id, clanJoinRequests.personId))
+    .where(eq(clanJoinRequests.clanId, clanId)).orderBy(clanJoinRequests.createdAt);
+  return rows.map(r => ({ personId: r.person.id, name: r.person.displayName || 'Someone', photoId: r.person.photoId, requestedAt: r.request.createdAt.toISOString() }));
+}
+async function addMember(clan: ClanRow, members: MemberRow[], personId: string, anonymous: boolean) {
+  const db = database();
+  const anonNumber = anonymous ? await nextAnonNumber(clan.id) : null;
+  try {
+    await db.insert(clanMembers).values({ id: randomUUID(), clanId: clan.id, personId, anonymous, anonNumber });
+  } catch { return; } // a double tap raced the unique index
+  const name = await alertName(clan.id, personId);
+  await sendAlerts(members.filter(isAdmin).map(m => ({ personId: m.personId, clanId: clan.id })), 'memberJoined', { personId },
+    { title: clan.name, body: `${name} joined the clan.` });
+}
 function profile(person: typeof clanPeople.$inferSelect) {
   return {
     personId: person.id, displayName: person.displayName, photoId: person.photoId, birthYear: person.birthYear, birthMonth: person.birthMonth,
@@ -530,7 +576,10 @@ async function listClans(personId: string, now: Date) {
     }
     result.push({ id: clan.id, name: clan.name, memberCount: members.length, role: m.role, unread: unread.get(clan.id) ?? 0, challenge: summary });
   }
-  return { clans: result, unread: [...unread.values()].reduce((a, b) => a + b, 0) };
+  // Clans this person asked to join and an admin hasn't answered yet.
+  const pending = await db.select({ clanId: clans.id, name: clans.name }).from(clanJoinRequests)
+    .innerJoin(clans, eq(clans.id, clanJoinRequests.clanId)).where(eq(clanJoinRequests.personId, personId));
+  return { clans: result, pending, unread: [...unread.values()].reduce((a, b) => a + b, 0) };
 }
 
 async function clanDetail(clan: ClanRow, member: MemberRow, personId: string, weekStart: string | undefined, now: Date) {
@@ -548,16 +597,24 @@ async function clanDetail(clan: ClanRow, member: MemberRow, personId: string, we
   const board = challenge ? boardJSON(challenge, clan, await challengeState(challenge, clan, now), personId, shownById, now) : null;
   const history = await database().select().from(clanChallenges)
     .where(and(eq(clanChallenges.clanId, clan.id), eq(clanChallenges.status, 'ended'))).orderBy(desc(clanChallenges.endedAt)).limit(10);
+  // The challenge that just ended stays on the clan page with its final standings for three days.
+  const [recent] = challenge ? [] : await database().select().from(clanChallenges)
+    .where(and(eq(clanChallenges.clanId, clan.id), eq(clanChallenges.status, 'ended'), gte(clanChallenges.endedAt, new Date(now.getTime() - RESULTS_SHOWN_MS))))
+    .orderBy(desc(clanChallenges.endedAt)).limit(1);
+  const lastChallenge = recent ? boardJSON(recent, clan, await challengeState(recent, clan, now), personId, shownById, now) : null;
+  const requests = isAdmin(member) ? await joinRequests(clan.id) : [];
   return {
     clan: {
       id: clan.id, name: clan.name, inviteCode: clan.inviteCode, accountability: clan.accountability, rule: clan.rule, ruleChoice: clan.ruleChoice,
-      bestStreak: clan.bestStreak, createdAt: clan.createdAt.toISOString(),
+      bestStreak: clan.bestStreak, createdAt: clan.createdAt.toISOString(), joinMode: clan.joinMode,
     },
     me: { role: member.role, anonymous: member.anonymous, muted: member.muted, rule: member.rule, today },
     hasPlus: isAdmin(member) ? await clanHasPlus(clan.id) : undefined,
     members: shown,
     accountability: accountabilityWeek(clan, members, people, reports, days, now),
     challenge: board,
+    lastChallenge,
+    requests,
     history: history.map(h => ({ id: h.id, kind: h.kind, name: CHALLENGE_NAMES[h.kind as ChallengeKind], startsOn: h.startsOn, endsOn: h.endsOn, endedAt: h.endedAt?.toISOString() ?? null, result: h.result })),
   };
 }

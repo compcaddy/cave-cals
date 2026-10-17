@@ -67,10 +67,24 @@ struct ClansScreen: View {
                     VStack(spacing: 10) {
                         Image("CaveCampfire").renderingMode(.template).resizable().scaledToFit().frame(width: 70, height: 70)
                             .foregroundStyle(Color.caveOrange).accessibilityHidden(true)
-                        Text("No clan yet").font(.cave(.title2))
-                        Text("Start one and invite friends, or join with a code someone sent you.")
+                        Text("No clans yet").font(.cave(.title2))
+                        Text("Friends who track together are more likely to hit their goals. Start a clan to team up on a collab, or go head to head in a competition.")
                             .font(.cave(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity).padding(.vertical, 24)
+                }
+                ForEach(clans.pending) { request in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(request.name).font(.cave(.title3)).lineLimit(1)
+                            Text("Waiting for an admin to let you in").font(.cave(.footnote)).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "hourglass").foregroundStyle(.secondary)
+                    }
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.caveSurface.opacity(0.6), in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("pendingClan")
                 }
                 ForEach(clans.clans) { clan in
                     NavigationLink(value: ClanRoute.clan(clan.id)) { ClanCard(clan: clan) }
@@ -142,6 +156,7 @@ struct JoinClanSheet: View {
     @State private var busy = false
     @State private var message: String?
     @State private var paywall = false
+    @State private var requested = false
     @State private var subscriptions = AISubscriptions()
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
@@ -149,7 +164,17 @@ struct JoinClanSheet: View {
     var body: some View {
         NavigationStack {
             HapticForm {
-                if let preview {
+                if let preview, requested || preview.pending == true {
+                    Section {
+                        VStack(spacing: 10) {
+                            Image(systemName: "hourglass").font(.largeTitle).foregroundStyle(Color.caveOrange)
+                            Text(requested ? "Request sent" : "Already asked").font(.cave(.title2))
+                            Text("You’re in \(preview.name) once an admin says yes.").font(.cave(.callout)).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }.frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                    Section { Button { dismiss() } label: { Text("Done").frame(maxWidth: .infinity) }.accessibilityIdentifier("joinRequestDone") }
+                } else if let preview {
                     Section {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(preview.name).font(.cave(.title2))
@@ -162,12 +187,12 @@ struct JoinClanSheet: View {
                         Section { Text("This clan is full.").foregroundStyle(.secondary) }
                     } else {
                         Section {
-                            Toggle("Join as a Cave person", isOn: $anonymous).accessibilityIdentifier("joinAnonymous")
+                            Toggle("Hide my name/image", isOn: $anonymous).accessibilityIdentifier("joinAnonymous")
                         } footer: {
-                            Text("Cave people show as “Cave person” with no photo. Your days still count. You can change this anytime.").font(.cave(.caption2))
+                            if preview.needsApproval == true { Text("Admins see your name when you ask to join.").font(.cave(.caption2)) }
                         }
                         Section {
-                            Button { join(preview) } label: { Text("Join \(preview.name)").frame(maxWidth: .infinity) }
+                            Button { join(preview) } label: { Text(preview.needsApproval == true ? "Ask to join" : "Join \(preview.name)").frame(maxWidth: .infinity) }
                                 .disabled(busy).hapticFeel(.success).accessibilityIdentifier("joinClan")
                         }
                     }
@@ -212,9 +237,16 @@ struct JoinClanSheet: View {
         busy = true; message = nil
         Task {
             do {
-                struct Joined: Decodable { let clanId: String }
+                struct Joined: Decodable { let clanId: String; let pending: Bool? }
                 let joined: Joined = try await ClanClient.shared.call("clan/join", ["code": ClanLinks.normalize(typed), "anonymous": anonymous])
                 Haptics.play(.success)
+                if joined.pending == true {
+                    // An admin lets them in; until then the clan shows as waiting on the list.
+                    UsageStats.shared.event("clan.joinRequested")
+                    requested = true; busy = false
+                    await ClanStore.shared.refresh()
+                    return
+                }
                 UsageStats.shared.event("clan.joined", ["anonymous": anonymous ? "yes" : "no"])
                 await ClanStore.shared.refresh()
                 await ClanStore.shared.requestPushPermission()
@@ -230,6 +262,8 @@ struct JoinClanSheet: View {
 
 struct CreateClanSheet: View {
     var onCreated: (String) -> Void
+    /// Placeholder names that take turns in the empty field.
+    static let nameIdeas = ["The Fire Keepers", "Mammoth Hunters", "Club Club", "Stone Age Squad", "Bone Appétit"]
     @State private var name = ""
     @State private var busy = false
     @State private var message: String?
@@ -239,11 +273,13 @@ struct CreateClanSheet: View {
         NavigationStack {
             HapticForm {
                 Section {
-                    TextField("The Cavemen", text: $name).focused($focused).submitLabel(.done).onSubmit(create)
-                        .accessibilityIdentifier("newClanName").keyboardInputArea()
-                } header: { Text("Clan name") } footer: {
-                    Text("A clan of two is free. Adding a third person needs Cave Cals+.").font(.cave(.caption2))
-                }
+                    TimelineView(.periodic(from: .now, by: 2.5)) { context in
+                        let idea = Self.nameIdeas[Int(context.date.timeIntervalSinceReferenceDate / 2.5) % Self.nameIdeas.count]
+                        TextField(idea, text: $name).focused($focused).submitLabel(.done).onSubmit(create)
+                            .accessibilityIdentifier("newClanName")
+                    }
+                    .keyboardInputArea()
+                } header: { Text("Clan name") }
                 Section {
                     Button(action: create) { Text("Start clan").frame(maxWidth: .infinity) }
                         .disabled(name.trimmingCharacters(in: .whitespaces).count < 2 || busy).hapticFeel(.success)
@@ -285,9 +321,13 @@ struct ClanDetailView: View {
     @State private var detail: ClanDetail?
     @State private var message: String?
     @State private var member: ClanMember?
-    @State private var newChallenge = false
+    @State private var newChallenge: ChallengeGroup?
     @State private var settings = false
     @State private var weekStart: String?
+    /// Letting in a third person needs Cave Cals+: who was being let in, then the paywall.
+    @State private var needsPlus: ClanJoinRequest?
+    @State private var paywall = false
+    @State private var subscriptions = AISubscriptions()
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -295,20 +335,16 @@ struct ClanDetailView: View {
             if let detail {
                 VStack(alignment: .leading, spacing: 18) {
                     header(detail)
-                    if let board = detail.challenge {
+                    if let requests = detail.requests, !requests.isEmpty { requestsSection(requests) }
+                    if let board = detail.challenge ?? detail.lastChallenge {
                         NavigationLink(value: ClanRoute.challenge(clanId)) { ChallengeCard(board: board) }
                             .hapticButtonStyle(.plain).hapticFeel(.none).accessibilityIdentifier("challengeCard")
-                    } else if detail.isAdmin {
-                        Button { newChallenge = true } label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: "flag.checkered").font(.title2)
-                                Text("Start a challenge").font(.cave(.headline))
-                                Text("A streak, Survivor, logging days, and more.").font(.cave(.footnote)).foregroundStyle(.secondary)
-                            }.frame(maxWidth: .infinity).padding(18)
-                            .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.caveOrange.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
-                            .foregroundStyle(Color.caveOrange)
-                        }.accessibilityIdentifier("startChallenge")
+                    }
+                    if detail.challenge == nil && detail.isAdmin {
+                        HStack(alignment: .top, spacing: 12) {
+                            startButton(.collab)
+                            startButton(.competition)
+                        }
                     }
                     if let accountability = detail.accountability {
                         AccountabilityGrid(accountability: accountability, members: detail.members, today: detail.me.today,
@@ -336,8 +372,19 @@ struct ClanDetailView: View {
         .sheet(item: $member) { m in
             if let detail { MemberSheet(clanId: clanId, member: m, viewerIsAdmin: detail.isAdmin, viewerRole: detail.me.role, onChange: load) }
         }
-        .sheet(isPresented: $newChallenge) {
-            if let detail { NewChallengeView(clanId: clanId, clanRule: detail.clan.rule, memberCount: detail.members.count, onCreated: { newChallenge = false; load() }) }
+        .sheet(item: $newChallenge) { group in
+            if let detail { NewChallengeView(group: group, clanId: clanId, clanRule: detail.clan.rule, memberCount: detail.members.count, onCreated: { newChallenge = nil; load() }) }
+        }
+        .alert("Cave Cals+ needed", isPresented: Binding(get: { needsPlus != nil && !paywall }, set: { if !$0 { needsPlus = nil } })) {
+            Button("See Cave Cals+") { Haptics.play(.tap); paywall = true }.hapticFeel(.none)
+            Button("Not now", role: .cancel) { Haptics.play(.tap); needsPlus = nil }.hapticFeel(.none)
+        } message: {
+            Text("A clan of three or more needs an admin with Cave Cals+.")
+        }
+        .sheet(isPresented: $paywall, onDismiss: { needsPlus = nil }) {
+            AIUpgradePaywall(subscriptions: subscriptions, trigger: .clans,
+                             onAccessGranted: { if let request = needsPlus { decide(request, approve: true) } },
+                             onDismissRequested: { paywall = false })
         }
         .sheet(isPresented: $settings) {
             if let detail { ClanSettingsView(detail: detail, onChange: load, onLeft: { settings = false; dismiss() }) }
@@ -347,6 +394,55 @@ struct ClanDetailView: View {
         .onAppear { if detail != nil { load() } }
     }
     private func load() { Task { await reload() } }
+    private func startButton(_ group: ChallengeGroup) -> some View {
+        Button { newChallenge = group } label: {
+            VStack(spacing: 6) {
+                Image(systemName: group.symbol).font(.title2)
+                Text(group.startTitle).font(.cave(.headline)).multilineTextAlignment(.center)
+                Text(group.tagline).font(.cave(.footnote)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.vertical, 16).padding(.horizontal, 10)
+            .background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.caveOrange.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            .foregroundStyle(Color.caveOrange)
+        }
+        .accessibilityIdentifier(group == .collab ? "startCollab" : "startCompetition")
+    }
+    private func requestsSection(_ requests: [ClanJoinRequest]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Wants to join").font(.cave(.title3))
+            VStack(spacing: 0) {
+                ForEach(requests) { request in
+                    HStack(spacing: 12) {
+                        ClanAvatar(photoId: request.photoId, name: request.name, anonymous: false, size: 40)
+                        Text(request.name).font(.cave(.body)).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Button("Decline") { decide(request, approve: false) }
+                            .hapticButtonStyle(.bordered).font(.cave(.callout)).accessibilityIdentifier("declineRequest")
+                        Button("Let in") { decide(request, approve: true) }
+                            .hapticButtonStyle(.borderedProminent).tint(.caveOrange).font(.cave(.callout)).hapticFeel(.success)
+                            .accessibilityIdentifier("approveRequest")
+                    }.padding(.horizontal, 14).frame(minHeight: 60)
+                    if request.id != requests.last?.id { Divider().padding(.leading, 66) }
+                }
+            }.background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("joinRequests")
+    }
+    private func decide(_ request: ClanJoinRequest, approve: Bool) {
+        Task {
+            do {
+                let _: [String: Bool] = try await ClanClient.shared.call("clan/request/decide", ["clanId": clanId, "personId": request.personId, "approve": approve])
+                UsageStats.shared.event("clan.joinRequest", ["approved": approve ? "yes" : "no"])
+                needsPlus = nil
+                await reload()
+            } catch let error as ClanError where error.code == "clan_needs_plus" {
+                needsPlus = request
+            } catch { message = error.localizedDescription }
+        }
+    }
     private func reload() async {
         do {
             var fields: [String: Any] = ["clanId": clanId]
@@ -466,10 +562,6 @@ struct AccountabilityGrid: View {
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(rowLabel(m))
-                    if let w = accountability.weekly[m.personId], w.logged > 0 {
-                        Text(weeklyLine(w)).font(.cave(.caption2)).foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 96).padding(.bottom, 4)
-                    }
                 }
             }.padding(12).background(Color.caveSurface, in: RoundedRectangle(cornerRadius: 16))
         }
@@ -482,18 +574,11 @@ struct AccountabilityGrid: View {
             Text(delta == 0 ? "0%" : "\(delta > 0 ? "+" : "−")\(abs(delta))%").font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(cell.inRange == true ? Color.caveOrange : .secondary).minimumScaleFactor(0.6).lineLimit(1)
         } else if let cell {
-            switch cell.state {
-            case "full": CaveIcon(.check, size: 18).foregroundStyle(Color.caveOrange)
-            case "partial": Circle().fill(Color.secondary.opacity(0.6)).frame(width: 7, height: 7)
-            case "today": cell.logged ? AnyView(Circle().stroke(Color.caveOrange, lineWidth: 2).frame(width: 12, height: 12)) : AnyView(Text("·").foregroundStyle(.secondary))
-            default: Text("–").foregroundStyle(.secondary)
-            }
+            // A check for a full day, a gray dash for a missed one. Today is lighter, and blank until something's logged.
+            if cell.state == "full" { CaveIcon(.check, size: 18).foregroundStyle(Color.caveOrange) }
+            else if cell.state == "today" { if cell.logged { CaveIcon(.check, size: 18).foregroundStyle(Color.caveOrange.opacity(0.35)) } else { Text(" ") } }
+            else { Text("–").font(.cave(.body)).foregroundStyle(Color.secondary.opacity(0.6)) }
         }
-    }
-    private func weeklyLine(_ w: ClanAccountability.Weekly) -> String {
-        var line = "\(w.full) of 7 full"
-        if let avg = w.averagePercent { line += " · avg \(avg - 100 >= 0 ? "+" : "−")\(abs(avg - 100))%" }
-        return line
     }
     private func rowLabel(_ m: ClanMember) -> String {
         let cells = accountability.days.compactMap { day -> String? in
@@ -608,6 +693,7 @@ struct ClanSettingsView: View {
     @State private var anonymous = false
     @State private var muted = false
     @State private var myRule = ClanRule()
+    @State private var openJoin = false
     @State private var message: String?
     @State private var confirmLeave = false
     @State private var confirmDelete = false
@@ -616,19 +702,24 @@ struct ClanSettingsView: View {
     var body: some View {
         NavigationStack {
             HapticForm {
+                Section("Clan name") {
+                    if detail.isAdmin {
+                        TextField("Clan name", text: $name).submitLabel(.done).onSubmit { save(["name": name]) }.keyboardInputArea()
+                            .accessibilityIdentifier("clanNameField")
+                    } else {
+                        Text(detail.clan.name)
+                    }
+                }
                 Section {
-                    Toggle("Be a Cave person here", isOn: $anonymous).accessibilityIdentifier("clanAnonymous")
+                    Toggle("Hide my name/image", isOn: $anonymous).accessibilityIdentifier("clanAnonymous")
                     Toggle("Mute this clan", isOn: $muted)
                 } header: { Text("You") } footer: {
-                    Text("A Cave person shows with no name or photo, even to admins. Muting stops this clan’s notifications.").font(.cave(.caption2))
+                    Text("Muting stops this clan’s notifications.").font(.cave(.caption2))
                 }
                 if detail.clan.ruleChoice == "member" {
                     Section("Your range") { RulePicker(rule: $myRule) }
                 }
                 if detail.isAdmin {
-                    Section("Clan name") {
-                        TextField("Clan name", text: $name).submitLabel(.done).onSubmit { save(["name": name]) }.keyboardInputArea()
-                    }
                     Section {
                         Picker("Show", selection: $accountability) {
                             Text("Off").tag("off"); Text("Yes / no").tag("logged"); Text("± goal").tag("percent")
@@ -647,8 +738,12 @@ struct ClanSettingsView: View {
                         Text("Always measured against each person’s own calorie goal.").font(.cave(.caption2))
                     }
                     Section {
+                        Toggle("Anyone with the code can join", isOn: $openJoin).accessibilityIdentifier("openJoin")
                         Button("New invite code") { resetCode() }
-                    } footer: { Text("The old link and code stop working.").font(.cave(.caption2)) }
+                    } header: { Text("Joining") } footer: {
+                        Text(openJoin ? "No approval needed. A new code stops the old link working." : "You let each person in. A new code stops the old link working.")
+                            .font(.cave(.caption2))
+                    }
                 }
                 Section {
                     Button("Report clan name") { report() }
@@ -664,6 +759,7 @@ struct ClanSettingsView: View {
             .onAppear {
                 name = detail.clan.name; accountability = detail.clan.accountability; rule = detail.clan.rule; ruleChoice = detail.clan.ruleChoice
                 anonymous = detail.me.anonymous; muted = detail.me.muted; myRule = detail.me.rule ?? detail.clan.rule
+                openJoin = detail.clan.joinMode == "open"
                 DispatchQueue.main.async { loaded = true }
             }
             .onChange(of: anonymous) { if loaded { member(["anonymous": anonymous]) } }
@@ -672,6 +768,7 @@ struct ClanSettingsView: View {
             .onChange(of: accountability) { if loaded { save(["accountability": accountability]) } }
             .onChange(of: rule) { if loaded { save(["rule": rule.json]) } }
             .onChange(of: ruleChoice) { if loaded { save(["ruleChoice": ruleChoice]) } }
+            .onChange(of: openJoin) { if loaded { save(["joinMode": openJoin ? "open" : "approval"]) } }
             .confirmationDialog("Leave \(detail.clan.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
                 Button("Leave clan", role: .destructive) { Haptics.play(.warning); leave() }.hapticFeel(.none)
                 Button("Cancel", role: .cancel) { Haptics.play(.tap) }.hapticFeel(.none)

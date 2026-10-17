@@ -137,13 +137,15 @@ export function boardJSON(challenge: ChallengeRow, clan: ClanRow, state: Board, 
     };
   }).sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999) || b.points - a.points);
   const statusNow = result.ended ? 'ended' : today < challenge.startsOn ? 'upcoming' : challenge.status === 'upcoming' ? 'active' : challenge.status;
+  // An admin can end a challenge early: its saved result has the winners then.
+  const stored = challenge.status === 'ended' ? (challenge.result as { winners?: string[]; endedOn?: string } | null) : null;
   return {
     id: challenge.id, kind: challenge.kind, name: CHALLENGE_NAMES[challenge.kind as ChallengeKind] ?? challenge.kind,
     settings, savesCount: challenge.savesCount, savesPeriod: challenge.savesPeriod,
     startsOn: challenge.startsOn, endsOn: challenge.endsOn, status: statusNow, dayNumber, totalDays,
     joined: result.entrants.some(e => e.personId === viewerId),
     canJoin: today <= challenge.startsOn && !result.entrants.some(e => e.personId === viewerId) && !result.ended,
-    entrants, winners: result.winners, endedOn: result.endedOn,
+    entrants, winners: stored?.winners ?? result.winners, endedOn: stored?.endedOn ?? result.endedOn,
     streak: result.streak ? { ...result.streak, record: clan.bestStreak } : null,
     team: result.team ?? null,
     inToday: entrants.filter(e => e.status === 'in' && e.madeToday).length,

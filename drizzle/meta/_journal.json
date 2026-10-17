@@ -50,6 +50,13 @@
       "when": 1791948046236,
       "tag": "0006_account_email",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792255306657,
+      "tag": "0007_clan_join_requests",
+      "breakpoints": true
     }
   ]
 }

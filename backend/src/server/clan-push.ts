@@ -9,12 +9,14 @@ import { bundleID } from './config';
 
 export const ALERT_KINDS = [
   'evening', 'nudge', 'cheer', 'challengeStarted', 'challengeEnded', 'lifeLost', 'out', 'streakMilestone', 'streakRecord', 'memberJoined',
+  'joinRequest', 'joinApproved',
 ] as const;
 export type AlertKind = typeof ALERT_KINDS[number];
 // The Settings → Clans switches; several kinds share one switch.
 export const ALERT_SWITCH: Record<AlertKind, string> = {
   evening: 'evening', nudge: 'nudges', cheer: 'nudges', challengeStarted: 'updates', challengeEnded: 'updates',
   lifeLost: 'updates', out: 'updates', streakMilestone: 'milestones', streakRecord: 'milestones', memberJoined: 'members',
+  joinRequest: 'members', joinApproved: 'updates',
 };
 export type Push = { title: string; body: string };
 
