@@ -18,7 +18,7 @@ import { ALERT_SWITCH, sendAlerts, type AlertKind } from './clan-push';
 import { finishChallenge } from './clan-jobs';
 import {
   activeMembers, accountabilityWeek, blockedBy, boardJSON, challengeState, CHALLENGE_NAMES, currentChallenge, peopleById, reportsFor,
-  shownMembers, type ClanRow, type MemberRow,
+  ruleOf, shownMembers, type ClanRow, type MemberRow,
 } from './clan-board';
 import {
   addDays, CHALLENGE_KINDS, challengeSettingsSchema, clanRuleSchema, daysBetween, inviteCode, isLocked, localDay, normalizeInviteCode,
@@ -532,7 +532,10 @@ async function createChallenge(personId: string, input: z.infer<typeof challenge
     if (!input.weeks) throw new APIError(400, 'length_needed', 'Pick how many weeks the challenge runs.');
     endsOn = addDays(input.startsOn, input.weeks * 7 - 1);
   }
-  const settings = { ...input.settings, basis: kind === 'onTargetDays' ? 'onTarget' : kind === 'loggingDays' ? 'logging' : input.settings.basis };
+  const basis = kind === 'onTargetDays' ? 'onTarget' : kind === 'loggingDays' ? 'logging' : input.settings.basis;
+  // Each challenge keeps its own range from the start, so editing the clan's (an accountability setting) never
+  // changes a running challenge.
+  const settings = { ...input.settings, basis, ...(basis === 'onTarget' && !input.settings.rule ? { rule: ruleOf(clan.rule) } : {}) };
   const id = randomUUID();
   await database().insert(clanChallenges).values({
     id, clanId: clan.id, kind, settings, startsOn: input.startsOn, endsOn, createdBy: personId,

@@ -75,7 +75,7 @@ struct ClansScreen: View {
                 ForEach(clans.pending) { request in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(request.name).font(.cave(.title3)).lineLimit(1)
+                            Text(request.name).font(.cave(.title3))
                             Text("Waiting for an admin to let you in").font(.cave(.footnote)).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 8)
@@ -115,13 +115,14 @@ struct ClanCard: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(clan.name).font(.cave(.title3)).foregroundStyle(Color.primary).lineLimit(1)
+                Text(clan.name).font(.cave(.title3)).foregroundStyle(Color.primary).multilineTextAlignment(.leading)
                 Text("\(clan.memberCount) \(clan.memberCount == 1 ? "member" : "members")").font(.cave(.footnote)).foregroundStyle(.secondary)
                 if let c = clan.challenge {
-                    HStack(spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: c.kind.symbol).foregroundStyle(Color.caveOrange)
                         Text(c.status == "upcoming" ? "\(c.name) starts \(ClanDay.label(c.startsOn))" : "\(c.name) · \(ClanStatusText.line(c))")
-                            .font(.cave(.footnote)).foregroundStyle(Color.primary).lineLimit(1)
+                            .font(.cave(.footnote)).foregroundStyle(Color.primary).multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -716,7 +717,8 @@ struct ClanSettingsView: View {
                 } header: { Text("You") } footer: {
                     Text("Muting stops this clan’s notifications.").font(.cave(.caption2))
                 }
-                if detail.clan.ruleChoice == "member" {
+                // The range only decides ± goal's orange checks; challenges pick their own when created.
+                if detail.clan.ruleChoice == "member" && detail.clan.accountability == "percent" {
                     Section("Your range") { RulePicker(rule: $myRule) }
                 }
                 if detail.isAdmin {
@@ -730,12 +732,14 @@ struct ClanSettingsView: View {
                              : "Everyone sees how close each person’s day was to their own goal, as a %. Never calories or food.")
                             .font(.cave(.caption2))
                     }
-                    Section {
-                        Picker("Range", selection: $ruleChoice) { Text("One for everyone").tag("clan"); Text("Each picks their own").tag("member") }
-                            .hapticSelection(on: ruleChoice)
-                        if ruleChoice == "clan" { RulePicker(rule: $rule) }
-                    } header: { Text("On-target range") } footer: {
-                        Text("Always measured against each person’s own calorie goal.").font(.cave(.caption2))
+                    if accountability == "percent" {
+                        Section {
+                            Picker("Range", selection: $ruleChoice) { Text("One for everyone").tag("clan"); Text("Each picks their own").tag("member") }
+                                .hapticSelection(on: ruleChoice)
+                            if ruleChoice == "clan" { RulePicker(rule: $rule) }
+                        } header: { Text("On-target range") } footer: {
+                            Text("Always measured against each person’s own calorie goal.").font(.cave(.caption2))
+                        }
                     }
                     Section {
                         Toggle("Anyone with the code can join", isOn: $openJoin).accessibilityIdentifier("openJoin")
