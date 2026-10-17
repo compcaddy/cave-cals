@@ -18,6 +18,9 @@ import { coach, coachInput, coachTips } from './coach';
 import { waitUntil } from '@vercel/functions';
 import { clanAPI, MAX_PHOTO_BODY } from './clan-api';
 import { signIn, signInInput } from './clan-auth';
+import { androidRegistration, registerAndroid } from './android-auth';
+import { androidProducts, androidEntitlement } from './android-purchases';
+import { eq } from 'drizzle-orm';
 const nonceSchema = z.string().min(1).max(200);
 const keySchema = z.string().min(1).max(200);
 // One source per recipe import. `wholeRecipe` asks a link import for the full batch plus its serving count;
@@ -71,6 +74,10 @@ export async function api(request: Request, path: string): Promise<Response> {
       const input = z.object({ keyId: keySchema, nonce: nonceSchema, attestation: z.string().min(1).max(20000), trialKey: z.string().regex(trialKeyPattern).optional() }).parse(body);
       return ok(await register(input.keyId, input.nonce, input.attestation, input.trialKey));
     }
+    if (path === 'android/device/register') {
+      await limitPublic(request);
+      return ok(await registerAndroid(request, raw, androidRegistration.parse(body)));
+    }
     if (path === 'stats') {
       // Anonymous usage counts and error reports. Unsigned on purpose: no App Attest or account needed.
       await recordStats(request, statsInput.parse(body));
@@ -109,8 +116,8 @@ export async function api(request: Request, path: string): Promise<Response> {
       const membership = await entitlement(identity);
       const access = await scanAccess(identity, membership.active, regularLogCount);
       // Only attested installs keep an install key; developer and owner-test identities are shared.
-      const trialKey = wantsTrialKey && !identity.development && identity.keyId !== OWNER_TEST_KEY ? await issueTrialKey(identity) : undefined;
-      return ok({ accountId: identity.accountId, ...membership, ...access, productIds: products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300), ...(trialKey ? { trialKey } : {}) });
+      const trialKey = wantsTrialKey && !identity.development && identity.keyId !== OWNER_TEST_KEY && !identity.keyId.startsWith('android:') ? await issueTrialKey(identity) : undefined;
+      return ok({ accountId: identity.accountId, ...membership, ...access, productIds: identity.keyId.startsWith('android:') ? androidProducts() : products(), dailyLimit: positiveInt('AI_DAILY_LIMIT',30), monthlyLimit: positiveInt('AI_MONTHLY_LIMIT',300), ...(trialKey ? { trialKey } : {}) });
     }
     if (path === 'clan/auth/signin') {
       return ok(await signIn(identity, signInInput.parse(body)));
@@ -118,6 +125,12 @@ export async function api(request: Request, path: string): Promise<Response> {
     if (path === 'purchase/verify') {
       const input = z.object({ signedTransaction: z.string().min(1).max(50000) }).parse(body);
       return ok(await verifyPurchase(identity, input.signedTransaction));
+    }
+    if (path === 'android/purchase/sync') {
+      if (!identity.keyId.startsWith('android:')) throw new APIError(403, 'wrong_platform', 'Use Google Play to manage this subscription.');
+      const [account] = await database().select().from(accounts).where(eq(accounts.id, identity.accountId));
+      if (!account) throw new APIError(401, 'unknown_device', 'Please reconnect to verify this device.');
+      return ok(await androidEntitlement(account, true));
     }
     if (path === 'uploads/sign') {
       const input = uploadInput.parse(body);

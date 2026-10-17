@@ -19,7 +19,7 @@ export const statsInput = z.object({
     build: z.string().max(20),
     os: z.string().min(1).max(20),
     device: z.string().min(1).max(20),
-    environment: z.enum(['appstore', 'testflight', 'debug']),
+    environment: z.enum(['appstore', 'playstore', 'testflight', 'debug']),
   }),
   startedAt: time,
   startedDay: day,

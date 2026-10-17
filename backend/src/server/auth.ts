@@ -62,6 +62,8 @@ export async function authenticate(request: Request, raw: string, nonce: string)
     return { accountId: DEV_ACCOUNT, keyId: 'local', development: true };
   }
   const keyId = request.headers.get('x-app-key'), assertion = request.headers.get('x-app-assertion');
+  if (keyId?.startsWith('android:')) return (await import('./android-auth')).authenticateAndroid(request, raw, nonce);
+  if (request.headers.has('x-android-integrity') || request.headers.has('x-android-signature')) throw new APIError(401, 'unauthorized', 'Please reconnect to verify this device.');
   if (!keyId || !assertion || keyId.length > 200 || assertion.length > 10000) throw new APIError(401, 'unauthorized', 'Please reconnect to verify this device.');
   return database().transaction(async tx => {
     const [device] = await tx.select().from(devices).where(eq(devices.keyId, keyId)).for('update');

@@ -15,6 +15,7 @@ import { clanSession, revokeAppleToken } from './clan-auth';
 import { cleanClanName, cleanDisplayName } from './clan-names';
 import { deletePhoto, readPhoto, storePhoto } from './clan-photos';
 import { ALERT_SWITCH, sendAlerts, type AlertKind } from './clan-push';
+import { pushRegistration } from './android-push';
 import { finishChallenge } from './clan-jobs';
 import {
   activeMembers, accountabilityWeek, blockedBy, boardJSON, challengeState, CHALLENGE_NAMES, currentChallenge, peopleById, reportsFor,
@@ -185,11 +186,16 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       return { photoId: null };
     }
     case 'clan/push/register': {
-      const { token, environment } = z.object({ token: z.string().regex(/^[a-f0-9]{64,200}$/), environment: z.enum(['sandbox', 'production']) }).parse(body);
+      const { token, environment } = pushRegistration.parse(body);
       await db.insert(clanPushTokens).values({ token, personId, environment }).onConflictDoUpdate({
         target: clanPushTokens.token, set: { personId, environment, updatedAt: sql`now()` },
       });
       return { registered: true };
+    }
+    case 'clan/push/unregister': {
+      const { token } = z.object({ token: z.string().min(1).max(4096) }).parse(body);
+      await db.delete(clanPushTokens).where(and(eq(clanPushTokens.token, token), eq(clanPushTokens.personId, personId)));
+      return { removed: true };
     }
     case 'clan/list': return listClans(personId, now);
     case 'clan/create': {
@@ -443,6 +449,8 @@ export async function clanAPI(request: Request, path: string, body: unknown): Pr
       return { reported: true };
     }
     case 'clan/signout': {
+      const { pushToken } = z.object({ pushToken: z.string().min(1).max(4096).optional() }).parse(body);
+      if (pushToken) await db.delete(clanPushTokens).where(and(eq(clanPushTokens.token, pushToken), eq(clanPushTokens.personId, personId)));
       await db.delete(clanSessions).where(eq(clanSessions.tokenHash, session.tokenHash));
       return { signedOut: true };
     }
@@ -571,7 +579,7 @@ async function listClans(personId: string, now: Date) {
       const mine = board.entrants.find(e => e.isMe);
       summary = {
         id: board.id, kind: board.kind, name: board.name, status: board.status, dayNumber: board.dayNumber, totalDays: board.totalDays,
-        joined: board.joined, canJoin: board.canJoin, startsOn: board.startsOn,
+        joined: board.joined, canJoin: board.canJoin, startsOn: board.startsOn, endsOn: board.endsOn,
         myStatus: mine?.status ?? null, myRank: mine?.rank ?? null, myLivesLeft: mine?.livesLeft ?? null, myLossPct: mine?.creditedLossPct ?? null,
         madeToday: mine?.madeToday ?? false, inToday: board.inToday, inCount: board.inCount,
         streak: board.streak, team: board.team,

@@ -1,6 +1,7 @@
 import test,{after,before} from 'node:test';
 import assert from 'node:assert/strict';
 import nextEnv from '@next/env';
+import { assertTestDatabase } from './test-database';
 import { randomUUID,createHash,generateKeyPairSync,sign } from 'node:crypto';
 import { mkdir,writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,8 +21,7 @@ const prefix=`test-${randomUUID()}`;const ids:string[]=[];const uploadIds:string
 const devToken=process.env.DEV_API_TOKEN!;
 before(()=>{
   // Refuse to mutate any database other than the explicitly configured development branch.
-  assert.equal(process.env.NEON_TEST_BRANCH,'backend-dev','Set NEON_TEST_BRANCH=backend-dev in .env.development.local.');
-  assert.ok(process.env.DATABASE_URL?.includes('ep-lingering-unit-axuq6fwj'),'Refusing to test against a different database.');
+  assertTestDatabase();
   env.NODE_ENV='development';delete env.VERCEL;env.OPENAI_API_KEY='test-provider-is-injected';env.APPLE_TEAM_ID='TESTTEAM01';
 });
 after(async()=>{

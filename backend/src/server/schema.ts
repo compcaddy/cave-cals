@@ -50,7 +50,7 @@ export const usageInstalls = pgTable('usage_installs', {
   startedDay: date('started_day').notNull(),
   existingUser: boolean('existing_user').notNull().default(false),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
-  // appstore | testflight | debug
+  // appstore | playstore | testflight | debug
   environment: text('environment').notNull(),
   appVersion: text('app_version').notNull(),
   osVersion: text('os_version').notNull(),

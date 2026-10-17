@@ -6,6 +6,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { database } from './db';
 import { clanAlerts, clanMembers, clanPeople, clanPushTokens } from './schema';
 import { bundleID } from './config';
+import { deliverAndroidPush } from './android-push';
 
 export const ALERT_KINDS = [
   'evening', 'nudge', 'cheer', 'challengeStarted', 'challengeEnded', 'lifeLost', 'out', 'streakMilestone', 'streakRecord', 'memberJoined',
@@ -32,12 +33,12 @@ function providerToken(): string | null {
   cachedJWT = { token: `${unsigned}.${signature.toString('base64url')}`, at: Date.now() };
   return cachedJWT.token;
 }
-type Delivery = { token: string; environment: string; payload: object; collapse?: string };
+type Delivery = { token: string; environment: string; payload: { aps: { alert: Push }; clanId: string | null; kind: string }; collapse?: string };
 // Sends a batch over one HTTP/2 connection per environment. Returns tokens Apple says are no longer valid.
 async function deliver(items: Delivery[]): Promise<string[]> {
+  const dead = await deliverAndroidPush(items.filter(i => i.environment === 'android').map(i => ({ token: i.token, ...i.payload.aps.alert, clanId: i.payload.clanId || '', kind: i.payload.kind, collapse: i.collapse }))).catch(() => [] as string[]);
   const jwt = providerToken();
-  if (!jwt || !items.length) return [];
-  const dead: string[] = [];
+  if (!jwt || !items.length) return dead;
   for (const environment of ['production', 'sandbox']) {
     const batch = items.filter(i => i.environment === environment);
     if (!batch.length) continue;

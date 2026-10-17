@@ -3,7 +3,8 @@
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import nextEnv from '@next/env';
-import { randomUUID } from 'node:crypto';
+import { assertTestDatabase } from './test-database';
+import { randomUUID, randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import { eq, inArray } from 'drizzle-orm';
 import { database, closeDatabase } from '../../backend/src/server/db';
@@ -32,9 +33,10 @@ const zone = 'America/Los_Angeles';
 
 before(() => {
   // Only ever a development branch: never production (its endpoint is ep-weathered-sun-ax6ytvmw).
-  assert.ok(process.env.NEON_TEST_BRANCH && process.env.NEON_TEST_BRANCH !== 'production', 'Set NEON_TEST_BRANCH to a Neon development branch in .env.development.local.');
-  assert.ok(process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('ep-weathered-sun-ax6ytvmw'), 'Refusing to test against the production database.');
+  assertTestDatabase();
   env.NODE_ENV = 'development'; delete env.VERCEL; env.LOCAL_UPLOADS = 'true';
+  // Local fixture key only; no production encryption key is needed by this suite.
+  env.CLAN_TOKEN_KEY = randomBytes(32).toString('base64');
 });
 after(async () => {
   const db = database();
@@ -95,19 +97,26 @@ test('clans are made, joined by code, and need Cave Cals+ for a third member', a
   const created = await call('clan/create', { name: 'The Cavemen' }, ana.session);
   assert.equal(created.status, 200);
   clanId = created.body.clanId; clanIds.push(clanId);
-  code = (await call('clan/get', { clanId }, ana.session)).body.clan.inviteCode;
+  const initial = (await call('clan/get', { clanId }, ana.session)).body;
+  code = initial.clan.inviteCode;
+  assert.equal(initial.clan.joinMode, 'approval');
+  assert.equal(initial.clan.accountability, 'logged');
+  await call('clan/update', { clanId, accountability: 'off' }, ana.session);
   assert.match(code, /^[A-Z2-9]{6}$/);
   const preview = await call('clan/preview', { code: code.toLowerCase() }, ben.session);
   sample('preview', preview.body);
   assert.deepEqual([preview.body.name, preview.body.memberCount, preview.body.alreadyMember], ['The Cavemen', 1, false]);
-  assert.equal((await call('clan/join', { code }, ben.session)).status, 200);
+  assert.equal((await call('clan/join', { code }, ben.session)).body.pending, true);
+  assert.equal((await call('clan/get', { clanId }, ben.session)).status, 404);
+  assert.equal((await call('clan/request/decide', { clanId, personId: ben.personId, approve: true }, ana.session)).status, 200);
   // Without Cave Cals+ on any admin, a third person can't join.
   await database().update(clanSessions).set({ membershipOverride: false, accountId: null }).where(eq(clanSessions.personId, ana.personId));
-  const blocked = await call('clan/join', { code }, cal.session);
+  assert.equal((await call('clan/join', { code, anonymous: true }, cal.session)).body.pending, true);
+  const blocked = await call('clan/request/decide', { clanId, personId: cal.personId, approve: true }, ana.session);
   assert.equal(blocked.status, 402);
   assert.equal(blocked.body.error.code, 'clan_needs_plus');
   await database().update(clanSessions).set({ membershipOverride: true }).where(eq(clanSessions.personId, ana.personId));
-  assert.equal((await call('clan/join', { code, anonymous: true }, cal.session)).status, 200);
+  assert.equal((await call('clan/request/decide', { clanId, personId: cal.personId, approve: true }, ana.session)).status, 200);
   const detail = (await call('clan/get', { clanId }, ben.session)).body;
   assert.deepEqual(detail.members.map((m: any) => m.name), ['Ana', 'Ben', 'Cave person']);
   assert.equal(detail.members[2].photoId, null);
@@ -164,6 +173,23 @@ test('nudges go once a day, and blocks stop them', async () => {
   assert.equal(shown[0].name, 'Blocked person');
   await call('clan/block', { personId: ana.personId, blocked: false }, ben.session);
   assert.equal((await call('clan/report', { kind: 'name', personId: ana.personId, clanId, reason: 'test' }, ben.session)).status, 200);
+});
+
+test('weight challenge summaries include the reporting window without exposing weights', async () => {
+  const owner = await person('Weight Tester');
+  const made = await call('clan/create', { name: 'Weight Test Clan' }, owner.session);
+  assert.equal(made.status, 200);
+  clanIds.push(made.body.clanId);
+  const startsOn = localDay(new Date(), zone);
+  const challenge = await call('clan/challenge/create', { clanId: made.body.clanId, kind: 'weightLoss', settings: {}, startsOn, weeks: 2 }, owner.session);
+  assert.equal(challenge.status, 200, JSON.stringify(challenge.body));
+  assert.equal((await call('clan/challenge/join', { challengeId: challenge.body.challengeId, adult: true, notClinicianLed: true }, owner.session)).status, 200);
+  const summary = (await call('clan/list', {}, owner.session)).body.clans[0].challenge;
+  assert.equal(summary.startsOn, startsOn);
+  assert.equal(summary.endsOn, addDays(startsOn, 13));
+  assert.equal(summary.joined, true);
+  assert.equal(summary.myStatus, 'in');
+  assert.equal(summary.weight, undefined);
 });
 
 test('photos are re-encoded and only clanmates who can see the person get them', async () => {

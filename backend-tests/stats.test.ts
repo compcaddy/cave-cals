@@ -78,3 +78,9 @@ test('admin pages need a password and accept it with any user name', () => {
     assert.equal(adminAuthorized('Bearer correct horse battery staple'), false);
   } finally { if (before === undefined) delete env.ADMIN_PASSWORD; else env.ADMIN_PASSWORD = before; }
 });
+
+test('Google Play production usage is a distinct accepted environment', () => {
+  const value = report();
+  value.app.environment = 'playstore';
+  assert.equal(statsInput.parse(value).app.environment, 'playstore');
+});
