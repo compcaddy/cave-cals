@@ -42,8 +42,13 @@ export default async function JoinPage({ params }: Props) {
         <img src="/brand/CavePhone.svg" width="26" height="32" alt="" />
         <span><small>Free on the App Store</small><strong>Get Cave Cals</strong></span>
       </a>
+      <a className="app-download code-go" href="https://play.google.com/store/apps/details?id=com.philstarkovich.cavecals">
+        <img src="/brand/CavePhone.svg" width="26" height="32" alt="" />
+        <span><small>Android on Google Play</small><strong>Get Cave Cals</strong></span>
+      </a>
+      {process.env.ANDROID_PUBLIC_RELEASE !== 'true' && <p className="download-note">Android is currently in private testing. Only invited testers can install it from Google Play.</p>}
       <ol className="code-steps">
-        <li>Get Cave Cals on the App Store.</li>
+        <li>Get Cave Cals for your phone from the App Store or Google Play.</li>
         <li>Installed? Come back and tap this link again. It opens the clan.</li>
         <li>Or open Cave Cals, tap the campfire, then Join with code and type {code}.</li>
       </ol>

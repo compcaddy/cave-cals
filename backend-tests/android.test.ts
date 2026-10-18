@@ -97,3 +97,23 @@ test('Firebase preserves notification routing and removes only explicitly unregi
   assert.equal(deadFirebaseToken({ error: { code: 400, details: [{ errorCode: 'INVALID_ARGUMENT' }] } }), false);
   assert.equal(deadFirebaseToken({ error: { details: [{ '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode: 'UNREGISTERED' }] } }), true);
 });
+
+test('license and certification failures explain recovery without relaxing integrity checks', () => {
+  const unlicensed = verdict();
+  unlicensed.accountDetails.appLicensingVerdict = 'UNLICENSED';
+  assert.throws(() => validateIntegrity(unlicensed, payload, policy, now), (error: unknown) => {
+    assert.ok(error instanceof Error && 'code' in error);
+    assert.equal(error.code, 'play_install_required');
+    assert.match(error.message, /Google Play/);
+    return true;
+  });
+  const uncertified = verdict();
+  uncertified.deviceIntegrity.deviceRecognitionVerdict = ['MEETS_BASIC_INTEGRITY'];
+  assert.throws(() => validateIntegrity(uncertified, payload, policy, now), (error: unknown) => {
+    assert.ok(error instanceof Error && 'code' in error);
+    assert.equal(error.code, 'unsupported_device');
+    assert.match(error.message, /Manual logging still works/);
+    assert.match(error.message, /subscription/);
+    return true;
+  });
+});

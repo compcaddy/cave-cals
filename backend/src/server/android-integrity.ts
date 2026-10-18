@@ -33,8 +33,9 @@ export function validateIntegrity(value: unknown, payload: string, policy: Integ
   if (v.requestDetails.requestPackageName !== policy.packageName || v.appIntegrity.packageName !== policy.packageName ||
       !safeEqual(v.requestDetails.requestHash, requestHash(payload)) || !Number.isSafeInteger(timestamp) || timestamp < now - 120_000 || timestamp > now + 30_000 ||
       v.appIntegrity.appRecognitionVerdict !== 'PLAY_RECOGNIZED' || !v.appIntegrity.certificateSha256Digest.some(s => policy.certificates.includes(s)) ||
-      !Number.isSafeInteger(version) || version < policy.minimumVersion || v.accountDetails.appLicensingVerdict !== 'LICENSED' ||
-      !v.deviceIntegrity.deviceRecognitionVerdict.includes('MEETS_DEVICE_INTEGRITY')) throw invalid();
+      !Number.isSafeInteger(version) || version < policy.minimumVersion) throw invalid();
+  if (v.accountDetails.appLicensingVerdict !== 'LICENSED') throw new APIError(401, 'play_install_required', 'Install Cave Cals from Google Play using the Google account that downloaded it. Manual logging still works. If this continues, contact Cave Cals support.');
+  if (!v.deviceIntegrity.deviceRecognitionVerdict.includes('MEETS_DEVICE_INTEGRITY')) throw new APIError(401, 'unsupported_device', 'Google Play could not certify this device for AI features. Check Play Store Settings → About → Play Protect certification. Manual logging still works. Contact Cave Cals support for help with an existing subscription.');
 }
 export function androidPublicKey(encoded: string): string {
   try {
