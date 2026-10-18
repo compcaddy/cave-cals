@@ -36,11 +36,12 @@ export function cachedPlayEntitlement(expiresAt: Date | null, checkedAt: Date | 
 async function fetchPlayExpiry(accountId: string) {
   const products = androidProducts();
   if (!products.length) throw new APIError(503, 'not_configured', 'Google Play subscriptions are not configured.');
-  const secret = required('REVENUECAT_SECRET_API_KEY');
+  // This read endpoint supports the app's public SDK key; no project-wide secret is needed.
+  const apiKey = required('REVENUECAT_ANDROID_API_KEY');
   let response: Response;
   try {
     response = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(`android:${accountId}`)}`, {
-      headers: { Authorization: `Bearer ${secret}`, Accept: 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(10_000),
     });
   } catch { throw new APIError(503, 'purchase_unavailable', 'Purchase verification is temporarily unavailable. Please try again.'); }
   if (response.status === 404) return null;

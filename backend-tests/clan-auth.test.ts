@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { openToken, sealToken, verifyIdentityToken } from '../backend/src/server/clan-auth';
+import { googleAudiences, openToken, sealToken, verifyIdentityToken } from '../backend/src/server/clan-auth';
 import { cleanClanName, cleanDisplayName, containsBlockedWord } from '../backend/src/server/clan-names';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -16,6 +16,26 @@ function token(claims: object, kid = 'test-key') {
 const nonce = 'a-random-nonce-from-the-app';
 const good = { iss: 'https://appleid.apple.com', aud: 'com.philstarkovich.cavecals', sub: 'apple-123', exp: Math.floor(Date.now() / 1000) + 600, nonce: createHash('sha256').update(nonce).digest('hex') };
 const options = { keysURL, issuers: ['https://appleid.apple.com'], audiences: ['com.philstarkovich.cavecals'], nonce };
+
+test('Android Google audience is additive and leaves every existing iOS audience accepted', () => {
+  const original = { GOOGLE_CLIENT_IDS: process.env.GOOGLE_CLIENT_IDS, GOOGLE_ANDROID_CLIENT_ID: process.env.GOOGLE_ANDROID_CLIENT_ID };
+  try {
+    process.env.GOOGLE_CLIENT_IDS = 'ios-one, ios-two, ';
+    process.env.GOOGLE_ANDROID_CLIENT_ID = 'android-web';
+    assert.deepEqual(googleAudiences(), ['ios-one', 'ios-two', 'android-web']);
+    process.env.GOOGLE_ANDROID_CLIENT_ID = '';
+    assert.deepEqual(googleAudiences(), ['ios-one', 'ios-two']);
+    process.env.GOOGLE_ANDROID_CLIENT_ID = ' ios-one ';
+    assert.deepEqual(googleAudiences(), ['ios-one', 'ios-two']);
+    delete process.env.GOOGLE_CLIENT_IDS;
+    delete process.env.GOOGLE_ANDROID_CLIENT_ID;
+    assert.deepEqual(googleAudiences(), []);
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
 
 test('identity tokens are checked for signature, issuer, audience, expiry, and nonce', async () => {
   globalThis.fetch = (async () => new Response(JSON.stringify({ keys: [jwk] }))) as typeof fetch;

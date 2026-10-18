@@ -63,7 +63,10 @@ export async function verifyIdentityToken(token: string, options: { keysURL: str
   return claims;
 }
 export const appleAudiences = () => [bundleID(), `${bundleID()}.dev`];
-export const googleAudiences = () => (process.env.GOOGLE_CLIENT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+// Android's web client can be added without replacing the existing iOS audience secret.
+export const googleAudiences = () => [...new Set([
+  ...(process.env.GOOGLE_CLIENT_IDS || '').split(','), process.env.GOOGLE_ANDROID_CLIENT_ID || '',
+].map(s => s.trim()).filter(Boolean))];
 
 // MARK: Apple refresh tokens (revoked when the clan account is deleted)
 
