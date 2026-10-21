@@ -202,24 +202,29 @@ struct LogReminderPlan {
 final class LogReminderNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = LogReminderNotificationDelegate()
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
-        -> UNNotificationPresentationOptions {
-        await LogReminders.isReminder(notification) ? [] : [.banner, .sound]
+    // Completion-handler versions on purpose: the async ones run on a background thread and iOS's
+    // completion then fires off the main thread, which crashed the app on every reminder tap.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        DispatchQueue.main.async {
+            completionHandler(LogReminders.isReminder(notification) ? [] : [.banner, .sound])
+        }
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        // Clan alerts open their clan.
-        let info = response.notification.request.content.userInfo
-        if info["kind"] is String, info["aps"] != nil, response.notification.request.trigger is UNPushNotificationTrigger {
-            let clanId = info["clanId"] as? String, kind = info["kind"] as? String ?? ""
-            await MainActor.run {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            defer { completionHandler() }
+            let notification = response.notification
+            // Clan alerts open their clan.
+            let info = notification.request.content.userInfo
+            if info["kind"] is String, info["aps"] != nil, notification.request.trigger is UNPushNotificationTrigger {
+                let clanId = info["clanId"] as? String, kind = info["kind"] as? String ?? ""
                 UsageStats.shared.event("clan.pushOpened", ["kind": kind])
                 ClanRouter.shared.open(clanId: clanId)
+                return
             }
-            return
-        }
-        guard await LogReminders.isReminder(response.notification) else { return }
-        await MainActor.run {
+            guard LogReminders.isReminder(notification) else { return }
             UsageStats.shared.count(.reminderTaps)
             LoggingActionRouter.shared.open(.add)
         }
