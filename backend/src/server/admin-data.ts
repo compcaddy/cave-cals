@@ -12,8 +12,8 @@ async function rows<T>(query: SQL): Promise<T[]> {
   return (await database().execute(query)).rows as T[];
 }
 
-/** App Store installs only, unless TestFlight and Xcode builds are included. */
-function installFilter(all: boolean) { return all ? sql`true` : sql`i.environment = 'appstore'`; }
+/** Production App Store and Google Play installs, unless development builds are included. */
+function installFilter(all: boolean) { return all ? sql`true` : sql`i.environment in ('appstore', 'playstore')`; }
 
 export type Weekly = { thisWeek: number; lastWeek: number; weekBefore: number };
 export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;

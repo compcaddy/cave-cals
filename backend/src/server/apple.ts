@@ -5,6 +5,8 @@ import { APIError, bundleID, required } from './config';
 import { database, type DBTransaction } from './db';
 import { accounts, devices } from './schema';
 import type { Identity } from './auth';
+import { ANDROID_ENVIRONMENT } from './android-integrity';
+import { androidEntitlement } from './android-purchases';
 export function products() { return (process.env.APPLE_PRODUCT_IDS || '').split(',').map(s => s.trim()).filter(Boolean); }
 export function appleEnvironments(): Environment[] {
   const env = process.env.APPLE_ENVIRONMENT || 'Production';
@@ -82,6 +84,7 @@ export async function entitlement(identity: Identity) {
   if (identity.testAccess !== undefined) return { active: identity.testAccess, expiresAt: null, development: false, testing: true };
   if (identity.development) return { active: true, expiresAt: null, development: true };
   const [account] = await database().select().from(accounts).where(eq(accounts.id, identity.accountId));
+  if (account?.environment === ANDROID_ENVIRONMENT) return androidEntitlement(account);
   if (!account?.originalTransactionId || !appleEnvironments().includes(account.environment as Environment)) return { active: false, expiresAt: null, development: false };
   const cached = cachedEntitlement(account.subscriptionExpiresAt, account.subscriptionCheckedAt);
   if (cached) return { ...cached, development: false };
@@ -116,6 +119,7 @@ export async function otherActiveDevices(tx: DBTransaction, accountId: string, k
   return row?.count ?? 0;
 }
 export async function verifyPurchase(identity: Identity, signedTransaction: string) {
+  if (identity.keyId.startsWith('android:')) throw new APIError(403, 'wrong_platform', 'Use Google Play to manage this subscription.');
   if (identity.development) throw new APIError(400, 'development_mode', 'Use a physical device to test Apple purchases.');
   const verified = await decodePurchase(signedTransaction);
   const decoded = verified.transaction;
@@ -128,6 +132,7 @@ export async function verifyPurchase(identity: Identity, signedTransaction: stri
     const [existing] = await tx.select().from(accounts).where(eq(accounts.originalTransactionId, decoded.originalTransactionId!)).for('update');
     if (!token || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(token)) throw new APIError(403, 'purchase_owner', 'This purchase has no account association. Please contact support.');
     const [tokenAccount] = await tx.select().from(accounts).where(eq(accounts.id, token)).for('update');
+    if (tokenAccount?.environment === ANDROID_ENVIRONMENT) throw new APIError(403, 'wrong_platform', 'This purchase cannot be linked across platforms.');
     const ownerId = existing?.id || tokenAccount?.id;
     if (!ownerId || (tokenAccount?.originalTransactionId && tokenAccount.originalTransactionId !== decoded.originalTransactionId && !existing)) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
     if (token !== ownerId.toLowerCase()) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
