@@ -111,7 +111,10 @@ import CoreData
             Persistence.shared = store
             UsageStats.shared.attach(store)
             if MacroAutoFill.isAllowed { store.macroAutoFill = MacroAutoFill(store: store) }
-            store.entriesDidChange = { nutrition.entriesChanged($0); LogReminders.shared.entriesChanged($0); ClanReporter.shared.schedule() }
+            store.entriesDidChange = { [weak store] entries in
+                nutrition.entriesChanged(entries); LogReminders.shared.entriesChanged(entries); ClanReporter.shared.schedule()
+                AdAttribution.shared.entriesChanged(entries, finishedSetup: store?.profile != nil)
+            }
             _store = State(initialValue: store)
         }
         catch { _failure = State(initialValue: error.localizedDescription) }
@@ -167,6 +170,8 @@ struct RootView: View {
         .task { store.macroAutoFill?.sweep() }
         .task { await AISubscriptions.listenForPurchases() }
         .task { LogReminders.shared.entriesChanged(store.entries); await LogReminders.shared.refreshAuthorization() }
+        // Starts Apple's ad-measurement window on the first launch; later changes arrive through `entriesDidChange`.
+        .task { AdAttribution.shared.entriesChanged(store.entries, finishedSetup: store.profile != nil) }
         .task {
             UsageStats.shared.traits = { [store, weights, nutritionHealth] in
                 [

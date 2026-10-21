@@ -21,6 +21,9 @@ import RevenueCatUI
                 .with(appUserID: userID)
                 .with(purchasesAreCompletedBy: .myApp, storeKitVersion: .storeKit2)
                 .build())
+            // Apple Ads: RevenueCat sends Apple's AdServices token once per install, so its charts show which campaign
+            // and keyword led to each subscription. Standard attribution needs no tracking permission.
+            if AdAttribution.shared.isMeasuring { Purchases.shared.attribution.enableAdServicesAttributionTokenCollection() }
         } else if Purchases.shared.appUserID != userID {
             _ = try? await Purchases.shared.logIn(userID)
         }
@@ -57,7 +60,10 @@ import RevenueCatUI
             }
             await connectRevenueCat()
             message = nil; messageIsError = false
-            if let account { UsageStats.shared.noteMembership(account.active) }
+            if let account {
+                UsageStats.shared.noteMembership(account.active)
+                if account.active && account.testing != true { AdAttribution.shared.joinedPlus(yearly: nil) }
+            }
         } catch {
             message = error.localizedDescription
             messageIsError = true
@@ -75,6 +81,7 @@ import RevenueCatUI
                 guard case .verified(let transaction) = verification else { throw AIServiceError(code:"purchase",message:"The purchase could not be verified.") }
                 try await AIBackend.shared.purchase(verification.jwsRepresentation)
                 await transaction.finish()
+                AdAttribution.shared.joinedPlus(yearly: product.subscription?.subscriptionPeriod.unit == .year)
                 self.account = try await AIBackend.shared.status(); message = nil; messageIsError = false
                 await connectRevenueCat()
                 if Purchases.isConfigured { _ = try? await Purchases.shared.syncPurchases() }

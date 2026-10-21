@@ -277,7 +277,7 @@ private struct UsageStatsSettingsSection: View {
         } header: {
             Text("Usage stats")
         } footer: {
-            Text("Sends counts like how many foods you log and which features you use, error reports, and searches that found nothing, so Cave Cals can get better. Never your diary, calories, weight, or Health data, and it isn’t linked to you.")
+            Text("Sends counts like how many foods you log and which features you use, error reports, and searches that found nothing, so Cave Cals can get better. Never your diary, calories, weight, or Health data, and it isn’t linked to you. If an ad brought you here, it also notes which Apple Ads campaign it was, and lets Apple tell the ad network, without naming you, whether you logged food or joined Cave Cals+.")
                 .font(.cave(.caption2))
         }
     }

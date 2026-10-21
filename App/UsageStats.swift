@@ -51,6 +51,8 @@ enum StatsErrorArea: String {
     case coach
     /// Clans: sign-in, loading, reports, and clan actions.
     case clans
+    /// Updating Apple's ad measurement (`AdAttribution`).
+    case adAttribution
 }
 
 enum UsageCounter: String {
