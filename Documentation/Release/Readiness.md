@@ -1,3 +1,9 @@
+# 1.2.0 (1): Clans, accounts, macro auto-fill, Health weigh-in import — submitted October 22, 2026
+
+- **Build:** source `637724e`, tag `v1.2.0-build1`, build `f1a43bc5-9dbd-42f2-981c-c22bc0eec2c5` processed **VALID**. 244 unit tests passed (1 skipped). Signed Release archive/export; app and widget both 1.2.0 (1); strict signature verification passed; production entitlements (push, App Attest) plus HealthKit + background delivery, Sign in with Apple, Associated Domains; `get-task-allow` false. AASA live at cavecals.com.
+- **App Store Connect:** version 1.2.0 created with the build attached; description (adds Clans, optional account, automatic macros and the food-name disclosure), What's New, and review notes (Clans, UGC report/block, account deletion, Health weight read) saved and read back identical (`1.2.0/`). Age rating now declares user-generated content. App Privacy adds Name and Email address (linked; email also for developer marketing), published. Release automatic after approval, no phased release (owner's choice). Submission `730ae240-653d-4553-a463-9875b4ff1f6c` (app only): **WAITING_FOR_REVIEW**.
+- **Not verified:** no TestFlight or physical-device testing (owner's choice). The privacy policy's "coming in an upcoming version" wording is fixed in source but not deployed. App Store Connect API returned intermittent 500s; retries succeeded.
+
 # Clans: merged and backend live, app unreleased — October 13, 2026
 
 ## October 17, 2026 — Android services deployed, owner-only test pending device acceptance

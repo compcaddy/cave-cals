@@ -1,0 +1,21 @@
+{
+  "version": "1.2.0",
+  "build": "1",
+  "sourceCommit": "637724e",
+  "tag": "v1.2.0-build1",
+  "buildId": "f1a43bc5-9dbd-42f2-981c-c22bc0eec2c5",
+  "processingState": "VALID",
+  "versionId": "db68265b-3de5-4282-a44d-57d785a72c92",
+  "appStoreState": "WAITING_FOR_REVIEW",
+  "reviewSubmissionId": "730ae240-653d-4553-a463-9875b4ff1f6c",
+  "submittedDate": "2026-10-22T17:54:26.083Z",
+  "submissionItems": ["iOS App 1.2.0 (1)"],
+  "discountSubscriptions": "Not attached (rejected under 3.1.1 on 2026-10-13). Do not attach them.",
+  "releaseType": "AFTER_APPROVAL",
+  "phasedRelease": "None (owner chose all at once)",
+  "ageRating": "userGeneratedContent true (clan names, display names, profile photos); messagingAndChat and socialMedia false",
+  "appPrivacy": "Added NAME (app functionality), EMAIL_ADDRESS (app functionality; developer's advertising or marketing), all linked to the user; published 2026-10-22 via asc web privacy. Advertising Data for Apple Ads attribution deliberately not declared (owner may revisit).",
+  "testFlightDistributionRequested": false,
+  "physicalDeviceChecksPerformed": false,
+  "note": "Owner chose to submit without device testing. Unverified on hardware: Sign in with Apple/Google, clan push, Universal Links, Health weight read/background delivery, AdServices token. 244 unit tests passed. Privacy policy wording fix ('coming in an upcoming version' removed) is committed but not deployed."
+}

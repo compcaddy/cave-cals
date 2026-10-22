@@ -1,0 +1,7 @@
+
+Warning: the following subscriptions are READY_TO_SUBMIT but are not automatically included in this submission:
+  - Cave Cals+ Monthly - Discount
+  - Cave Cals+ Yearly - Discount
+If this is their first review, run `asc web review subscriptions list --app "APP_ID"` to find the relevant IDs, then attach the group with `asc web review subscriptions attach-group --app "APP_ID" --group-id "GROUP_ID" --confirm` (or use `attach --subscription-id "SUB_ID"` for one subscription) before retrying `asc review submit`.
+For subsequent reviews, use `asc subscriptions versions list --subscription-id "SUB_ID"` (or `asc subscriptions versions create --subscription-id "SUB_ID"` when a new version is needed), then add that version with `asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "VERSION_ID"`.
+{"appId":"6809208501","version":"1.2.0","versionId":"db68265b-3de5-4282-a44d-57d785a72c92","buildId":"f1a43bc5-9dbd-42f2-981c-c22bc0eec2c5","platform":"IOS","submissionId":"730ae240-653d-4553-a463-9875b4ff1f6c","submittedDate":"2026-10-22T17:54:26.083Z","buildAttachment":{"versionId":"db68265b-3de5-4282-a44d-57d785a72c92","buildId":"f1a43bc5-9dbd-42f2-981c-c22bc0eec2c5","currentBuildId":"f1a43bc5-9dbd-42f2-981c-c22bc0eec2c5","alreadyAttached":true}}
