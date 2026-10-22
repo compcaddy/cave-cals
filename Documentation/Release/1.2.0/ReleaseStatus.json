@@ -17,5 +17,5 @@
   "appPrivacy": "Added NAME (app functionality), EMAIL_ADDRESS (app functionality; developer's advertising or marketing), all linked to the user; published 2026-10-22 via asc web privacy. Advertising Data for Apple Ads attribution deliberately not declared (owner may revisit).",
   "testFlightDistributionRequested": false,
   "physicalDeviceChecksPerformed": false,
-  "note": "Owner chose to submit without device testing. Unverified on hardware: Sign in with Apple/Google, clan push, Universal Links, Health weight read/background delivery, AdServices token. 244 unit tests passed. Privacy policy wording fix ('coming in an upcoming version' removed) is committed but not deployed."
+  "note": "Owner chose to submit without device testing. Unverified on hardware: Sign in with Apple/Google, clan push, Universal Links, Health weight read/background delivery, AdServices token. 244 unit tests passed. Privacy policy wording fix deployed 2026-10-22 (dpl_FvUKPvekiTG1AjVMNYJsdPcDGXr5)."
 }
