@@ -1,0 +1,25 @@
+No account signup or demo login is required. Manual logging, food search, barcode lookup, saved meals, calorie plans, macros, weight tracking, and the standard Progress charts are free.
+
+CLANS AND OPTIONAL ACCOUNT (NEW IN 1.2.0)
+Tap the campfire icon in Home's header > Sign in with Apple (Google is also offered). Signing in is optional; the rest of the app works without it. Sign-in requires agreeing to the terms (no objectionable content). Create a clan, then share its invite link or code; joining needs an admin's approval by default. A second account is needed to see another member, nudges/cheers, and boards. A clan of two is free; letting in a third member requires an admin with Cave Cals+.
+User-generated content is limited to display names, optional profile photos, and clan names (names are filtered). There is no free-text chat; nudges and cheers are preset messages. Tap a member > Report name or photo, or Block; clan names from the clan's Clan settings > Report clan name. Reports reach us and are reviewed within 24 hours. Members can join anonymously as "Cave person".
+Account deletion: Me (person icon) > your account row > Delete account.
+Clans receive only a small daily summary per member (logged, full day, % of goal, done eating); clans never receive food, calories, or Health data. Weight-loss challenges send only percentages from weigh-ins logged in Cave Cals and are limited to adults.
+
+APPLE HEALTH (HEALTHKIT)
+Settings (gear icon on Home) > Apple Health, marked with the Apple Health icon: Calories & macros and Weigh-ins switches. Also in Me (person icon) > Apple Health. Off by default. Cave Cals writes calories, macros, and weigh-ins. New in 1.2.0: with Weigh-ins on, it also reads body mass (weight only) so readings from a smart scale appear as weigh-ins; Settings > Apple Health > Sync now. Health data is never sent to our backend. Screen recording on a physical iPhone: https://www.youtube.com/shorts/GuFt72SOAkg
+
+FIRST LAUNCH
+Setup is optional: choose Build Plan or Just start tracking. Plans support loss, maintenance, or gain. The post-setup subscription offer can be closed without purchasing.
+
+SUBSCRIPTIONS
+Cave Cals+ is sold only through the regular monthly and yearly In-App Purchase subscriptions, with Apple introductory offers for eligible new subscribers; the paywall shows the introductory price, its length, and the renewal price. There is no in-app promo code entry. Restore purchases is on the paywall and in the subscription area.
+
+AI FEATURES
+Meal Scan and Voice Log (Cave Cals+ after an introductory allowance of up to 10 analyses), Cave Coach (Progress > On-Target vs. Over Days), and recipe import send only what the user selects, or a summary of logging patterns for Cave Coach, through our backend to OpenAI. New in 1.2.0: while Track macros is on, the name and calories of foods missing macros are sent to estimate them automatically; this is free and does not use scans. Progress Photos are never uploaded.
+
+AI AND DEVICE REQUIREMENTS
+AI requests and Clans sign-in need internet and a real signed device for Apple's App Attest. Paid access is server-verified. Please use the normal purchase flow for subscription review.
+
+ICLOUD
+Diary, meal-type settings, and Progress preferences use private iCloud sync. Weight history and Progress Photos stay local. Privacy policy: https://cavecals.com/privacy

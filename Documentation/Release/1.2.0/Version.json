@@ -1,0 +1,2 @@
+Error: versions create: request failed: Post "https://api.appstoreconnect.apple.com/v1/appStoreVersions": context deadline exceeded
+Hint: Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`).
