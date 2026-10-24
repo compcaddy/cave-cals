@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { loadDashboard, ADMIN_TIME_ZONE, type Weekly } from '@/server/admin-data';
+import { loadDashboard, adminQuery, toPlatform, ADMIN_TIME_ZONE, type Weekly } from '@/server/admin-data';
 import { requireAdmin } from './require-admin';
+import { FilterPills, phones, scopeLabel } from './filters';
 export const dynamic = 'force-dynamic';
 
 const methodNames: Record<string, string> = {
@@ -58,13 +59,22 @@ function Bars({ rows, format = (value: number) => n(value) }: { rows: { label: s
       <span className="value">{format(row.value)}{row.note ? ` · ${row.note}` : ''}</span>
     </div>)}</div>;
 }
+/** In place of a section the Android app sends nothing for yet. */
+function NotFromAndroid() {
+  return <p className="empty">The Android app doesn’t report this yet.</p>;
+}
 const weekday = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-export default async function StatsPage({ searchParams }: { searchParams: Promise<{ env?: string }> }) {
+export default async function StatsPage({ searchParams }: { searchParams: Promise<{ env?: string; platform?: string }> }) {
   await requireAdmin();
-  const all = (await searchParams).env === 'all';
-  const d = await loadDashboard(all);
-  const query = all ? '?env=all' : '';
+  const params = await searchParams;
+  const all = params.env === 'all';
+  const platform = toPlatform(params.platform);
+  const d = await loadDashboard(all, platform);
+  const query = adminQuery(all, platform);
+  const android = platform === 'android';
+  // Sections built from events and setup traits, which only the iOS app sends so far.
+  const iosOnly = platform === 'all' ? ' · iPhone only' : '';
   const itemsAll = d.methods.reduce((sum, row) => sum + row.allTime, 0);
   const items30 = d.methods.reduce((sum, row) => sum + row.last30, 0);
   const search30 = d.methods.filter(row => row.metric.startsWith('search')).reduce((sum, row) => sum + row.last30, 0);
@@ -80,13 +90,13 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     <header>
       <div>
         <h1>Cave Cals stats</h1>
-        <p className="note">{all ? 'All builds, including TestFlight and Xcode' : 'App Store installs only'} · Pacific time · weeks start Monday · updated {updated}</p>
+        <p className="note">{scopeLabel(all, platform)} · Pacific time · weeks start Monday · updated {updated}</p>
       </div>
       <nav className="nav">
-        <Link className={`pill${all ? '' : ' on'}`} href="/admin">App Store</Link>
-        <Link className={`pill${all ? ' on' : ''}`} href="/admin?env=all">All builds</Link>
+        <FilterPills path="/admin" all={all} platform={platform} />
+        <span className="divider" />
         <Link className="pill" href={`/admin/errors${query}`}>Errors · {n(errors7)} this week</Link>
-        <Link className="pill" href={`/admin/codes${query}`}>Discount codes</Link>
+        <Link className="pill" href={`/admin/codes${adminQuery(all, 'all')}`}>Discount codes</Link>
         <Link className="pill" href="/admin/reports">Clan reports</Link>
         <Link className="pill" href="/admin/email">News email</Link>
       </nav>
@@ -99,9 +109,12 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <Tile value={n(d.headline.active7)} label="Active, last 7 days" />
         <Tile value={n(d.headline.active30)} label="Active, last 30 days" />
         <Tile value={n(d.headline.logging7)} label="Logged food, last 7 days" />
-        <Tile value={n(d.headline.installs)} label={`Reporting iPhones (${n(d.headline.existing)} had the app before stats)`} />
+        <Tile value={n(d.headline.installs)} label={platform === 'all'
+          ? `Reporting phones (${n(d.headline.installs - d.headline.android)} iPhone · ${n(d.headline.android)} Android; ${n(d.headline.existing)} had the app before stats)`
+          : android ? 'Reporting Android phones' : `Reporting iPhones (${n(d.headline.existing)} had the app before stats)`} />
       </div>
-      <p className="note">Active means opened the app or logged food that day. Stats start with version 1.0.5; people who had the app before then are counted from their earliest diary entry, not as new users.</p>
+      <p className="note">Active means opened the app or logged food that day. {android ? '' : 'iPhone stats start with version 1.0.5; people who had the app before then are counted from their earliest diary entry, not as new users.'}</p>
+      {platform !== 'ios' && <p className="note">The Android app sends daily counts (opens, items, scans, searches, edits, weigh-ins, Done eating, Progress) and errors, but no events or setup details yet, so paywall views, the setup funnel, ratings, searches that found nothing, and Setup and features {android ? 'are empty here' : 'count iPhones only'}.</p>}
     </section>
 
     <div className="grid">
@@ -139,9 +152,10 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <div>
           <h3>Top 25 by lifetime items</h3>
           <div className="scroll"><table>
-            <thead><tr><th>iPhone</th><th>Started</th><th>Items</th><th>Days</th><th>Last logged</th><th>Version</th></tr></thead>
+            <thead><tr><th>{android ? 'Android phone' : platform === 'ios' ? 'iPhone' : 'Phone'}</th><th>Started</th><th>Items</th><th>Days</th><th>Last logged</th><th>Version</th></tr></thead>
             <tbody>{d.topUsers.map(user => <tr key={user.id}>
-              <td><code>{user.id.slice(0, 8)}</code>{user.plus === 'true' ? <span className="tag">+</span> : null}</td>
+              <td><code>{user.id.slice(0, 8)}</code>{user.plus === 'true' ? <span className="tag">+</span> : null}
+                {platform === 'all' && user.android ? <span className="tag">Android</span> : null}</td>
               <td>{user.startedAt}{user.existing ? '*' : ''}</td><td>{n(user.items)}</td><td>{n(user.days)}</td>
               <td>{user.lastLogged ?? '–'}</td><td>{user.version}</td>
             </tr>)}</tbody>
@@ -152,7 +166,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     </section>
 
     <section>
-      <h2>4a · Paywall views</h2>
+      <h2>4a · Paywall views{iosOnly}</h2>
+      {android ? <NotFromAndroid /> : <>
       <div className="scroll"><table>
         <thead><tr><th>What showed it (last 30 days)</th><th>Views</th><th>People</th><th>Bought</th><th>Trials</th><th>Restored</th><th>Closed</th><th>Converted</th><th>All-time views</th><th>All-time bought</th></tr></thead>
         <tbody>{d.paywalls.map(row => <tr key={row.trigger}>
@@ -162,11 +177,12 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
       </table></div>
       {!d.paywalls.length && <p className="empty">No paywall views yet.</p>}
       <p className="note">Bought includes free trials started. Revenue and renewals stay in RevenueCat.</p>
+      </>}
     </section>
 
     <section>
-      <h2>4b · Setup funnel (new users, last 30 days)</h2>
-      <div className="grid">
+      <h2>4b · Setup funnel (new users, last 30 days){iosOnly}</h2>
+      {android ? <NotFromAndroid /> : <div className="grid">
         <div>
           <Bars rows={[
             { label: 'New users', value: started, note: '100%' },
@@ -193,7 +209,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
             { label: 'No goal', value: d.finished.none }, { label: 'Goal: lose', value: d.finished.lose }, { label: 'Goal: maintain', value: d.finished.maintain },
           ]} />
         </div>
-      </div>
+      </div>}
     </section>
 
     <section>
@@ -250,16 +266,16 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     <div className="grid">
       <section>
         <h2>How it’s going</h2>
-        <div className="tiles">
+        {android ? null : <div className="tiles">
           {['yes', 'no'].map(answer => {
             const row = d.ratings.find(r => r.answer === answer);
-            return <Tile key={answer} value={n(row?.allTime ?? 0)} label={`${answer === 'yes' ? '“Yes! Me like”' : '“Not really”'} (${n(row?.last30 ?? 0)} in 30 days)`} />;
+            return <Tile key={answer} value={n(row?.allTime ?? 0)} label={`${answer === 'yes' ? '“Yes! Me like”' : '“Not really”'} (${n(row?.last30 ?? 0)} in 30 days)${iosOnly}`} />;
           })}
-          <Tile value={n(friction.feedbackTaps ?? 0)} label="Send Feedback taps (30 days)" />
-        </div>
+          <Tile value={n(friction.feedbackTaps ?? 0)} label={`Send Feedback taps (30 days)${iosOnly}`} />
+        </div>}
         <h3>Last 30 days</h3>
         <div className="tiles">
-          <Tile value={pct(friction.searchesAbandoned ?? 0, friction.searches ?? 0)} label={`Searches left without adding (${n(friction.searches ?? 0)} searches)`} />
+          {android ? null : <Tile value={pct(friction.searchesAbandoned ?? 0, d.frictionReported.searches ?? 0)} label={`Searches left without adding (${n(d.frictionReported.searches ?? 0)} ${platform === 'all' ? 'iPhone ' : ''}searches)`} />}
           <Tile value={n(((friction.edits ?? 0) / Math.max(1, items30Friction)) * 100, 1)} label="Edits per 100 items" />
           <Tile value={n(((friction.deletes ?? 0) / Math.max(1, items30Friction)) * 100, 1)} label="Deletes per 100 items" />
           <Tile value={n(((friction.undos ?? 0) / Math.max(1, items30Friction)) * 100, 1)} label="Undos per 100 items" />
@@ -267,20 +283,24 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           <Tile value={n(friction.progressViews ?? 0)} label="Progress views" />
           <Tile value={n(friction.weighIns ?? 0)} label="Weigh-ins saved" />
           <Tile value={n(friction.progressPhotos ?? 0)} label="Progress photos saved" />
-          <Tile value={n(friction.photoCompares ?? 0)} label="Photo comparisons opened" />
-          <Tile value={n(friction.reminderTaps ?? 0)} label="Reminder notifications tapped" />
-          <Tile value={n(friction.mealMoves ?? 0)} label="Foods moved to another meal" />
+          {android ? null : <>
+            <Tile value={n(friction.photoCompares ?? 0)} label={`Photo comparisons opened${iosOnly}`} />
+            <Tile value={n(friction.reminderTaps ?? 0)} label={`Reminder notifications tapped${iosOnly}`} />
+            <Tile value={n(friction.mealMoves ?? 0)} label={`Foods moved to another meal${iosOnly}`} />
+          </>}
         </div>
       </section>
 
       <section>
-        <h2>Searches that found nothing (30 days)</h2>
+        <h2>Searches that found nothing (30 days){iosOnly}</h2>
+        {android ? <NotFromAndroid /> : <>
         <div className="scroll"><table>
           <thead><tr><th>Search</th><th>Times</th><th>People</th><th>Last</th></tr></thead>
           <tbody>{d.missing.map(row => <tr key={row.query}><td className="wrap">{row.query}</td><td>{n(row.times)}</td><td>{n(row.people)}</td><td>{row.last}</td></tr>)}</tbody>
         </table></div>
         {!d.missing.length && <p className="empty">None yet.</p>}
         <p className="note">Nothing in past foods, saved meals, built-in foods, or online results.</p>
+        </>}
       </section>
     </div>
 
@@ -296,7 +316,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section>
-        <h2>Setup and features</h2>
+        <h2>Setup and features{iosOnly}</h2>
+        {android ? <NotFromAndroid /> : <>
         <p className="note">{n(d.traits.people)} iPhones seen in the last 30 days.</p>
         <Bars rows={[
           ...traitNames.map(([trait, label]) => ({ label, value: d.traits[trait] ?? 0, note: pct(d.traits[trait] ?? 0, d.traits.people) })),
@@ -305,6 +326,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           { label: 'Meal types, set by time of day', value: d.traits.mealTypesTime ?? 0, note: pct(d.traits.mealTypesTime ?? 0, d.traits.people) },
           { label: 'Meal types, asks each time', value: d.traits.mealTypesAsk ?? 0, note: pct(d.traits.mealTypesAsk ?? 0, d.traits.people) },
         ]} />
+        </>}
       </section>
     </div>
 
@@ -319,7 +341,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
       <section>
         <h2>AI scans and Cave Cals+</h2>
         <div className="tiles">
-          <Tile value={n(d.ai.accounts)} label="AI accounts (iPhones that reached the backend)" />
+          <Tile value={n(d.ai.accounts)} label={`AI accounts (${phones[platform]} that reached the backend)`} />
           <Tile value={n(d.ai.scanned)} label="Used at least one scan" />
           <Tile value={n(d.ai.usedAll)} label="Used all 10 free scans" />
           <Tile value={n(d.ai.scans)} label="Scans, all time" />

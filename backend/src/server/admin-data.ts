@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { database } from './db';
+import { ANDROID_ENVIRONMENT } from './android-integrity';
 
 /** Days and weeks on the admin pages follow the owner's time zone; weeks start on Monday. */
 export const ADMIN_TIME_ZONE = 'America/Los_Angeles';
@@ -12,26 +13,48 @@ async function rows<T>(query: SQL): Promise<T[]> {
   return (await database().execute(query)).rows as T[];
 }
 
-/** Production App Store and Google Play installs, unless development builds are included. */
-function installFilter(all: boolean) { return all ? sql`true` : sql`i.environment in ('appstore', 'playstore')`; }
+/** Which app's installs the admin pages show. The Android app reports as `playstore`; every other install is the iOS app. */
+export type Platform = 'all' | 'ios' | 'android';
+export const toPlatform = (value?: string): Platform => (value === 'ios' || value === 'android' ? value : 'all');
+const platformFilters: Record<Platform, SQL> = { all: sql`true`, ios: sql`i.environment <> 'playstore'`, android: sql`i.environment = 'playstore'` };
+const accountFilters: Record<Platform, SQL> = {
+  all: sql`true`, ios: sql`environment is distinct from ${ANDROID_ENVIRONMENT}`, android: sql`environment = ${ANDROID_ENVIRONMENT}`,
+};
+
+/** The query string that keeps the admin pages on the same builds and platform. */
+export function adminQuery(all: boolean, platform: Platform) {
+  const params = new URLSearchParams();
+  if (all) params.set('env', 'all');
+  if (platform !== 'all') params.set('platform', platform);
+  return params.size ? `?${params}` : '';
+}
+
+/** Production App Store and Google Play installs, unless development builds are included, from the chosen app. */
+function installFilter(all: boolean, platform: Platform) {
+  return sql`${all ? sql`true` : sql`i.environment in ('appstore', 'playstore')`} and ${platformFilters[platform]}`;
+}
 
 export type Weekly = { thisWeek: number; lastWeek: number; weekBefore: number };
 export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;
 
-export async function loadDashboard(all: boolean) {
-  const env = installFilter(all);
+export async function loadDashboard(all: boolean, platform: Platform) {
+  const env = installFilter(all, platform);
+  // The Android app sends daily counts but no events or setup traits yet, so with both apps shown, sections built
+  // from those count iPhones only rather than diluting their percentages with Android installs.
+  const reported = installFilter(all, platform === 'all' ? 'ios' : platform);
   const [
     headline, newByDay, newByWeek, perDay7, perDay30, itemsByWeek, lifetime, topUsers, buckets,
     paywalls, funnel, choices, finished, methods, scans, cohorts, activation, quiet, ratings, friction,
     missing, errorAreas, traits, versions, countries, ai,
   ] = await Promise.all([
-    rows<{ installs: number; existing: number; activeToday: number; active7: number; active30: number; logging7: number }>(sql`
+    rows<{ installs: number; android: number; existing: number; activeToday: number; active7: number; active30: number; logging7: number }>(sql`
       with active as (
         select d.install_id, max(d.day) as last_day, max(d.day) filter (where ${ITEMS} and d.count > 0) as last_logged
         from usage_daily d join usage_installs i on i.id = d.install_id
         where ${env} and d.day > ${TODAY} - 30 group by d.install_id)
       select
         (select count(*)::int from usage_installs i where ${env}) as "installs",
+        (select count(*)::int from usage_installs i where ${env} and ${platformFilters.android}) as "android",
         (select count(*)::int from usage_installs i where ${env} and i.existing_user) as "existing",
         count(*) filter (where last_day >= ${TODAY})::int as "activeToday",
         count(*) filter (where last_day > ${TODAY} - 7)::int as "active7",
@@ -66,8 +89,9 @@ export async function loadDashboard(all: boolean) {
         avg(items) filter (where items > 0)::float8 as "average",
         percentile_cont(0.5) within group (order by items) filter (where items > 0)::float8 as "median"
       from per_user`),
-    rows<{ id: string; startedAt: string; existing: boolean; items: number; days: number; lastLogged: string | null; version: string; plus: string | null }>(sql`
+    rows<{ id: string; startedAt: string; existing: boolean; android: boolean; items: number; days: number; lastLogged: string | null; version: string; plus: string | null }>(sql`
       select i.id::text as "id", to_char(i.started_at at time zone ${TZ}, 'YYYY-MM-DD') as "startedAt", i.existing_user as "existing",
+        i.environment = 'playstore' as "android",
         coalesce(sum(d.count) filter (where ${ITEMS}), 0)::int as "items",
         count(distinct d.day) filter (where ${ITEMS} and d.count > 0)::int as "days",
         max(d.day) filter (where ${ITEMS} and d.count > 0)::text as "lastLogged",
@@ -94,22 +118,22 @@ export async function loadDashboard(all: boolean) {
         count(*) filter (where e.name = 'paywall.shown')::int as "shownAll",
         count(*) filter (where e.name = 'paywall.result' and e.props->>'result' in ('purchased', 'trial'))::int as "boughtAll"
       from usage_events e join usage_installs i on i.id = e.install_id
-      where e.name in ('paywall.shown', 'paywall.result') and ${env}
+      where e.name in ('paywall.shown', 'paywall.result') and ${reported}
       group by 1 order by "shownAll" desc`),
     rows<{ step: string; people: number }>(sql`
       select e.props->>'step' as "step", count(distinct e.install_id)::int as "people"
       from usage_events e join usage_installs i on i.id = e.install_id
-      where e.name = 'onboarding.step' and not i.existing_user and i.started_at > now() - interval '30 days' and ${env}
+      where e.name = 'onboarding.step' and not i.existing_user and i.started_at > now() - interval '30 days' and ${reported}
       group by 1`),
     rows<{ choice: string; people: number }>(sql`
       select e.props->>'choice' as "choice", count(distinct e.install_id)::int as "people"
       from usage_events e join usage_installs i on i.id = e.install_id
-      where e.name = 'onboarding.choice' and not i.existing_user and i.started_at > now() - interval '30 days' and ${env}
+      where e.name = 'onboarding.choice' and not i.existing_user and i.started_at > now() - interval '30 days' and ${reported}
       group by 1`),
     rows<{ started: number; finished: number; plan: number; manual: number; none: number; lose: number; maintain: number; offerShown: number; offerBought: number; logged: number; loggedThreeDays: number }>(sql`
       with cohort as (
         select i.id from usage_installs i
-        where not i.existing_user and i.started_at > now() - interval '30 days' and ${env}),
+        where not i.existing_user and i.started_at > now() - interval '30 days' and ${reported}),
       done as (
         select distinct on (e.install_id) e.install_id, e.props from usage_events e join cohort c on c.id = e.install_id
         where e.name = 'onboarding.finished' order by e.install_id, e.at),
@@ -184,9 +208,9 @@ export async function loadDashboard(all: boolean) {
       left join lateral (select e.name, e.props from usage_events e where e.install_id = q.id order by e.at desc limit 1) le on true`),
     rows<{ answer: string; last30: number; allTime: number }>(sql`
       select e.props->>'answer' as "answer", count(*) filter (where e.at > now() - interval '30 days')::int as "last30", count(*)::int as "allTime"
-      from usage_events e join usage_installs i on i.id = e.install_id where e.name = 'rating' and ${env} group by 1`),
-    rows<{ metric: string; last30: number }>(sql`
-      select d.metric as "metric", sum(d.count)::int as "last30"
+      from usage_events e join usage_installs i on i.id = e.install_id where e.name = 'rating' and ${reported} group by 1`),
+    rows<{ metric: string; last30: number; reported: number }>(sql`
+      select d.metric as "metric", sum(d.count)::int as "last30", coalesce(sum(d.count) filter (where ${reported}), 0)::int as "reported"
       from usage_daily d join usage_installs i on i.id = d.install_id
       where d.day > ${TODAY} - 30 and ${env}
         and (d.metric in ('searches', 'searchesAbandoned', 'edits', 'deletes', 'undos', 'feedbackTaps', 'doneEating', 'progressViews', 'weighIns', 'progressPhotos', 'photoCompares', 'reminderTaps', 'mealMoves', 'opens') or ${ITEMS})
@@ -195,7 +219,7 @@ export async function loadDashboard(all: boolean) {
       select lower(trim(e.props->>'query')) as "query", count(*)::int as "times", count(distinct e.install_id)::int as "people",
         to_char(max(e.at) at time zone ${TZ}, 'Mon DD') as "last"
       from usage_events e join usage_installs i on i.id = e.install_id
-      where e.name = 'search.missing' and e.at > now() - interval '30 days' and ${env}
+      where e.name = 'search.missing' and e.at > now() - interval '30 days' and ${reported}
       group by 1 order by "times" desc, max(e.at) desc limit 40`),
     rows<{ area: string; week: number; month: number; people: number }>(sql`
       select case when a.source = 'server' then 'server · ' || a.area else a.area end as "area", count(*) filter (where a.at > now() - interval '7 days')::int as "week", count(*)::int as "month",
@@ -211,7 +235,7 @@ export async function loadDashboard(all: boolean) {
         count(*) filter (where i.traits->>'intent' = 'maintain')::int as "maintain",
         count(*) filter (where i.traits->>'mealTypes' = 'time')::int as "mealTypesTime",
         count(*) filter (where i.traits->>'mealTypes' = 'ask')::int as "mealTypesAsk"
-      from usage_installs i where ${env} and i.last_seen_at > now() - interval '30 days'`),
+      from usage_installs i where ${reported} and i.last_seen_at > now() - interval '30 days'`),
     rows<{ version: string; device: string; people: number }>(sql`
       select i.app_version || ' (' || coalesce(i.traits->>'build', '?') || ')' as "version", i.device as "device", count(*)::int as "people"
       from usage_installs i where ${env} and i.last_seen_at > now() - interval '30 days'
@@ -224,13 +248,16 @@ export async function loadDashboard(all: boolean) {
         count(*) filter (where scans_used >= 10)::int as "usedAll",
         count(*) filter (where subscription_expires_at > now())::int as "subscribers",
         coalesce(sum(scans_used), 0)::int as "scans"
-      from ai_accounts where id not in ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002')`),
+      from ai_accounts where id not in ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002')
+        and ${accountFilters[platform]}`),
   ]);
   return {
     headline: headline[0], newByDay, newByWeek: newByWeek[0], perDay7: perDay7[0], perDay30: perDay30[0],
     itemsByWeek: itemsByWeek[0], lifetime: lifetime[0], topUsers, buckets, paywalls, funnel, choices,
     finished: finished[0], methods, scans, cohorts, activation: activation[0], quiet: quietReasons(quiet),
     ratings, friction: Object.fromEntries(friction.map(row => [row.metric, row.last30])) as Record<string, number>,
+    // Counts from the installs that also report events, for rates whose other half only the iOS app sends.
+    frictionReported: Object.fromEntries(friction.map(row => [row.metric, row.reported])) as Record<string, number>,
     missing, errorAreas, traits: traits[0], versions, countries, ai: ai[0],
   };
 }
@@ -279,11 +306,11 @@ function quietReasons(people: { items: number; existing: boolean; finishedSetup:
 export type ErrorGroup = {
   fingerprint: string; source: string; area: string; code: string; message: string; location: string; detail: string;
   total: number; week: number; people: number; first: string; last: string; versions: string[]; os: string[];
-  resolvedAt: string | null; sinceFix: number;
+  platforms: ('iOS' | 'Android')[]; resolvedAt: string | null; sinceFix: number;
 };
 
-export async function loadErrors(all: boolean) {
-  const env = installFilter(all);
+export async function loadErrors(all: boolean, platform: Platform) {
+  const env = installFilter(all, platform);
   const [groups, recent] = await Promise.all([
     rows<ErrorGroup>(sql`
       select a.fingerprint as "fingerprint", max(a.source) as "source", max(a.area) as "area", max(a.code) as "code",
@@ -294,6 +321,7 @@ export async function loadErrors(all: boolean) {
         to_char(min(a.at) at time zone ${TZ}, 'Mon DD, HH12:MI AM') as "first", to_char(max(a.at) at time zone ${TZ}, 'Mon DD, HH12:MI AM') as "last",
         array_remove(array_agg(distinct nullif(a.app_version, '')), null) as "versions",
         array_remove(array_agg(distinct nullif(a.os_version, '')), null) as "os",
+        array_remove(array_agg(distinct case when i.id is null then null when i.environment = 'playstore' then 'Android' else 'iOS' end), null) as "platforms",
         to_char(r.resolved_at at time zone ${TZ}, 'Mon DD') as "resolvedAt",
         count(*) filter (where r.resolved_at is not null and a.at > r.resolved_at)::int as "sinceFix"
       from app_errors a
@@ -317,23 +345,33 @@ export async function loadErrors(all: boolean) {
 }
 
 /** Plain text an AI coding assistant can work from: one section per open error group. */
+/** The iOS app reports its bare version ("26.0"); the Android app's already starts with "Android". */
+export const osName = (os: string) => (os.startsWith('Android') ? os : `iOS ${os}`);
+
+/** "App", or which app it came from when only one reported it. */
+export function errorSource(group: Pick<ErrorGroup, 'source' | 'platforms'>) {
+  if (group.source === 'server') return 'Server';
+  return group.platforms.length === 1 ? `${group.platforms[0]} app` : 'App';
+}
+
 export function errorsForAI(groups: (ErrorGroup & { recent: { at: string; version: string; os: string }[] })[]) {
   const header = [
     '# Cave Cals error report',
     '',
     'Each section is one group of matching errors from the last 90 days.',
-    'App errors come from the iOS app in this repository: `location` is the Swift file and line that reported it.',
+    'iOS app errors come from the iOS app in this repository: `location` is the Swift file and line that reported it.',
+    'Android app errors come from the Android app at `/Users/phil/Documents/GIT/CaveCalsAndroid` (GitHub compcaddy/cave-cals-android); `area` names the feature that failed.',
     'Server errors come from the Next.js backend in `backend/src`: `location` is the API path and `detail` holds stack frames (messages are not stored).',
     'Please find the cause of each and fix it where possible.',
   ].join('\n');
   const sections = groups.map(group => [
-    `## ${group.source === 'server' ? 'Server' : 'App'} · ${group.area} · ${group.code}`,
+    `## ${errorSource(group)} · ${group.area} · ${group.code}`,
     `- Message: ${group.message || '(none)'}`,
     `- Where: ${group.location || '(unknown)'}`,
     `- Count: ${group.total} total, ${group.week} in the last 7 days, ${group.people} ${group.people === 1 ? 'person' : 'people'}`,
     `- First seen: ${group.first}; last seen: ${group.last} (Pacific)`,
     group.versions.length ? `- App versions: ${group.versions.join(', ')}` : '',
-    group.os.length ? `- iOS versions: ${group.os.join(', ')}` : '',
+    group.os.length ? `- OS versions: ${group.os.map(osName).join(', ')}` : '',
     group.resolvedAt ? `- Marked fixed ${group.resolvedAt}; happened ${group.sinceFix} time(s) since` : '',
     group.detail ? `- Detail:\n\n\`\`\`\n${group.detail}\n\`\`\`` : '',
   ].filter(Boolean).join('\n'));

@@ -8,6 +8,7 @@
 .admin h3{font-size:14px;margin:18px 0 8px;color:var(--muted);font-weight:650;text-transform:uppercase;letter-spacing:.06em}
 .admin .note{color:var(--muted);font-size:13px;margin:4px 0 0}
 .admin .nav{display:flex;flex-wrap:wrap;gap:6px}
+.admin .nav .divider{width:1px;align-self:stretch;background:var(--line);margin:2px 4px}
 .admin .pill{display:inline-block;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;text-decoration:none;color:var(--ink);background:var(--card)}
 .admin .pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .admin section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px;min-width:0}

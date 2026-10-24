@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { loadErrors, errorsForAI } from '@/server/admin-data';
+import { loadErrors, errorsForAI, errorSource, osName, adminQuery, toPlatform } from '@/server/admin-data';
 import { requireAdmin } from '../require-admin';
+import { FilterPills, scopeLabel } from '../filters';
 import { markFixed, reopen } from '../actions';
 import CopyButton from '../copy-button';
 export const dynamic = 'force-dynamic';
@@ -9,15 +10,15 @@ type Group = Awaited<ReturnType<typeof loadErrors>>[number];
 
 function ErrorCard({ group }: { group: Group }) {
   return <div className="error-card">
-    <h3>{group.source === 'server' ? 'Server' : 'App'} · {group.area} · <code>{group.code}</code>
+    <h3>{errorSource(group)} · {group.area} · <code>{group.code}</code>
       {group.resolvedAt && group.open ? <span className="tag">Back after fix on {group.resolvedAt}</span> : null}</h3>
     <p><b>{group.week}</b> in 7 days · <b>{group.total}</b> in 90 days · {group.people} {group.people === 1 ? 'person' : 'people'} · last {group.last}</p>
     {group.message && group.message !== group.code ? <p>{group.message}</p> : null}
-    <p className="note">{group.location || 'Unknown location'}{group.versions.length ? ` · app ${group.versions.join(', ')}` : ''}{group.os.length ? ` · iOS ${group.os.join(', ')}` : ''} · first {group.first}</p>
+    <p className="note">{group.location || 'Unknown location'}{group.versions.length ? ` · app ${group.versions.join(', ')}` : ''}{group.os.length ? ` · ${group.os.map(osName).join(', ')}` : ''} · first {group.first}</p>
     <details>
       <summary>Details and recent times</summary>
       {group.detail ? <pre>{group.detail}</pre> : null}
-      <ul className="note">{group.recent.map(row => <li key={row.at + row.version}>{row.at} · {row.version || 'server'}{row.os ? ` · iOS ${row.os}` : ''} · {row.location}</li>)}</ul>
+      <ul className="note">{group.recent.map(row => <li key={row.at + row.version}>{row.at} · {row.version || 'server'}{row.os ? ` · ${osName(row.os)}` : ''} · {row.location}</li>)}</ul>
     </details>
     <div className="actions">
       <CopyButton text={errorsForAI([group])} label="Copy for AI" />
@@ -29,22 +30,23 @@ function ErrorCard({ group }: { group: Group }) {
   </div>;
 }
 
-export default async function ErrorsPage({ searchParams }: { searchParams: Promise<{ env?: string }> }) {
+export default async function ErrorsPage({ searchParams }: { searchParams: Promise<{ env?: string; platform?: string }> }) {
   await requireAdmin();
-  const all = (await searchParams).env === 'all';
-  const groups = await loadErrors(all);
+  const params = await searchParams;
+  const all = params.env === 'all';
+  const platform = toPlatform(params.platform);
+  const groups = await loadErrors(all, platform);
   const open = groups.filter(group => group.open), fixed = groups.filter(group => !group.open);
-  const query = all ? '?env=all' : '';
+  const query = adminQuery(all, platform);
   return <>
     <header>
       <div>
         <h1>Errors</h1>
-        <p className="note">Last 90 days · {all ? 'all builds' : 'App Store installs and the server'} · Pacific time. Matching errors are grouped; Mark fixed hides a group until it happens again.</p>
+        <p className="note">Last 90 days · {scopeLabel(all, platform)}, plus the server · Pacific time. Matching errors are grouped; Mark fixed hides a group until it happens again.</p>
       </div>
       <nav className="nav">
         <Link className="pill" href={`/admin${query}`}>← Stats</Link>
-        <Link className={`pill${all ? '' : ' on'}`} href="/admin/errors">App Store</Link>
-        <Link className={`pill${all ? ' on' : ''}`} href="/admin/errors?env=all">All builds</Link>
+        <FilterPills path="/admin/errors" all={all} platform={platform} />
       </nav>
     </header>
     <section>
