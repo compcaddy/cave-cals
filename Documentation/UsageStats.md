@@ -44,7 +44,7 @@ Days and weeks follow Pacific time (`America/Los_Angeles`), weeks start Monday. 
 ## Testing
 
 - Backend: `npx tsx --test backend-tests/stats.test.ts`. App: `UsageStatsTests` in the unit test bundle.
-- Local end to end: `npm run dev` (uses the `backend-dev` Neon branch from `.env.development.local`, which also holds a local `ADMIN_PASSWORD`), then launch a Debug simulator build with `--stats-url http://127.0.0.1:3000` and background the app. Debug builds report `environment = debug`; without `--stats-url` they send to production, where they're hidden unless All builds is chosen.
+- Local end to end: `npm run dev` with `DATABASE_URL` and a local `ADMIN_PASSWORD` in `backend/.env.development.local` (git-ignored). The `backend-dev` Neon branch no longer exists (October 24, 2026); branch production in Neon for a throwaway copy and delete it afterwards, then launch a Debug simulator build with `--stats-url http://127.0.0.1:3000` and background the app. Debug builds report `environment = debug`; without `--stats-url` they send to production, where they're hidden unless All builds is chosen.
 
 ## Release checklist
 
