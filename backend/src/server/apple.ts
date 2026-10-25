@@ -1,4 +1,4 @@
-import { AppStoreServerAPIClient, Environment, SignedDataVerifier, Status, type JWSTransactionDecodedPayload } from '@apple/app-store-server-library';
+import { AppStoreServerAPIClient, Environment, OfferType, SignedDataVerifier, Status, type JWSTransactionDecodedPayload } from '@apple/app-store-server-library';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import roots from './certs/roots.json';
 import { APIError, bundleID, required } from './config';
@@ -118,28 +118,56 @@ export async function otherActiveDevices(tx: DBTransaction, accountId: string, k
   ));
   return row?.count ?? 0;
 }
+const ACCOUNT_TOKEN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+type PurchaseAccount = { id: string; environment: string | null; originalTransactionId: string | null };
+// Offer codes are redeemed in the App Store, outside the app, so their purchases carry no appAccountToken.
+// Apple marks the redeeming transaction; later renewals don't, so the original purchase is checked too.
+export async function redeemedOfferCode(transactions: JWSTransactionDecodedPayload[], originalId: string, env: Environment) {
+  if (transactions.some(t => t.offerType === OfferType.OFFER_CODE)) return true;
+  let info;
+  try { info = (await client(env).getTransactionInfo(originalId)).signedTransactionInfo; }
+  catch { throw new APIError(503, 'purchase_unavailable', 'Apple purchase verification is temporarily unavailable. Please try again.'); }
+  return !!info && (await verifier(env).verifyAndDecodeTransaction(info)).offerType === OfferType.OFFER_CODE;
+}
+// Picks the account a verified purchase belongs to. The signed appAccountToken links a purchase made in the app
+// to an anonymous server identity. A tokenless offer-code purchase belongs to the first install that reports it,
+// and from then on is restored like any other linked purchase.
+export function purchaseOwner({ token, originalId, existing, tokenAccount, installAccount, offerCode }: {
+  token?: string; originalId: string; existing?: PurchaseAccount; tokenAccount?: PurchaseAccount; installAccount?: PurchaseAccount; offerCode: boolean;
+}) {
+  if (!token && offerCode) {
+    if (existing) return existing.id;
+    if (installAccount && installAccount.environment !== ANDROID_ENVIRONMENT &&
+      (!installAccount.originalTransactionId || installAccount.originalTransactionId === originalId)) return installAccount.id;
+    throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
+  }
+  if (!token || !ACCOUNT_TOKEN.test(token)) throw new APIError(403, 'purchase_owner', 'This purchase has no account association. Please contact support.');
+  if (tokenAccount?.environment === ANDROID_ENVIRONMENT) throw new APIError(403, 'wrong_platform', 'This purchase cannot be linked across platforms.');
+  const ownerId = existing?.id || tokenAccount?.id;
+  if (!ownerId || (tokenAccount?.originalTransactionId && tokenAccount.originalTransactionId !== originalId && !existing)) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
+  if (token !== ownerId.toLowerCase()) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
+  return ownerId;
+}
 export async function verifyPurchase(identity: Identity, signedTransaction: string) {
   if (identity.keyId.startsWith('android:')) throw new APIError(403, 'wrong_platform', 'Use Google Play to manage this subscription.');
   if (identity.development) throw new APIError(400, 'development_mode', 'Use a physical device to test Apple purchases.');
   const verified = await decodePurchase(signedTransaction);
   const decoded = verified.transaction;
   if (!allowedTransaction(decoded)) throw new APIError(402, 'invalid_purchase', 'This purchase does not include AI access.');
-  const current = await activePurchase(decoded.originalTransactionId!, verified.environment);
+  const originalId = decoded.originalTransactionId!;
+  const current = await activePurchase(originalId, verified.environment);
   if (!current) throw new APIError(402, 'subscription_required', 'This subscription is no longer active.');
   const token = current.transaction.appAccountToken?.toLowerCase();
+  const offerCode = !token && await redeemedOfferCode([decoded, current.transaction], originalId, verified.environment);
   const result = await database().transaction(async tx => {
-    // The signed appAccountToken links the original purchase to an anonymous server identity.
-    const [existing] = await tx.select().from(accounts).where(eq(accounts.originalTransactionId, decoded.originalTransactionId!)).for('update');
-    if (!token || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(token)) throw new APIError(403, 'purchase_owner', 'This purchase has no account association. Please contact support.');
-    const [tokenAccount] = await tx.select().from(accounts).where(eq(accounts.id, token)).for('update');
-    if (tokenAccount?.environment === ANDROID_ENVIRONMENT) throw new APIError(403, 'wrong_platform', 'This purchase cannot be linked across platforms.');
-    const ownerId = existing?.id || tokenAccount?.id;
-    if (!ownerId || (tokenAccount?.originalTransactionId && tokenAccount.originalTransactionId !== decoded.originalTransactionId && !existing)) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
-    if (token !== ownerId.toLowerCase()) throw new APIError(403, 'purchase_owner', 'This purchase could not be linked. Please contact support.');
+    const [existing] = await tx.select().from(accounts).where(eq(accounts.originalTransactionId, originalId)).for('update');
+    const [tokenAccount] = token && ACCOUNT_TOKEN.test(token) ? await tx.select().from(accounts).where(eq(accounts.id, token)).for('update') : [];
+    const [installAccount] = offerCode && !existing ? await tx.select().from(accounts).where(eq(accounts.id, identity.accountId)).for('update') : [];
+    const ownerId = purchaseOwner({ token, originalId, existing, tokenAccount, installAccount, offerCode });
     await tx.select().from(accounts).where(eq(accounts.id, ownerId)).for('update');
     if (await otherActiveDevices(tx, ownerId, identity.keyId) >= MAX_SUBSCRIPTION_DEVICES) throw new APIError(403, 'device_limit', 'This subscription has reached its device limit. Contact support to reset old devices.');
     await tx.update(accounts).set({
-      originalTransactionId: decoded.originalTransactionId, environment: verified.environment,
+      originalTransactionId: originalId, environment: verified.environment,
       subscriptionExpiresAt: new Date(current.expiresAt), subscriptionCheckedAt: new Date(),
     }).where(eq(accounts.id, ownerId));
     // Preserve trial history when restoring a purchase links an install to its owner.
